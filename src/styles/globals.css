@@ -1,0 +1,95 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+/*
+ * Brand tokens sourced from docs/branding/branding.pdf.
+ * Only the minimum theme surface needed for the foundation is defined
+ * here — no business-screen styling. Variable names follow shadcn/ui's
+ * conventions so components added later via `shadcn add` slot in without
+ * reconfiguring the theme.
+ */
+:root {
+  --radius: 0.5rem;
+
+  /* Neutrals */
+  --background: #fafaf8; /* Blanco roto */
+  --foreground: #2c2c2a; /* Oscuro primario */
+  --card: #fafaf8;
+  --card-foreground: #2c2c2a;
+  --popover: #fafaf8;
+  --popover-foreground: #2c2c2a;
+  --border: #e8e6e1; /* Beige muy claro */
+  --input: #e8e6e1;
+  --ring: #b4a9a1; /* Beige oscuro */
+
+  --muted: #d3d1c7; /* Beige claro */
+  --muted-foreground: #5f5e5a; /* Gris medio */
+  --secondary: #d3d1c7;
+  --secondary-foreground: #2c2c2a;
+  --accent: #e8e6e1;
+  --accent-foreground: #2c2c2a;
+
+  /* Brand + semantic accents */
+  --primary: #d85a30; /* Terracota — acción principal */
+  --primary-foreground: #fafaf8;
+  --destructive: #a32d2d; /* Error / crítico */
+  --destructive-foreground: #fafaf8;
+  --success: #1d9e75; /* Éxito / confirmado */
+  --success-foreground: #fafaf8;
+  --warning: #ba7517; /* Alerta / en proceso */
+  --warning-foreground: #fafaf8;
+  --info: #185fa5; /* Información / secundario */
+  --info-foreground: #fafaf8;
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+
+  /*
+   * Typography per docs/branding/branding.pdf (Poppins for headings, Inter
+   * for body copy). Font files are loaded via <link> tags in index.html;
+   * self-hosting them is a later decision, not part of this foundation.
+   */
+  --font-heading: 'Poppins', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+  }
+}
