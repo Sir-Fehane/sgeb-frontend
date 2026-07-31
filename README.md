@@ -84,6 +84,38 @@ pnpm preview     # serve the production build locally
 Husky runs `lint-staged` on `pre-commit` (ESLint + Prettier on staged files only).
 No hook creates commits automatically.
 
+## Continuous Integration
+
+`.github/workflows/ci.yml` ("Frontend CI") runs the same checks used locally,
+against the **entire** repository (not just staged files — `lint-staged` is a
+pre-commit-only tool and is never used in CI):
+
+1. `pnpm typecheck`
+2. `pnpm lint`
+3. `pnpm format:check`
+4. `pnpm test:run`
+5. `pnpm build`
+
+**When it runs**: on every Pull Request targeting `develop` or `main`, and on
+every push to `develop` or `main`.
+
+**Runtime**: Node `22.12.0` — the minimum runtime declared by this repo's
+`engines.node` (`>=22.12.0`) — is the version CI tests against; `engines.node`
+only declares a floor, so this is not an exact pin the way pnpm's version is.
+pnpm is installed through the official
+[`pnpm/action-setup`](https://github.com/pnpm/action-setup) action, which
+reads its exact version (`pnpm@11.18.0`) directly from this repo's
+`packageManager` field — Corepack is **not** part of this workflow (its
+bundled keyring failed to verify pnpm's signature on GitHub's runners).
+Dependencies are installed with `pnpm install --frozen-lockfile` against the
+committed `pnpm-lock.yaml`, which CI never modifies.
+
+The workflow uses GitHub-maintained actions under `actions/*` (checkout,
+setup-node, cache) plus the pnpm-maintained `pnpm/action-setup` — not
+exclusively GitHub-maintained actions.
+
+This workflow does **not** deploy the application — it only validates it.
+
 ## Design system
 
 Tokens and reusable UI components live under `src/shared/components/`, based on
