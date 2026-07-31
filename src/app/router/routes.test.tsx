@@ -69,3 +69,31 @@ describe('existing routes remain available', () => {
     expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument()
   })
 })
+
+describe('/eventos renders the real events UI inside AppShell', () => {
+  it('renders the AppShell chrome and the events list content at /eventos', async () => {
+    await renderAt('/eventos')
+
+    expect(
+      screen.getByRole('navigation', { name: 'Navegación principal' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('banner')).toBeInTheDocument()
+    expect(
+      screen.getByText('Consulta y filtra los eventos registrados.'),
+    ).toBeInTheDocument()
+  })
+
+  it('does not register /eventos/nuevo — the slug is only "Proposed", not confirmed', async () => {
+    await renderAt('/eventos/nuevo')
+
+    // Falls through to the catch-all NotFoundPage, not a real creation page.
+    expect(screen.getByText('404')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Crear evento' })).not.toBeInTheDocument()
+  })
+
+  it('does not register an /eventos/:id detail route', async () => {
+    await renderAt('/eventos/1001')
+
+    expect(screen.getByText('404')).toBeInTheDocument()
+  })
+})

@@ -153,9 +153,10 @@ the same `@/shared/components` barrel as the rest of the design system.
   They still render in the sidebar/drawer, visibly labeled "Ruta pendiente",
   `aria-disabled`, and not keyboard-activatable.
 - **Still pending**: authentication, route guards, and role-based nav/action
-  filtering are not implemented — every route under the shell is currently a
-  shared, unguarded development placeholder (`AppShellPreviewPage`), not a real
-  business page.
+  filtering are not implemented — `/panel`, `/meseros`, and `/reportes` still
+  render the shared, unguarded development placeholder (`AppShellPreviewPage`).
+  `/eventos` now renders the real, presentation-only events UI foundation
+  instead — see the next section.
 
 Visit `/panel`, `/eventos`, `/meseros`, or `/reportes` in dev to see the shell
 with a different nav item active.
@@ -191,6 +192,77 @@ foundation yet).
   dev-only no-op that visibly states the integration is pending — it never
   claims a user was authenticated. See `docs/FrontendArchitecture.md` §18 for
   the full intended flow once these land.
+
+## Events UI foundation
+
+A **UI-only** foundation for the SGEB events module lives under
+`src/features/events/` (`components/`, `pages/`, `schemas/`, `types/`, `utils/`,
+`fixtures/` — no `services/queries/mutations`, since API integration isn't part
+of this foundation yet).
+
+- **Routes**: `/eventos` (inside `AppShell`) is the **only registered events
+  route** — a real, presentation-only events list, replacing the generic
+  `AppShellPreviewPage` placeholder. `/eventos/nuevo` and `/eventos/:id` are
+  **intentionally not registered**: `docs/FrontendArchitecture.md` §17 lists
+  those exact slugs only under a section explicitly headed "Proposed Routing
+  Structure" — not reconfirmed the way `/eventos` itself was, so registering
+  them would be inferring an unapproved URL.
+- **Event creation is currently a non-routed field-validation prototype**
+  (`EventCreateForm` + `EventCreateFieldPrototypePage`, not wired into
+  `routes.ts`). The documented wireframe (W-03 "Crear evento") is a five-step
+  wizard, but its exact step boundaries are still pending verification against
+  the wireframe (no PDF image rendering was available to inspect it) — the
+  prototype's single-page layout exists only to exercise field-level
+  validation and must not be read as the approved creation UX. Its final
+  action is labeled "Validar borrador" and only demonstrates successful local
+  validation — it never claims an event was created or persisted.
+  - **Captain assignment** (`id_capitan`) has no selector anywhere in this
+    prototype: whether it should derive from the authenticated capitán's own
+    session, be picked by an admin, or depend on role/permissions is pending
+    the authentication/role decisions of a later branch.
+  - **Comanda upload** (`comanda_url`) is not an editable field either — no
+    upload endpoint is documented (`docs/FrontendArchitecture.md` §7.5), and
+    asking a user to hand-type a technical URL isn't a real workflow, so the
+    prototype only shows a non-interactive "pending" note.
+- **Validation source**: `src/features/events/schemas/eventCreateSchema.ts`
+  mirrors the subset of `EventoCrear` this prototype validates
+  (`docs/api/documentacion-endpoints.txt`) field-for-field, plus two documented
+  cross-field rules (SGEB-2008 fecha/inicio coherence, SGEB-4007 num_mesas vs.
+  salón capacity). `titulo`'s maximum length is a documented blocker for API
+  integration: the OpenAPI schema says `maxLength: 120`, the data dictionary's
+  raw column-type text reads `VARCHAR(40)` — a real, unresolved conflict, so
+  only the minimum (3 characters) is enforced until the backend team clarifies
+  which maximum is correct.
+- **Page-level state architecture**: `EventsContent`
+  (`src/features/events/components/EventsContent.tsx`) is the presentational
+  composition — header, filters, and exactly one of loading / error / empty /
+  populated, selected purely from its own props (`events`, `isLoading`,
+  `errorMessage`, `onRetry`, `filters`, `onFilterChange`, `salones`,
+  `onSelectEvent`, `onCreate`). The routed `EventsPage` is only a thin,
+  fixture-backed wrapper around it — always `isLoading={false}`, no
+  `errorMessage`, no development-state selector. Real API integration wires
+  TanStack Query state into those same two props without touching
+  `EventsContent` itself.
+- **Development fixtures**: `src/features/events/fixtures/eventFixtures.ts` —
+  neutral, fictional salón/event data, clearly labeled as dev-only and easy to
+  delete once real API integration lands. `/eventos` always renders this
+  fixture list (clearly labeled as development data) — there is no
+  user-facing control to fake loading/empty/error states; `EventsLoadingState`
+  and `EventsErrorState` remain fully implemented and independently testable
+  (both directly and through `EventsContent`'s own props), and the empty
+  state is reachable for real by filtering the fixture list down to zero
+  matches.
+- **Event list types are presentation models, not confirmed response DTOs.**
+  No read/response schema for an event exists in any documented source (only
+  `EventoCrear`'s request shape is documented) — `EventListItemViewModel`
+  (`src/features/events/types/event.ts`) is a necessary synthesis for
+  fixtures/components, not a literal backend contract; `salonNombre`/
+  `capitanNombre` are optional, fixture-only display fields.
+- **Still pending** (explicitly out of scope for this foundation): SGEB API
+  integration, real salón directories, event detail/editing, and any
+  authenticated-user-derived field. Selecting an event or requesting creation
+  on `/eventos` shows an inline notice rather than silently doing nothing or
+  faking navigation.
 
 ## High-level architecture
 
