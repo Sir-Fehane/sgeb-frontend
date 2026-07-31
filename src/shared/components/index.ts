@@ -5,6 +5,7 @@
  * shadcn/Radix-backed implementation swappable without touching every
  * feature that uses it.
  */
+export * from '@/shared/components/layout'
 export * from '@/shared/components/ui/alert'
 export * from '@/shared/components/ui/badge'
 export * from '@/shared/components/ui/button'

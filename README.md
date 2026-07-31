@@ -127,6 +127,39 @@ every token and foundation component (typography, colors, buttons, form controls
 cards, badges, alerts, loading states, and a mobile-viewport example). This is not
 a business screen and will be replaced once real routes exist.
 
+## Authenticated app shell
+
+The reusable layout shared by the `admin` and `capitan` roles lives under
+`src/shared/components/layout/` (`AppShell`, `Sidebar`, `MobileNavDrawer`,
+`Topbar`, `NavItem`, `AppShellMain`, `AccountMenuPlaceholder`), exported through
+the same `@/shared/components` barrel as the rest of the design system.
+
+- **How pages render inside it**: a route-level layout
+  (`src/app/router/layouts/AppShellLayout.tsx`) wraps an `<Outlet />` in
+  `<AppShell>`; any authenticated page is simply the element rendered at a child
+  route of that layout — it should not render its own top-level page heading
+  (`AppShell`'s `Topbar` already renders the page's `<h1>` from the route's
+  `title`).
+- **Navigation configuration**: `src/shared/components/layout/nav-items.ts`
+  exports a typed `NavItemConfig[]` (`NAV_ITEMS`) — the 7 items from the captain
+  wireframes (Panel, Eventos, Meseros, Operación en vivo, Bebidas y Cubaitor,
+  Pagos, Reportes). It's shaped to add a `roles` field later, but does **not**
+  filter by role yet. Each item is `status: 'available'` (with a real `href`) or
+  `status: 'route-pending'` (`href: null`) — only Panel, Eventos, Meseros, and
+  Reportes have a top-level route pinned in `docs/FrontendArchitecture.md` §17.
+  Operación en vivo, Bebidas y Cubaitor, and Pagos are genuinely undecided
+  information architecture (see the comment in that file for why) and are
+  **not** registered as routes — no placeholder slug was invented for them.
+  They still render in the sidebar/drawer, visibly labeled "Ruta pendiente",
+  `aria-disabled`, and not keyboard-activatable.
+- **Still pending**: authentication, route guards, and role-based nav/action
+  filtering are not implemented — every route under the shell is currently a
+  shared, unguarded development placeholder (`AppShellPreviewPage`), not a real
+  business page.
+
+Visit `/panel`, `/eventos`, `/meseros`, or `/reportes` in dev to see the shell
+with a different nav item active.
+
 ## High-level architecture
 
 - **Feature-Based Architecture**: business logic lives under `src/features/*`

@@ -19,6 +19,55 @@ export const router = createBrowserRouter([
     },
   },
   {
+    /**
+     * Authenticated shell — no route guard yet (§10.1). Only the 4 nav
+     * items with an approved top-level route in
+     * docs/FrontendArchitecture.md §17 get a child route here ("Operación
+     * en vivo", "Bebidas y Cubaitor", and "Pagos" do not — see the
+     * comment on `NAV_ITEMS` in shared/components/layout/nav-items.ts).
+     * Every child below renders the same development placeholder, not a
+     * real page.
+     */
+    lazy: async () => {
+      const { AppShellLayout } = await import('@/app/router/layouts/AppShellLayout')
+      return { Component: AppShellLayout }
+    },
+    children: [
+      {
+        path: 'panel',
+        lazy: async () => {
+          const { AppShellPreviewPage } =
+            await import('@/app/router/pages/AppShellPreviewPage')
+          return { Component: AppShellPreviewPage }
+        },
+      },
+      {
+        path: 'eventos',
+        lazy: async () => {
+          const { AppShellPreviewPage } =
+            await import('@/app/router/pages/AppShellPreviewPage')
+          return { Component: AppShellPreviewPage }
+        },
+      },
+      {
+        path: 'meseros',
+        lazy: async () => {
+          const { AppShellPreviewPage } =
+            await import('@/app/router/pages/AppShellPreviewPage')
+          return { Component: AppShellPreviewPage }
+        },
+      },
+      {
+        path: 'reportes',
+        lazy: async () => {
+          const { AppShellPreviewPage } =
+            await import('@/app/router/pages/AppShellPreviewPage')
+          return { Component: AppShellPreviewPage }
+        },
+      },
+    ],
+  },
+  {
     path: '*',
     lazy: async () => {
       const { NotFoundPage } = await import('@/app/router/pages/NotFoundPage')
