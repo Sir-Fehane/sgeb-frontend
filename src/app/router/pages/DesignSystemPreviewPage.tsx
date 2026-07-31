@@ -346,9 +346,6 @@ export function DesignSystemPreviewPage() {
                   Activa
                 </Badge>
                 <Button className="w-full" size="lg">
-                  Solicitar la cuenta
-                </Button>
-                <Button className="w-full" size="lg" variant="outline">
                   Llamar al mesero
                 </Button>
               </CardContent>
