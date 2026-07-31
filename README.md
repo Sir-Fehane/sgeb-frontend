@@ -4,9 +4,10 @@ Web console for **SGEB** (Sistema de Gestión de Eventos de Banquetes) — Medio
 Inc. React/Vite/TypeScript frontend for the `admin` and `capitan` roles, plus the
 public, unauthenticated comensal (guest) experience.
 
-This repository currently contains the **technical foundation** only. Business
-features are added incrementally — see `docs/FrontendArchitecture.md` for the full
-architecture, open questions, and roadmap (internal docs, not tracked in git).
+This repository currently contains the **technical foundation** and a **design-system
+foundation** (tokens + reusable UI components). Business features are added
+incrementally — see `docs/FrontendArchitecture.md` for the full architecture, open
+questions, and roadmap (internal docs, not tracked in git).
 
 ## Requirements
 
@@ -82,6 +83,49 @@ pnpm preview     # serve the production build locally
 
 Husky runs `lint-staged` on `pre-commit` (ESLint + Prettier on staged files only).
 No hook creates commits automatically.
+
+## Design system
+
+Tokens and reusable UI components live under `src/shared/components/`, based on
+`docs/branding/branding.pdf` (colors, typography scale, spacing, radius) and built
+on shadcn/ui + Radix primitives.
+
+- **Import from the barrel, not from `ui/`.** Feature code must always import
+  shared components from `@/shared/components` —
+  ```ts
+  import { Button, Card, Badge, FormField } from '@/shared/components'
+  ```
+  never `@/shared/components/ui/button` etc. directly. `ui/` holds the
+  shadcn/Radix-backed implementation; the barrel (`src/shared/components/index.ts`)
+  is the stable, project-owned public API — this keeps every consumer decoupled
+  from how a primitive is implemented internally.
+- **Tokens** live in `src/styles/globals.css` as CSS variables (colors, the
+  typography scale, radius, shadows), consumed through Tailwind's `@theme` block.
+  Typography primitives (`PageTitle`, `SectionHeading`, `CardHeading`, `Text`,
+  `Caption`, `HelperText`, `ErrorText`) wrap that scale — use them instead of raw
+  `text-*` utilities so the hierarchy stays consistent.
+- **Semantic tones** (`success | warning | danger | info | neutral`) are a typed
+  `Tone` union (`src/shared/components/ui/tone.ts`) consumed by `Badge` and
+  `Alert`. Don't map an undocumented business status to a tone directly — do that
+  mapping inside the feature that owns the status.
+- **Icons** use `@tabler/icons-react` per branding, imported individually
+  (`import { IconCheck } from '@tabler/icons-react'`) for tree-shaking. Components
+  accept an icon-agnostic `icon?: ReactNode` slot rather than being coupled to a
+  specific icon.
+- **Responsive targets**: the authenticated console is desktop-first with full
+  tablet support; the (not-yet-built) comensal experience is mobile-first — see
+  `docs/FrontendArchitecture.md` §10.3.
+
+### Running the design-system preview
+
+```bash
+pnpm dev
+```
+
+Then open the app root (`/`) — it currently renders a development-only preview of
+every token and foundation component (typography, colors, buttons, form controls,
+cards, badges, alerts, loading states, and a mobile-viewport example). This is not
+a business screen and will be replaced once real routes exist.
 
 ## High-level architecture
 

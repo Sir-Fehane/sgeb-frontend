@@ -13,8 +13,9 @@ export const router = createBrowserRouter([
   {
     path: '/',
     lazy: async () => {
-      const { FoundationHomePage } = await import('@/app/router/pages/FoundationHomePage')
-      return { Component: FoundationHomePage }
+      const { DesignSystemPreviewPage } =
+        await import('@/app/router/pages/DesignSystemPreviewPage')
+      return { Component: DesignSystemPreviewPage }
     },
   },
   {

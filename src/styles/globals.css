@@ -20,7 +20,22 @@
   --popover-foreground: #2c2c2a;
   --border: #e8e6e1; /* Beige muy claro */
   --input: #e8e6e1;
-  --ring: #b4a9a1; /* Beige oscuro */
+  /*
+   * Focus ring: branding does not document a dedicated focus color. Using
+   * the documented "Beige oscuro" (#b4a9a1) here measures 2.20:1 against
+   * the light (#fafaf8) background — below the WCAG 1.4.11 non-text 3:1
+   * requirement. The keyboard focus ring instead reuses the *official*
+   * "Urgencia / Acción principal" brand token (`--brand-primary`,
+   * terracota) directly: measured at 3.70:1 against #fafaf8, which clears
+   * the 3:1 non-text/focus-indicator threshold (a lower bar than the
+   * 4.5:1 normal-text requirement `--primary` below is held to, so the
+   * ring can safely use the true brand color where `--primary` cannot).
+   * Ring-offset always interposes the fixed `--background` color between
+   * the focused element and this ring, so #fafaf8 is the correct
+   * "adjacent background" to check, not whatever section the element
+   * happens to sit in.
+   */
+  --ring: var(--brand-primary);
 
   --muted: #d3d1c7; /* Beige claro */
   --muted-foreground: #5f5e5a; /* Gris medio */
@@ -29,16 +44,58 @@
   --accent: #e8e6e1;
   --accent-foreground: #2c2c2a;
 
-  /* Brand + semantic accents */
-  --primary: #d85a30; /* Terracota — acción principal */
+  /*
+   * Official brand accent tokens — the literal, unmodified colors from
+   * docs/branding/branding.pdf "Colores de acento y estados". These are
+   * always safe to use for NON-TEXT purposes: borders, icons, focus
+   * indicators, thin decorative accents, and anything else that only
+   * needs the WCAG 1.4.11 non-text 3:1 contrast (or no contrast
+   * requirement at all — print, marketing, large-scale decorative use).
+   *
+   * Do NOT pair these hexes directly with normal-sized light (#fafaf8)
+   * text — three of the five fail the 4.5:1 normal-text AA requirement
+   * at that combination. See the accessibility-derivatives block below
+   * for the tokens actually used as solid backgrounds under white text
+   * (Button, Badge, Alert).
+   */
+  --brand-primary: #d85a30; /* Terracota — Urgencia / Acción principal */
+  --brand-success: #1d9e75; /* Éxito / Confirmado */
+  --brand-warning: #ba7517; /* Alerta / En proceso */
+  --brand-danger: #a32d2d; /* Error / Crítico */
+  --brand-info: #185fa5; /* Información / Secundario */
+
+  /*
+   * Accessibility derivatives — the implementation colors actually used
+   * as solid backgrounds under normal-size white (#fafaf8) text (Button,
+   * Badge, Alert solid fills). Audited against the real WCAG
+   * relative-luminance formula rather than the branding guide's own
+   * (partially incorrect) claim of "WCAG AA" for all five:
+   *   --brand-primary (#D85A30) -> 3.70:1  FAILS 4.5:1 (normal text)
+   *   --brand-success (#1D9E75) -> 3.24:1  FAILS 4.5:1
+   *   --brand-warning (#BA7517) -> 3.56:1  FAILS 4.5:1
+   *   --brand-danger  (#A32D2D) -> 6.76:1  passes — used verbatim below
+   *   --brand-info    (#185FA5) -> 6.24:1  passes — used verbatim below
+   *
+   * `--primary`/`--success`/`--warning` are therefore darkened, same-hue
+   * derivatives of their `--brand-*` counterpart (each reaches ≥4.5:1);
+   * they are implementation colors, not official branding tokens, and
+   * must not be presented as such. `--destructive`/`--info` simply
+   * reference the official `--brand-danger`/`--brand-info` tokens
+   * directly, since those already clear 4.5:1 with no adjustment.
+   */
+  --primary: #c44d25; /* Derivative of --brand-primary; 4.53:1 with #fafaf8 text */
   --primary-foreground: #fafaf8;
-  --destructive: #a32d2d; /* Error / crítico */
+  --destructive: var(
+    --brand-danger
+  ); /* 6.76:1 — official hex used directly, no derivative needed */
   --destructive-foreground: #fafaf8;
-  --success: #1d9e75; /* Éxito / confirmado */
+  --success: #188260; /* Derivative of --brand-success; 4.57:1 with #fafaf8 text */
   --success-foreground: #fafaf8;
-  --warning: #ba7517; /* Alerta / en proceso */
+  --warning: #a16514; /* Derivative of --brand-warning; 4.58:1 with #fafaf8 text */
   --warning-foreground: #fafaf8;
-  --info: #185fa5; /* Información / secundario */
+  --info: var(
+    --brand-info
+  ); /* 6.24:1 — official hex used directly, no derivative needed */
   --info-foreground: #fafaf8;
 }
 
@@ -77,12 +134,56 @@
   --color-info-foreground: var(--info-foreground);
 
   /*
+   * Official brand accent tokens (see the `:root` block above) exposed as
+   * Tailwind utilities — `bg-brand-primary`, `text-brand-success`,
+   * `border-brand-warning`, etc. — for the non-text uses documented
+   * there. There is no paired `-foreground` here on purpose: these are
+   * not meant to sit under text directly.
+   */
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-success: var(--brand-success);
+  --color-brand-warning: var(--brand-warning);
+  --color-brand-danger: var(--brand-danger);
+  --color-brand-info: var(--brand-info);
+
+  /*
    * Typography per docs/branding/branding.pdf (Poppins for headings, Inter
    * for body copy). Font files are loaded via <link> tags in index.html;
    * self-hosting them is a later decision, not part of this foundation.
    */
   --font-heading: 'Poppins', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  /*
+   * Typographic scale per docs/branding/branding.pdf "Escala tipográfica"
+   * (H1 32–44px/600-700, H2 24–28px/600, H3 16–18px/600, Body 14–16px/400,
+   * Small 12–13px/400). Each pair generates a `text-{name}` utility with a
+   * matching line-height. See shared/components/ui/typography.tsx for the
+   * components that consume these.
+   */
+  --text-display: 2.5rem; /* 40px — H1 / page title */
+  --text-display--line-height: 1.15;
+  --text-heading: 1.75rem; /* 28px — H2 / section heading */
+  --text-heading--line-height: 1.25;
+  --text-subheading: 1.125rem; /* 18px — H3 / card heading */
+  --text-subheading--line-height: 1.35;
+  --text-body: 1rem; /* 16px — body */
+  --text-body--line-height: 1.5;
+  --text-body-sm: 0.875rem; /* 14px — dense body */
+  --text-body-sm--line-height: 1.5;
+  --text-label: 0.8125rem; /* 13px — labels, per branding's "Small" bucket */
+  --text-label--line-height: 1.4;
+  --text-caption: 0.75rem; /* 12px — captions, hints */
+  --text-caption--line-height: 1.4;
+
+  /*
+   * No shadow/elevation tokens are defined here. The branding guide
+   * documents no elevation system at all (it favors a flat,
+   * border-driven look — hairline borders, 8px radius) — surfaces like
+   * `Card` rely on `border-border` for separation instead. Add a real
+   * elevation scale here once design provides one; don't reintroduce
+   * invented shadow values in the meantime.
+   */
 }
 
 @layer base {

@@ -17,5 +17,5 @@
     "lib": "@/shared/utils",
     "hooks": "@/shared/hooks"
   },
-  "iconLibrary": "lucide"
+  "iconLibrary": "tabler"
 }
