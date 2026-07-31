@@ -1,5 +1,6 @@
 export * from '@/shared/components/layout/AccountMenuPlaceholder'
 export * from '@/shared/components/layout/AppShell'
+export * from '@/shared/components/layout/AuthLayout'
 export * from '@/shared/components/layout/AppShellMain'
 export * from '@/shared/components/layout/MobileNavDrawer'
 export * from '@/shared/components/layout/NavItem'

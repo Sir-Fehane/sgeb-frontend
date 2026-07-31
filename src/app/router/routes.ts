@@ -67,6 +67,41 @@ export const router = createBrowserRouter([
       },
     ],
   },
+  /*
+   * Public SSO web auth screens (S1, the web adaptation of S3, S5, S6 —
+   * docs/FrontendArchitecture.md §17). Each page renders `AuthLayout`
+   * itself (no shared AppShell chrome, no route guards — auth
+   * integration is out of scope for this branch, see §10.1/§18).
+   */
+  {
+    path: '/login',
+    lazy: async () => {
+      const { LoginPage } = await import('@/features/auth/pages/LoginPage')
+      return { Component: LoginPage }
+    },
+  },
+  {
+    path: '/verificacion-2fa',
+    lazy: async () => {
+      const { TwoFactorPage } = await import('@/features/auth/pages/TwoFactorPage')
+      return { Component: TwoFactorPage }
+    },
+  },
+  {
+    path: '/recuperar',
+    lazy: async () => {
+      const { RecoveryRequestPage } =
+        await import('@/features/auth/pages/RecoveryRequestPage')
+      return { Component: RecoveryRequestPage }
+    },
+  },
+  {
+    path: '/recuperar/:token',
+    lazy: async () => {
+      const { NewPasswordPage } = await import('@/features/auth/pages/NewPasswordPage')
+      return { Component: NewPasswordPage }
+    },
+  },
   {
     path: '*',
     lazy: async () => {

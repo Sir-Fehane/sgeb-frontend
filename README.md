@@ -160,6 +160,38 @@ the same `@/shared/components` barrel as the rest of the design system.
 Visit `/panel`, `/eventos`, `/meseros`, or `/reportes` in dev to see the shell
 with a different nav item active.
 
+## Authentication UI foundation
+
+A **UI-only** foundation for the public SSO web auth screens lives under
+`src/features/auth/` (`components/`, `pages/`, `schemas/`, `types/`, `utils/` —
+no `services/queries/mutations/stores`, since API integration isn't part of this
+foundation yet).
+
+- **Routes** (public, unauthenticated, rendered outside `AppShell`):
+  - `/login` — S1, shared by `admin` and `capitan`.
+  - `/verificacion-2fa` — the still-undesigned web adaptation of S3; shows a
+    fallback message when visited without an in-progress verification (no real
+    login flow produces that state yet).
+  - `/recuperar` — S5, request a recovery link.
+  - `/recuperar/:token` — S6, set a new password. The route's `token` is never
+    read, displayed, or logged on this branch.
+- **`AuthLayout`** (`src/shared/components/layout/AuthLayout.tsx`) — the
+  project-owned, centered card layout for these screens. A real, separate
+  layout from `AppShell`, exported through the same `@/shared/components`
+  barrel; each auth page renders it directly (there is no shared route-level
+  wrapper, since each screen has its own distinct title/description).
+- **Validation source**: every Zod schema under `src/features/auth/schemas/`
+  mirrors `docs/sso/openapi-sso (1).yaml` and
+  `docs/sso/Diccionario_Datos_Auth_SGEB_v3.md` field-for-field (lengths, regex,
+  and the exact password policy) — see `src/features/auth/utils/patterns.ts`
+  for the shared regexes.
+- **Still pending** (explicitly out of scope for this foundation): SSO API
+  integration, token storage, `AuthProvider`, a Zustand auth store, route
+  guards, and role-based redirects. Every routed page's submit handler is a
+  dev-only no-op that visibly states the integration is pending — it never
+  claims a user was authenticated. See `docs/FrontendArchitecture.md` §18 for
+  the full intended flow once these land.
+
 ## High-level architecture
 
 - **Feature-Based Architecture**: business logic lives under `src/features/*`

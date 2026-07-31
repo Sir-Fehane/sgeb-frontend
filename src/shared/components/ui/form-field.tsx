@@ -14,9 +14,9 @@ export interface FormFieldControlProps {
 export interface FormFieldProps {
   /** Visible label text — every control rendered by this field is labeled. */
   label: string
-  description?: string
+  description?: string | undefined
   /** When present, replaces the description and marks the control invalid. */
-  error?: string
+  error?: string | undefined
   required?: boolean
   className?: string
   /**
