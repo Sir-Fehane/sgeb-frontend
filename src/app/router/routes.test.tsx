@@ -97,3 +97,33 @@ describe('/eventos renders the real events UI inside AppShell', () => {
     expect(screen.getByText('404')).toBeInTheDocument()
   })
 })
+
+describe('/meseros renders the real waiters UI inside AppShell', () => {
+  it('renders the AppShell chrome and the waiters list content at /meseros', async () => {
+    await renderAt('/meseros')
+
+    expect(
+      screen.getByRole('navigation', { name: 'Navegación principal' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('banner')).toBeInTheDocument()
+    expect(
+      screen.getByText('Consulta y filtra el directorio de meseros.'),
+    ).toBeInTheDocument()
+  })
+
+  it('does not register /meseros/:id — no waiter detail route is approved even as "Proposed"', async () => {
+    await renderAt('/meseros/mesero-demo-1')
+
+    expect(screen.getByText('404')).toBeInTheDocument()
+  })
+
+  it('does not register /meseros/invitar', async () => {
+    await renderAt('/meseros/invitar')
+    expect(screen.getByText('404')).toBeInTheDocument()
+  })
+
+  it('does not register /meseros/nuevo', async () => {
+    await renderAt('/meseros/nuevo')
+    expect(screen.getByText('404')).toBeInTheDocument()
+  })
+})

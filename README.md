@@ -296,6 +296,66 @@ of this foundation yet).
   on `/eventos` shows an inline notice rather than silently doing nothing or
   faking navigation.
 
+## Waiters UI foundation
+
+A **UI-only** foundation for the SGEB waiters directory lives under
+`src/features/waiters/` (`components/`, `pages/`, `types/`, `utils/`,
+`fixtures/` — no `services/queries/mutations`, since API integration isn't
+part of this foundation yet).
+
+- **Routes**: `/meseros` (inside `AppShell`) is the **only registered waiters
+  route** — a real, presentation-only directory, replacing the generic
+  `AppShellPreviewPage` placeholder. No waiter detail, creation, or invite
+  route is registered: unlike `/eventos/nuevo` or `/eventos/:id` (at least
+  listed as "Proposed"), `docs/FrontendArchitecture.md` §17 doesn't list
+  `/meseros/:id`, `/meseros/nuevo`, or `/meseros/invitar` at all — there is
+  nothing to infer a slug from.
+- **No separate "operational waiter" entity exists.** The 29-table data
+  dictionary has no `MESERO` table — the only documented waiter-directory
+  source is `GET /usuarios?rol=mesero`, returning the same `Usuario` schema
+  shared with `admin`/`capitan`. `src/features/waiters/types/waiter.ts`
+  documents this explicitly and does not invent a second entity; it also
+  flags a real, unresolved identifier conflict: SGEB's `Usuario.id_usuario`
+  is a plain integer, while the SSO documentation states that identifier
+  never leaves the backend and only `uuid_usuario` is exposed
+  (`docs/FrontendArchitecture.md` §8.1). Every waiter identifier here is
+  therefore an opaque string, never parsed or validated.
+- **Fields shown**: name, correo, teléfono (or "No registrado"), and account
+  status (`activo`/`inactivo`, from `Usuario.activo`) — the only fields
+  `Usuario` documents that are appropriate directory content. No rating, no
+  completed-events count, no payment/bank data, no per-event
+  attendance/assignment status: none of those are documented on `Usuario`,
+  and the tables that do define them (`CALIFICACION`, `PARTICIPACION_EVENTO`,
+  `CONFIRMACION_LLEGADA`, `PAGO`) are either per-event (no "current event"
+  exists on a general directory) or belong to a separate, contract-pending
+  dashboard screen (`GET /dashboard/meseros`, §7.1).
+- **Invitation renders genuinely disabled — it is not a form, and not a
+  clickable notice either.** `POST /auth/invitaciones` (SSO) is documented,
+  but the W-04 wireframe's invite panel captures only a phone number — a
+  field the confirmed contract doesn't even have (it requires
+  `nombre`/`apellido_paterno`/`correo`/`id_rol_destino` instead), and
+  `id_rol_destino`'s integer↔role mapping is undocumented. This mismatch is
+  already flagged in `docs/FrontendArchitecture.md` §8.2/§19 item 13 as
+  needing a design decision — building a capture form here would mean
+  guessing which field set is right. `WaitersPageHeader`'s "Invitar mesero"
+  button has no click handler and renders with the native `disabled`
+  attribute, with visible supporting text explaining the pending fields/role
+  mapping; the component accepts an `onInvite` callback prop so a real
+  handler can be wired in later, but the routed page does not supply one.
+- **Waiter rows are static, not selectable.** No waiter-detail route is
+  approved (`docs/FrontendArchitecture.md` §17 doesn't list `/meseros/:id`
+  even as "Proposed"), so `WaiterListItem` renders as a plain, non-interactive
+  item by default — never a clickable div. It only becomes a keyboard-operable
+  button when an `onSelect` callback is explicitly supplied, which the routed
+  `/meseros` page does not do.
+- **Development fixtures**: `src/features/waiters/fixtures/waiterFixtures.ts`
+  — neutral, fictional names/contact info, clearly labeled as dev-only. No
+  fake links to event/participation/payment fixtures are fabricated, since
+  none of those concerns are displayed in this directory.
+- **Still pending** (explicitly out of scope for this foundation): SGEB/SSO
+  API integration, waiter detail, SSO invitation sending, event assignment,
+  attendance, and payments (all separate features/screens).
+
 ## High-level architecture
 
 - **Feature-Based Architecture**: business logic lives under `src/features/*`
