@@ -34,8 +34,8 @@ export interface EventCreateFormProps {
  * validation rules. This is not a layout the user should expect to ship
  * as-is; see `EventCreateFieldPrototypePage` for the prototype framing.
  *
- * `id_capitan` and `comanda_url` are intentionally absent — see
- * `eventCreateSchema.ts`'s comment for why.
+ * `uuid_capitan` and `comanda_url` are intentionally absent — both are
+ * integration-owned fields; see `eventCreateSchema.ts`'s comment for why.
  */
 export function EventCreateForm({
   onSubmit,
@@ -68,7 +68,12 @@ export function EventCreateForm({
         <SectionHeading>Datos generales</SectionHeading>
         <FormField label="Título" required error={errors.titulo?.message}>
           {(controlProps) => (
-            <Input {...controlProps} disabled={isSubmitting} {...register('titulo')} />
+            <Input
+              {...controlProps}
+              maxLength={120}
+              disabled={isSubmitting}
+              {...register('titulo')}
+            />
           )}
         </FormField>
         <FormField label="Tipo de evento" required error={errors.tipo?.message}>

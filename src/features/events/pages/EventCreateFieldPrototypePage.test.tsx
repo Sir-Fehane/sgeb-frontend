@@ -47,6 +47,7 @@ describe('EventCreateFieldPrototypePage', () => {
     render(<EventCreateFieldPrototypePage />)
 
     expect(screen.queryByLabelText(/^Capitán/)).not.toBeInTheDocument()
+    expect(document.querySelector('[name="uuid_capitan"]')).toBeNull()
     expect(document.querySelector('[name="id_capitan"]')).toBeNull()
     expect(document.querySelector('[name="comanda_url"]')).toBeNull()
     expect(document.querySelector('input[type="file"]')).toBeNull()

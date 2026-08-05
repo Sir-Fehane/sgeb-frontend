@@ -12,9 +12,13 @@ import type {
  * (a later branch) supplies `GET /salones` and `GET /eventos` responses.
  *
  * No captain-option fixture exists here: the captain-selector control
- * was removed from event creation entirely (id_capitan's real source —
- * authenticated session vs. admin picker vs. role-dependent — remains
- * unresolved), so there is nothing left that needs one.
+ * was removed from event creation entirely (`uuid_capitan`'s real
+ * source — authenticated session vs. admin picker vs. role-dependent —
+ * remains unresolved), so there is nothing left that needs one. Nor does
+ * any event below carry a captain identifier field — the list
+ * presentation model has no genuine use for it (see
+ * `EventListItemViewModel`'s comment); `capitanNombre` is a display-only
+ * convenience, not a fabricated `uuid_capitan`.
  */
 
 export const SALON_OPTIONS_FIXTURE: readonly EventSalonOption[] = [
@@ -28,7 +32,6 @@ export const EVENTOS_FIXTURE: readonly EventListItemViewModel[] = [
     idEvento: 1001,
     idSalon: 1,
     salonNombre: 'Salón Roble',
-    idCapitan: 101,
     capitanNombre: 'Capitán de demostración uno',
     titulo: 'Evento de demostración — boda',
     tipo: 'social',
@@ -47,7 +50,6 @@ export const EVENTOS_FIXTURE: readonly EventListItemViewModel[] = [
     idEvento: 1002,
     idSalon: 3,
     salonNombre: 'Jardín Norte',
-    idCapitan: 102,
     capitanNombre: 'Capitán de demostración dos',
     titulo: 'Evento de demostración — conferencia anual',
     tipo: 'empresarial',
@@ -66,7 +68,6 @@ export const EVENTOS_FIXTURE: readonly EventListItemViewModel[] = [
     idEvento: 1003,
     idSalon: 2,
     salonNombre: 'Salón Alameda',
-    idCapitan: 101,
     capitanNombre: 'Capitán de demostración uno',
     titulo: 'Evento de demostración — en curso',
     tipo: 'social',
@@ -85,7 +86,6 @@ export const EVENTOS_FIXTURE: readonly EventListItemViewModel[] = [
     idEvento: 1004,
     idSalon: 1,
     salonNombre: 'Salón Roble',
-    idCapitan: 102,
     capitanNombre: 'Capitán de demostración dos',
     titulo: 'Evento de demostración — cancelado',
     tipo: 'empresarial',
@@ -104,7 +104,6 @@ export const EVENTOS_FIXTURE: readonly EventListItemViewModel[] = [
     idEvento: 1005,
     idSalon: 2,
     salonNombre: 'Salón Alameda',
-    idCapitan: 101,
     capitanNombre: 'Capitán de demostración uno',
     titulo: 'Evento de demostración — borrador',
     tipo: 'social',

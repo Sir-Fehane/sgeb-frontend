@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { EventSalonOption } from '@/features/events/types/event'
 
 const TITULO_MIN = 3
+const TITULO_MAX = 120
 const CUPO_MESEROS_MIN = 1
 const CUPO_MESEROS_MAX = 500
 const NUM_MESAS_MIN = 1
@@ -20,24 +21,30 @@ function todayIsoDate(): string {
 }
 
 /**
- * Mirrors a subset of `EventoCrear` (docs/api/documentacion-endpoints.txt)
+ * Mirrors a subset of `EventoCrear` (docs/api/openapi-sgeb.yaml v1.6.0)
  * as a **field-validation prototype**, not the approved creation
  * workflow — see `EventCreateFieldPrototypePage`. Two fields from
- * `EventoCrear` are deliberately absent here, not merely unvalidated:
+ * `EventoCrear` are deliberately absent here, not merely unvalidated —
+ * both are **integration-owned**, meaning a future request-composition
+ * layer must combine this prototype's validated values with these two
+ * fields before the result is a real `POST /eventos` payload:
  *
- * - `id_capitan`: its real source (authenticated session vs. an
- *   admin-only picker vs. something role-dependent) is unresolved —
- *   see the confirmed project context for this branch. No selector
- *   exists anywhere in this feature for it.
+ * - `uuid_capitan`: required by the confirmed contract, but this
+ *   prototype has no authentication, role resolution, or approved
+ *   captain-selection wireframe to source it from (session-derived vs.
+ *   an admin picker is still an open product question). No selector
+ *   exists anywhere in this feature for it — adding one, or a fake
+ *   captain list, would be guessing at an unapproved flow.
  * - `comanda_url`: the upload/authoring workflow that would produce
  *   this value is unresolved (no upload endpoint is documented,
  *   docs/FrontendArchitecture.md §7.5) — asking a user to hand-type a
  *   technical URL is not a real workflow either, so the field is
  *   omitted rather than faked.
  *
- * `titulo`'s maximum length is also deliberately unenforced — see the
- * comment on that field below (OpenAPI says 120, the data dictionary's
- * raw extraction reads 40; neither is encoded here).
+ * `titulo`'s length rule is now confirmed by `openapi-sgeb.yaml` v1.6.0
+ * (`minLength: 3, maxLength: 120`) — the previous 40-vs-120 conflict
+ * against the data dictionary's raw column-type text is resolved in
+ * favor of the OpenAPI schema, the definitive source of truth.
  *
  * Also includes two documented cross-field business rules, enforced
  * client-side as a first-pass check (the server remains authoritative):
@@ -60,22 +67,14 @@ export function createEventFormSchema(salones: readonly EventSalonOption[]) {
   return z
     .object({
       id_salon: z.number({ error: 'Selecciona un salón.' }).int().min(1),
-      /**
-       * Maximum length is intentionally NOT enforced here: the OpenAPI
-       * schema documents `maxLength: 120` while the data dictionary's
-       * raw column-type text reads `VARCHAR(40)` — a real, unresolved
-       * conflict between sources (see this branch's source-of-truth
-       * review). Encoding either number as an approved local rule would
-       * be guessing; only the documented minimum (3) is enforced until
-       * the backend team clarifies which one is correct. This is a
-       * blocker for API integration, not something this branch resolves.
-       */
+      /** `EventoCrear.titulo` — `minLength: 3, maxLength: 120`, confirmed by `openapi-sgeb.yaml` v1.6.0. */
       titulo: z
         .string()
         .min(
           TITULO_MIN,
           `El título debe tener al menos ${String(TITULO_MIN)} caracteres.`,
-        ),
+        )
+        .max(TITULO_MAX, `El título no puede superar ${String(TITULO_MAX)} caracteres.`),
       tipo: z.enum(['social', 'empresarial'], { error: 'Selecciona un tipo de evento.' }),
       fecha: z
         .string()
@@ -165,15 +164,19 @@ export function createEventFormSchema(salones: readonly EventSalonOption[]) {
 }
 
 /**
- * NOT the `EventoCrear` request DTO — this is the value shape of the
- * field-validation prototype only. It deliberately omits `id_capitan`
- * and `comanda_url`, leaves `titulo`'s maximum length unenforced, and
+ * NOT the `EventoCrear` request DTO, and NOT an `EventoCrearRequest`/
+ * `EventoCrearDto` — this is the value shape of the field-validation
+ * prototype only, and it is incomplete relative to `EventoCrear`. It
+ * deliberately omits two integration-owned fields (`uuid_capitan`,
+ * `comanda_url` — see `createEventFormSchema`'s comment for why), and
  * has never been confirmed against the real five-step wireframe. Do
- * not use this type to construct a `POST /eventos` payload; no mapper
- * from this shape to the real API request exists yet (a later branch's
- * job, once the wizard's actual steps and the remaining unresolved
- * fields are confirmed). See `createEventFormSchema`'s comment for the
- * full list of what's intentionally missing and why.
+ * not use this type to construct a `POST /eventos` payload directly; a
+ * future request-composition layer must combine these validated values
+ * with `uuid_capitan` (from the authenticated captain or an approved
+ * admin-selection flow) and `comanda_url`/an upload result (once its
+ * contract is defined) before the result is a real `EventoCrear`
+ * request. No such mapper exists yet — that is a later branch's job,
+ * once the wizard's actual steps and these two fields are resolved.
  */
 export type EventCreateFieldPrototypeValues = z.infer<
   ReturnType<typeof createEventFormSchema>

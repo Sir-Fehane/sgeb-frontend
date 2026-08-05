@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -47,7 +47,7 @@ describe('EventCreateForm', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
-  it('enforces the documented título minimum of 3 characters', async () => {
+  it('rejects a título shorter than the documented minimum of 3 characters', async () => {
     const user = userEvent.setup()
     const { onSubmit } = renderForm()
 
@@ -58,18 +58,49 @@ describe('EventCreateForm', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
-  it('does not enforce a título maximum — 40 vs. 120 is an unresolved source conflict, so neither is encoded', async () => {
+  it('accepts a título at exactly the documented minimum of 3 characters', async () => {
     const user = userEvent.setup()
     const { onSubmit } = renderForm()
 
-    // Longer than both candidate maximums (40 and 120).
-    const longTitulo = 'T'.repeat(150)
-    await fillValidForm(user, { titulo: longTitulo })
+    await fillValidForm(user, { titulo: 'abc' })
+    await user.click(screen.getByRole('button', { name: 'Validar borrador' }))
+
+    expect(onSubmit).toHaveBeenCalledOnce()
+  })
+
+  it('accepts a título at exactly the documented maximum of 120 characters', async () => {
+    const user = userEvent.setup()
+    const { onSubmit } = renderForm()
+
+    const exactly120 = 'T'.repeat(120)
+    await fillValidForm(user, { titulo: exactly120 })
     await user.click(screen.getByRole('button', { name: 'Validar borrador' }))
 
     expect(onSubmit).toHaveBeenCalledOnce()
     const [payload] = onSubmit.mock.calls[0] as [Record<string, unknown>]
-    expect(payload.titulo).toBe(longTitulo)
+    expect(payload.titulo).toBe(exactly120)
+  })
+
+  it('rejects a título longer than the documented maximum of 120 characters', async () => {
+    const user = userEvent.setup()
+    const { onSubmit } = renderForm()
+
+    await fillValidForm(user)
+
+    // The Input's `maxLength={120}` HTML attribute already stops a real
+    // user from *typing* past 120 characters — `user.type` can't
+    // exercise the over-limit case at all, since the DOM itself refuses
+    // the 121st keystroke. `fireEvent.change` sets the value directly
+    // (bypassing that browser-level restriction) so this test proves
+    // the Zod rule independently rejects an over-limit value, as a
+    // defense-in-depth check behind the HTML attribute.
+    fireEvent.change(screen.getByLabelText(/^Título/), {
+      target: { value: 'T'.repeat(121) },
+    })
+    await user.click(screen.getByRole('button', { name: 'Validar borrador' }))
+
+    expect(await screen.findByText(/no puede superar 120 caracteres/)).toBeInTheDocument()
+    expect(onSubmit).not.toHaveBeenCalled()
   })
 
   it('enforces SGEB-4007: num_mesas must not exceed the selected salón capacity', async () => {
@@ -100,7 +131,7 @@ describe('EventCreateForm', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
-  it('invokes the supplied callback with the documented field names for a valid draft, excluding id_capitan and comanda_url', async () => {
+  it('invokes the supplied callback with only the fields this prototype actually captures, never fabricating uuid_capitan or comanda_url', async () => {
     const user = userEvent.setup()
     const { onSubmit } = renderForm()
 
@@ -118,6 +149,10 @@ describe('EventCreateForm', () => {
       radio_geocerca_m: 150,
       tarifa_por_mesero: 400,
     })
+    // This callback's payload is not a complete EventoCrear request —
+    // uuid_capitan and comanda_url are integration-owned and must never
+    // be fabricated here (see eventCreateSchema.ts).
+    expect(payload).not.toHaveProperty('uuid_capitan')
     expect(payload).not.toHaveProperty('id_capitan')
     expect(payload).not.toHaveProperty('comanda_url')
   })
@@ -132,10 +167,11 @@ describe('EventCreateForm', () => {
     expect(document.querySelector('[name="token"]')).toBeNull()
   })
 
-  it("does not render a captain selector, matching id_capitan's unresolved sourcing", () => {
+  it('does not render a captain selector — uuid_capitan is integration-owned, not sourced from an unapproved picker', () => {
     renderForm()
 
     expect(screen.queryByLabelText(/^Capitán/)).not.toBeInTheDocument()
+    expect(document.querySelector('[name="uuid_capitan"]')).toBeNull()
     expect(document.querySelector('[name="id_capitan"]')).toBeNull()
     expect(
       screen.getByText(

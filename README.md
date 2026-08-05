@@ -248,23 +248,28 @@ of this foundation yet).
   validation and must not be read as the approved creation UX. Its final
   action is labeled "Validar borrador" and only demonstrates successful local
   validation — it never claims an event was created or persisted.
-  - **Captain assignment** (`id_capitan`) has no selector anywhere in this
-    prototype: whether it should derive from the authenticated capitán's own
-    session, be picked by an admin, or depend on role/permissions is pending
-    the authentication/role decisions of a later branch.
+  - **Captain assignment** (`uuid_capitan`, required by `EventoCrear`) has no
+    selector anywhere in this prototype: it is required by the confirmed
+    contract, but its real source (the authenticated capitán's own session vs.
+    an admin-only picker vs. something role-dependent) is pending the
+    authentication/role decisions of a later branch. This prototype does not
+    invent a captain selector, a fake captain list, or a disabled field merely
+    to mimic the API — the future request-composition layer must combine this
+    prototype's validated values with a real `uuid_capitan` once that's
+    resolved.
   - **Comanda upload** (`comanda_url`) is not an editable field either — no
     upload endpoint is documented (`docs/FrontendArchitecture.md` §7.5), and
     asking a user to hand-type a technical URL isn't a real workflow, so the
     prototype only shows a non-interactive "pending" note.
 - **Validation source**: `src/features/events/schemas/eventCreateSchema.ts`
   mirrors the subset of `EventoCrear` this prototype validates
-  (`docs/api/documentacion-endpoints.txt`) field-for-field, plus two documented
-  cross-field rules (SGEB-2008 fecha/inicio coherence, SGEB-4007 num_mesas vs.
-  salón capacity). `titulo`'s maximum length is a documented blocker for API
-  integration: the OpenAPI schema says `maxLength: 120`, the data dictionary's
-  raw column-type text reads `VARCHAR(40)` — a real, unresolved conflict, so
-  only the minimum (3 characters) is enforced until the backend team clarifies
-  which maximum is correct.
+  (`docs/api/openapi-sgeb.yaml`, currently v1.6.0) field-for-field, plus two
+  documented cross-field rules (SGEB-2008 fecha/inicio coherence, SGEB-4007
+  num_mesas vs. salón capacity). `titulo` enforces exactly the confirmed
+  `minLength: 3, maxLength: 120` rule (both a Zod rule and the input's
+  `maxLength` HTML attribute) — the previous 40-vs-120 conflict against the
+  data dictionary's raw column-type text is resolved in favor of the OpenAPI
+  schema.
 - **Page-level state architecture**: `EventsContent`
   (`src/features/events/components/EventsContent.tsx`) is the presentational
   composition — header, filters, and exactly one of loading / error / empty /
@@ -286,15 +291,23 @@ of this foundation yet).
   matches.
 - **Event list types are presentation models, not confirmed response DTOs.**
   No read/response schema for an event exists in any documented source (only
-  `EventoCrear`'s request shape is documented) — `EventListItemViewModel`
+  `EventoCrear`'s request shape is documented — confirmed still true in
+  `openapi-sgeb.yaml` v1.6.0: `GET /eventos`/`GET /eventos/{id}` both respond
+  with the generic envelope, no dedicated schema) — `EventListItemViewModel`
   (`src/features/events/types/event.ts`) is a necessary synthesis for
   fixtures/components, not a literal backend contract; `salonNombre`/
   `capitanNombre` are optional, fixture-only display fields.
+  `EventListItemViewModel` carries **no captain-identifier field at all**
+  (no `idCapitan`/`uuidCapitan`) — the list neither displays nor filters by
+  captain identity, so there is no genuine use for one here, even though
+  `EventoCrear.uuid_capitan` is a real, confirmed, required backend field.
+  That requirement is documented where it actually belongs — see
+  `EventCreateFieldPrototypeValues` below.
 - **Still pending** (explicitly out of scope for this foundation): SGEB API
   integration, real salón directories, event detail/editing, and any
-  authenticated-user-derived field. Selecting an event or requesting creation
-  on `/eventos` shows an inline notice rather than silently doing nothing or
-  faking navigation.
+  authenticated-user-derived field (including a real `uuid_capitan` source).
+  Selecting an event or requesting creation on `/eventos` shows an inline
+  notice rather than silently doing nothing or faking navigation.
 
 ## Waiters UI foundation
 
@@ -411,14 +424,14 @@ is no admin dashboard, no role switcher, and no inferred "current captain"
   labeled as development data; loading/global-error/partial-success states
   remain fully implemented and independently testable through
   `CaptainDashboardContent`'s own props.
-- **A newly-flagged, unresolved cross-document drift** (not fixed on this
-  branch — the Events feature is frozen): `openapi-sgeb.yaml`'s current
-  `EventoCrear` schema requires `uuid_capitan` (a UUID), while the
-  already-shipped Events UI foundation was built against
+- **A cross-document drift flagged here, resolved on `refactor/events-contract-v1-6`:**
+  `openapi-sgeb.yaml`'s `EventoCrear` schema requires `uuid_capitan` (a UUID),
+  while the Events UI foundation had originally been built against
   `docs/api/documentacion-endpoints.txt`'s older `EventoCrear`, which used
-  `id_capitan` (a plain integer). This is a genuine version drift between
-  two OpenAPI-shaped documents in the repo, surfaced here because this
-  branch is the first to read the newer document closely.
+  `id_capitan` (a plain integer) — a genuine version drift between two
+  OpenAPI-shaped documents in the repo. The Events feature (list types,
+  fixtures, the field-validation prototype's comments/tests) has since been
+  aligned to `uuid_capitan` — see the "Events UI foundation" section above.
 - **Still pending** (explicitly out of scope for this foundation): SGEB API
   integration, authentication/role resolution, Socket.IO, event-detail and
   live-operation routes, and waiter invitations (same contract gap as the

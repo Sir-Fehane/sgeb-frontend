@@ -1,13 +1,23 @@
 /**
  * UI domain types for the SGEB events module, derived from
- * docs/api/documentacion-endpoints.txt (`EventoCrear`, `/eventos` query
+ * docs/api/openapi-sgeb.yaml v1.6.0 (`EventoCrear`, `/eventos` query
  * params) and docs/data/diccionario-datos.pdf's EVENTO table.
+ * `documentacion-endpoints.txt` is the older, superseded version of this
+ * same OpenAPI document — `openapi-sgeb.yaml` v1.6.0 is the current
+ * source of truth wherever the two disagree (see
+ * refactor/events-contract-v1-6's report for the exact corrections this
+ * made — most notably, this list model no longer carries any captain
+ * identifier at all; see `EventListItemViewModel`'s own comment for why,
+ * and `EventCreateFieldPrototypeValues`/`createEventFormSchema` for
+ * where the confirmed `uuid_capitan` requirement actually lives).
  *
  * Documentation gap (flagged, not resolved): neither source defines a
  * literal read/response schema for "Evento" — only the `EventoCrear`
- * *request* shape is documented. `EventListItemViewModel` below is a
- * necessary synthesis for presentation purposes, not a literal
- * documented schema or a confirmed backend DTO — see its own comment.
+ * *request* shape is documented (`GET /eventos` and `GET /eventos/{id}`
+ * both respond with the generic `ExitoLista`/`Exito` envelope, no
+ * dedicated schema). `EventListItemViewModel` below is a necessary
+ * synthesis for presentation purposes, not a literal documented schema
+ * or a confirmed backend DTO — see its own comment.
  */
 
 /** `EVENTO.estado` — exact enum from `/eventos` GET params and `PATCH /eventos/{id}/estado`. */
@@ -33,9 +43,9 @@ export interface EventSalonOption {
 
 /**
  * Temporary presentation model for the events list/card UI — NOT a
- * confirmed backend response DTO. Neither `documentacion-endpoints.txt`
- * nor the data dictionary defines a literal read/response schema for
- * "Evento"; this type is the union of `EventoCrear`'s documented
+ * confirmed backend response DTO. Neither `openapi-sgeb.yaml` nor the
+ * data dictionary defines a literal read/response schema for "Evento";
+ * this type is the union of `EventoCrear`'s documented
  * request fields plus the data dictionary's server-generated columns
  * (`idEvento`, `estado`, `fin`, `creadoEn`), built only so fixtures and
  * components have something typed to render. Do not treat its
@@ -50,7 +60,7 @@ export interface EventSalonOption {
  *   unlike the SSO uuid/id duality) — but any route/prop boundary that
  *   would carry this as a URL param must still treat it as an opaque
  *   string, never parse/validate its format (see `EventListItem`).
- * - idSalon/idCapitan: `EventoCrear` (required FKs, both `integer`).
+ * - idSalon: `EventoCrear.id_salon` (required FK, `integer`).
  * - salonNombre/capitanNombre: NOT part of any documented response
  *   schema — a UI-model convenience for display, populated from
  *   fixtures only on this branch.
@@ -59,15 +69,28 @@ export interface EventSalonOption {
  * - estado/fin/creadoEn: data dictionary EVENTO table (server-generated,
  *   not part of `EventoCrear`).
  *
- * `comandaUrl` is deliberately absent: the upload/authoring workflow
- * for that field is unresolved (see `EventCreateFieldPrototypePage`),
- * so this presentation model does not carry it either.
+ * No captain-identifier field exists here (no `idCapitan`/`uuidCapitan`).
+ * `EventoCrear.uuid_capitan` is a real, confirmed, *required* backend
+ * field, but this list-presentation model has no genuine use for it:
+ * the list neither displays nor filters by captain identity, no
+ * event-detail route consumes it (§17 doesn't approve one), and no
+ * documented read/response schema for "Evento" exists to confirm it
+ * would even be embedded in a list item. `capitanNombre` alone (a
+ * display-only convenience, not a mirror of any wire field) is what the
+ * list renders. The confirmed `uuid_capitan` requirement is documented
+ * where it genuinely belongs instead — see
+ * `EventCreateFieldPrototypeValues` and `createEventFormSchema` in
+ * `features/events/schemas/eventCreateSchema.ts`.
+ *
+ * `comandaUrl` is deliberately absent for the same reason: the
+ * upload/authoring workflow for that field is unresolved (see
+ * `EventCreateFieldPrototypePage`), so this presentation model does not
+ * carry it either.
  */
 export interface EventListItemViewModel {
   idEvento: number
   idSalon: number
   salonNombre?: string
-  idCapitan: number
   capitanNombre?: string
   titulo: string
   tipo: EventType
