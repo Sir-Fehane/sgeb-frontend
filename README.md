@@ -185,10 +185,10 @@ the same `@/shared/components` barrel as the rest of the design system.
   They still render in the sidebar/drawer, visibly labeled "Ruta pendiente",
   `aria-disabled`, and not keyboard-activatable.
 - **Still pending**: authentication, route guards, and role-based nav/action
-  filtering are not implemented — `/panel`, `/meseros`, and `/reportes` still
-  render the shared, unguarded development placeholder (`AppShellPreviewPage`).
-  `/eventos` now renders the real, presentation-only events UI foundation
-  instead — see the next section.
+  filtering are not implemented — `/reportes` still renders the shared,
+  unguarded development placeholder (`AppShellPreviewPage`). `/panel`,
+  `/eventos`, and `/meseros` now render real, presentation-only feature UIs
+  instead — see the sections below.
 
 Visit `/panel`, `/eventos`, `/meseros`, or `/reportes` in dev to see the shell
 with a different nav item active.
@@ -355,6 +355,74 @@ part of this foundation yet).
 - **Still pending** (explicitly out of scope for this foundation): SGEB/SSO
   API integration, waiter detail, SSO invitation sending, event assignment,
   attendance, and payments (all separate features/screens).
+
+## Captain Dashboard UI foundation
+
+A **UI-only** foundation for the captain's operational dashboard lives under
+`src/features/dashboard/` (`components/`, `pages/`, `types/`, `utils/`,
+`fixtures/` — no `services/queries/mutations`, since API integration isn't
+part of this foundation yet). This is the **captain** dashboard only — there
+is no admin dashboard, no role switcher, and no inferred "current captain"
+(auth/role resolution is still pending).
+
+- **Routes**: `/panel` (inside `AppShell`) is the **only registered dashboard
+  route**, replacing the generic `AppShellPreviewPage` placeholder. No
+  event-detail or live-operation route is registered — none is approved in
+  `docs/FrontendArchitecture.md` §17.
+- **Source contract**: `GET /dashboard/capitan` and its `DashboardCapitan` /
+  `AlertaOperativa` schemas in `docs/api/openapi-sgeb.yaml` (v1.6.0). This
+  **resolves** the "pending" dashboard/KPI contract §7.1 previously noted for
+  the captain role specifically — the admin dashboard remains unresolved.
+  Every field rendered traces back to this contract; no additional KPI,
+  chart, status, or action is invented.
+- **Six sections, each independently nullable**: resumen (event counts),
+  próximos eventos, riesgo de personal (staffing), operación en curso,
+  cierre y pagos, and alertas operativas. Every `id_evento`/`id_alerta` is an
+  opaque string (`src/features/dashboard/types/dashboard.ts`), never parsed,
+  validated, or used to build a route.
+- **SGEB-0004 partial success**: when the API reports this code, some
+  sections arrive `null` because they failed to compute (not because they
+  were excluded via `secciones`). Each null section renders its own
+  "No disponible" (`DashboardSectionUnavailable`) — never a spinner, never a
+  failed dashboard — and `CaptainDashboardContent`'s `isPartial` prop shows a
+  non-interrupting banner using the exact documented wording. A **global**
+  error (`errorMessage`, e.g. SGEB-5008) is a distinct, total-failure state
+  that replaces the whole dashboard body instead.
+- **Date-range filters**: native date inputs for the two documented,
+  user-facing query parameters (`fecha_desde`/`fecha_hasta`), defaulting to
+  today / today+30 days. Validation is local-only (inverted range, >366-day
+  span) via `validateDashboardDateRange` — nothing is ever sent to a server.
+  `secciones` is **not** exposed as a user-facing filter; it's an internal
+  API mechanism, not a documented filter concept.
+- **Two unresolved actions render genuinely disabled**, mirroring the
+  Waiters feature's pattern: "Invitar meseros" in the staffing-risk section
+  has no approved invitation flow (same contract gap as `WaitersPageHeader`),
+  so it renders with the native `disabled` attribute and an accessible
+  pending explanation rather than a modal/route/form that doesn't exist.
+  Upcoming-event rows render as plain, non-interactive items by default
+  (never a clickable div) — the routed page doesn't supply `onSelectEvent`
+  since no event-detail route is approved.
+- **Development fixtures**: `src/features/dashboard/fixtures/dashboardFixtures.ts`
+  — a fully populated `CAPTAIN_DASHBOARD_FIXTURE` (one event in progress,
+  upcoming events, a staffing risk, one alert per documented severity) and an
+  `EMPTY_CAPTAIN_DASHBOARD_FIXTURE` demonstrating that a dashboard with zero
+  counts/empty lists/no current event is a valid state, distinct from
+  "unavailable". `/panel` always renders the populated fixture, clearly
+  labeled as development data; loading/global-error/partial-success states
+  remain fully implemented and independently testable through
+  `CaptainDashboardContent`'s own props.
+- **A newly-flagged, unresolved cross-document drift** (not fixed on this
+  branch — the Events feature is frozen): `openapi-sgeb.yaml`'s current
+  `EventoCrear` schema requires `uuid_capitan` (a UUID), while the
+  already-shipped Events UI foundation was built against
+  `docs/api/documentacion-endpoints.txt`'s older `EventoCrear`, which used
+  `id_capitan` (a plain integer). This is a genuine version drift between
+  two OpenAPI-shaped documents in the repo, surfaced here because this
+  branch is the first to read the newer document closely.
+- **Still pending** (explicitly out of scope for this foundation): SGEB API
+  integration, authentication/role resolution, Socket.IO, event-detail and
+  live-operation routes, and waiter invitations (same contract gap as the
+  Waiters feature).
 
 ## High-level architecture
 

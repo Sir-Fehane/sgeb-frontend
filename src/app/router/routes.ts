@@ -25,10 +25,10 @@ export const router = createBrowserRouter([
      * docs/FrontendArchitecture.md §17 get a child route here ("Operación
      * en vivo", "Bebidas y Cubaitor", and "Pagos" do not — see the
      * comment on `NAV_ITEMS` in shared/components/layout/nav-items.ts).
-     * `eventos` and `meseros` render the real, presentation-only
-     * events/waiters features (features/events, features/waiters); the
-     * other two children still render the shared development
-     * placeholder, not a real page.
+     * `panel`, `eventos` and `meseros` render the real, presentation-only
+     * dashboard/events/waiters features (features/dashboard,
+     * features/events, features/waiters); the remaining child still
+     * renders the shared development placeholder, not a real page.
      */
     lazy: async () => {
       const { AppShellLayout } = await import('@/app/router/layouts/AppShellLayout')
@@ -38,9 +38,9 @@ export const router = createBrowserRouter([
       {
         path: 'panel',
         lazy: async () => {
-          const { AppShellPreviewPage } =
-            await import('@/app/router/pages/AppShellPreviewPage')
-          return { Component: AppShellPreviewPage }
+          const { CaptainDashboardPage } =
+            await import('@/features/dashboard/pages/CaptainDashboardPage')
+          return { Component: CaptainDashboardPage }
         },
       },
       {

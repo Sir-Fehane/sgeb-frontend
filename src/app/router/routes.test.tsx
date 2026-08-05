@@ -70,6 +70,24 @@ describe('existing routes remain available', () => {
   })
 })
 
+describe('/panel renders the captain dashboard UI inside AppShell', () => {
+  it('renders the AppShell chrome and the captain dashboard content at /panel', async () => {
+    await renderAt('/panel')
+
+    expect(
+      screen.getByRole('navigation', { name: 'Navegación principal' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('banner')).toBeInTheDocument()
+    expect(screen.getByText('Resumen de eventos')).toBeInTheDocument()
+  })
+
+  it('does not register an /panel/:id event-detail or live-operation route', async () => {
+    await renderAt('/panel/dashboard-evento-demo-1')
+
+    expect(screen.getByText('404')).toBeInTheDocument()
+  })
+})
+
 describe('/eventos renders the real events UI inside AppShell', () => {
   it('renders the AppShell chrome and the events list content at /eventos', async () => {
     await renderAt('/eventos')
