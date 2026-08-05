@@ -1,5 +1,8 @@
 import { createBrowserRouter } from 'react-router-dom'
 
+import { RouteErrorBoundary } from '@/features/route-errors/components/RouteErrorBoundary'
+import { RouteHydrateFallback } from '@/features/route-errors/components/RouteHydrateFallback'
+
 /**
  * Minimal route table for the technical foundation.
  *
@@ -8,10 +11,23 @@ import { createBrowserRouter } from 'react-router-dom'
  * rest of the app should follow as business routes are added — see
  * docs/FrontendArchitecture.md §17 for the full planned route map. No
  * route guards exist yet because there is no auth contract to guard with.
+ *
+ * `errorElement`/`hydrateFallbackElement` are attached directly (not via
+ * each route's own `lazy()` loader) so both stay effective even if a
+ * route's lazy module itself fails to load — see
+ * `features/route-errors/components/RouteErrorBoundary` and
+ * `RouteHydrateFallback`. Both bubble from a child route to its nearest
+ * ancestor that defines one, so the single instance on `AppShellLayout`
+ * covers `panel`/`eventos`/`meseros`/`reportes` too — no per-child
+ * repetition needed, and (correctly) no AppShell chrome remains once
+ * either fires: a route failure or loading gap is never rendered as
+ * AppShell domain content.
  */
 export const router = createBrowserRouter([
   {
     path: '/',
+    errorElement: <RouteErrorBoundary />,
+    hydrateFallbackElement: <RouteHydrateFallback />,
     lazy: async () => {
       const { DesignSystemPreviewPage } =
         await import('@/app/router/pages/DesignSystemPreviewPage')
@@ -30,6 +46,8 @@ export const router = createBrowserRouter([
      * features/events, features/waiters); the remaining child still
      * renders the shared development placeholder, not a real page.
      */
+    errorElement: <RouteErrorBoundary />,
+    hydrateFallbackElement: <RouteHydrateFallback />,
     lazy: async () => {
       const { AppShellLayout } = await import('@/app/router/layouts/AppShellLayout')
       return { Component: AppShellLayout }
@@ -75,6 +93,8 @@ export const router = createBrowserRouter([
    */
   {
     path: '/login',
+    errorElement: <RouteErrorBoundary />,
+    hydrateFallbackElement: <RouteHydrateFallback />,
     lazy: async () => {
       const { LoginPage } = await import('@/features/auth/pages/LoginPage')
       return { Component: LoginPage }
@@ -82,6 +102,8 @@ export const router = createBrowserRouter([
   },
   {
     path: '/verificacion-2fa',
+    errorElement: <RouteErrorBoundary />,
+    hydrateFallbackElement: <RouteHydrateFallback />,
     lazy: async () => {
       const { TwoFactorPage } = await import('@/features/auth/pages/TwoFactorPage')
       return { Component: TwoFactorPage }
@@ -89,6 +111,8 @@ export const router = createBrowserRouter([
   },
   {
     path: '/recuperar',
+    errorElement: <RouteErrorBoundary />,
+    hydrateFallbackElement: <RouteHydrateFallback />,
     lazy: async () => {
       const { RecoveryRequestPage } =
         await import('@/features/auth/pages/RecoveryRequestPage')
@@ -97,6 +121,8 @@ export const router = createBrowserRouter([
   },
   {
     path: '/recuperar/:token',
+    errorElement: <RouteErrorBoundary />,
+    hydrateFallbackElement: <RouteHydrateFallback />,
     lazy: async () => {
       const { NewPasswordPage } = await import('@/features/auth/pages/NewPasswordPage')
       return { Component: NewPasswordPage }
@@ -104,8 +130,10 @@ export const router = createBrowserRouter([
   },
   {
     path: '*',
+    errorElement: <RouteErrorBoundary />,
+    hydrateFallbackElement: <RouteHydrateFallback />,
     lazy: async () => {
-      const { NotFoundPage } = await import('@/app/router/pages/NotFoundPage')
+      const { NotFoundPage } = await import('@/features/route-errors/pages/NotFoundPage')
       return { Component: NotFoundPage }
     },
   },

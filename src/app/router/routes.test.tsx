@@ -63,10 +63,58 @@ describe('existing routes remain available', () => {
     ).toBeInTheDocument()
   })
 
-  it('still falls back to NotFoundPage for an unknown path', async () => {
+  it('/reportes remains available', async () => {
+    await renderAt('/reportes')
+
+    expect(
+      screen.getByRole('navigation', { name: 'Navegación principal' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).not.toBeInTheDocument()
+  })
+})
+
+describe('an unknown path renders the not-found page', () => {
+  it('renders exactly one clear heading explaining the page was not found', async () => {
     await renderAt('/una-ruta-que-no-existe')
 
-    expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument()
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
+  })
+
+  it('provides a real recovery action to /panel', async () => {
+    await renderAt('/una-ruta-que-no-existe')
+
+    expect(screen.getByRole('link', { name: 'Volver al panel' })).toHaveAttribute(
+      'href',
+      '/panel',
+    )
+  })
+
+  it('does not render /login and does not redirect there', async () => {
+    await renderAt('/una-ruta-que-no-existe')
+
+    expect(
+      screen.queryByRole('heading', { level: 1, name: 'Iniciar sesión' }),
+    ).not.toBeInTheDocument()
+    expect(window.location.pathname).not.toBe('/login')
+  })
+
+  it('does not automatically redirect anywhere — the unmatched path stays put', async () => {
+    await renderAt('/una-ruta-que-no-existe')
+
+    expect(router.state.location.pathname).toBe('/una-ruta-que-no-existe')
+  })
+
+  it('displays no raw technical information', async () => {
+    await renderAt('/una-ruta-que-no-existe')
+
+    expect(
+      screen.queryByText(/TypeError|ReferenceError|stack|technical_message/i),
+    ).not.toBeInTheDocument()
   })
 })
 
@@ -84,7 +132,9 @@ describe('/panel renders the captain dashboard UI inside AppShell', () => {
   it('does not register an /panel/:id event-detail or live-operation route', async () => {
     await renderAt('/panel/dashboard-evento-demo-1')
 
-    expect(screen.getByText('404')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
   })
 })
 
@@ -105,14 +155,18 @@ describe('/eventos renders the real events UI inside AppShell', () => {
     await renderAt('/eventos/nuevo')
 
     // Falls through to the catch-all NotFoundPage, not a real creation page.
-    expect(screen.getByText('404')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Crear evento' })).not.toBeInTheDocument()
   })
 
   it('does not register an /eventos/:id detail route', async () => {
     await renderAt('/eventos/1001')
 
-    expect(screen.getByText('404')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
   })
 })
 
@@ -132,16 +186,22 @@ describe('/meseros renders the real waiters UI inside AppShell', () => {
   it('does not register /meseros/:id — no waiter detail route is approved even as "Proposed"', async () => {
     await renderAt('/meseros/mesero-demo-1')
 
-    expect(screen.getByText('404')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
   })
 
   it('does not register /meseros/invitar', async () => {
     await renderAt('/meseros/invitar')
-    expect(screen.getByText('404')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
   })
 
   it('does not register /meseros/nuevo', async () => {
     await renderAt('/meseros/nuevo')
-    expect(screen.getByText('404')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
   })
 })

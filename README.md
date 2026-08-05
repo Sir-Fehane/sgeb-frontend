@@ -437,6 +437,60 @@ is no admin dashboard, no role switcher, and no inferred "current captain"
   live-operation routes, and waiter invitations (same contract gap as the
   Waiters feature).
 
+## Route-error foundation
+
+A **UI-only** foundation for unmatched routes and unexpected route-level failures
+lives under `src/features/route-errors/` (`components/`, `pages/` — no
+`services/queries/mutations`, since this is unrelated to API/domain error
+handling). This is client-side routing infrastructure, independent of
+authentication, current role, current user, or API availability.
+
+- **Not-found route**: `path: '*'` in `src/app/router/routes.tsx` (already
+  registered, now pointing at `features/route-errors/pages/NotFoundPage.tsx`)
+  renders a real page for any URL that matches no registered route — a normal
+  client-navigation outcome, not a crash. It never redirects automatically,
+  never redirects to `/login`, and never claims the user lacks permission; its
+  one recovery action links to `/panel`, the app's stable authenticated home.
+- **Route error boundary**: every top-level route in `routes.tsx` has an
+  `errorElement` (`RouteErrorBoundary`), the idiomatic React Router v7
+  mechanism for a thrown loader/action/render error or a failed lazy-module
+  import. It distinguishes exactly two outcomes via `useRouteError` +
+  `isRouteErrorResponse`: a thrown `404` route response renders the same
+  not-found presentation as the catch-all route; anything else (a thrown
+  `Error`, an unknown value, or any other response status) renders one safe,
+  generic "No pudimos abrir esta página" presentation. No 401/403 is
+  special-cased into a login redirect or authorization behavior — that
+  remains explicitly out of scope. `errorElement` bubbles from a child route
+  to its nearest ancestor that defines one, so the single instance on the
+  `AppShellLayout` route also covers `panel`/`eventos`/`meseros`/`reportes` —
+  and correctly replaces the whole AppShell chrome rather than rendering
+  inside it, since a route failure is never treated as AppShell domain
+  content.
+- **Shared presentation, never raw error text**:
+  `RouteErrorPresentation` (`src/features/route-errors/components/`) is the
+  one reusable component behind both the not-found page and the error
+  boundary. It has no prop for the original thrown value or message — the
+  boundary discards it down to just a `variant` — so it structurally cannot
+  render a stack trace, `Error.message`, a file path, or a `technical_message`.
+  The not-found variant uses plain, non-assertive text; the unexpected-error
+  variant uses an assertive `Alert` (`tone="danger"`). Both always render
+  exactly one `<h1>` and a real "Volver al panel" link; the unexpected variant
+  additionally offers a "Reintentar" button that calls a real
+  `window.location.reload()` — but only at the boundary itself, so the
+  presentational component stays fully unit-testable via an injected callback,
+  without ever triggering real navigation inside a test.
+- **Hydration fallback**: every route in this app is registered via
+  route-level `lazy()`, and until this branch nothing was configured for the
+  window before the initially-matched route's module resolves — reproducible
+  as `No \`HydrateFallback\` element provided...`on a fresh render. Every
+top-level route now also has a`hydrateFallbackElement`
+(`RouteHydrateFallback`): one accessible `role="status"`region (via the
+existing`Spinner` component) with no fake progress and no simulated delay.
+- **Still pending** (explicitly out of scope for this foundation): SGEB/SSO
+  API error handling (envelope parsing, `result.code` mapping) — a
+  deliberately separate concern from route-level errors — plus
+  authentication, route guards, and role-based authorization.
+
 ## High-level architecture
 
 - **Feature-Based Architecture**: business logic lives under `src/features/*`
