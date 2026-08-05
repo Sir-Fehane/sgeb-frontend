@@ -1,8 +1,10 @@
 # Dependencies and builds
 node_modules/
 dist/
+dev-dist/
 coverage/
 .vite/
+*.tsbuildinfo
 
 # Environment variables
 .env

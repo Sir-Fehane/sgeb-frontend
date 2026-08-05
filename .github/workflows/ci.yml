@@ -1,0 +1,90 @@
+name: Frontend CI
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+  push:
+    branches:
+      - develop
+      - main
+
+# Cancel a superseded run for the same branch/PR when a newer one starts.
+# github.ref is stable per branch (push) and per PR (pull_request), so this
+# never touches unrelated branches or PRs.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# Least privilege: this workflow only reads the repository to run checks.
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Type check, lint, format, test, build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # The CI workflow runs on Node 22.12.0, the minimum version declared
+      # by engines.node (">=22.12.0") — not an exact pin, since engines.node
+      # only declares a floor. No .nvmrc/.node-version/Volta config exists
+      # in this repository, so this is the one concrete, documented number
+      # available; CI intentionally validates against that declared minimum
+      # rather than inventing or upgrading to a different version.
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.12.0'
+
+      # Installs pnpm via the official pnpm-maintained action. `version` is
+      # intentionally omitted so package.json's "packageManager" field
+      # (pnpm@11.18.0) stays the single source of truth for which pnpm
+      # version is used — this action reads it automatically. Corepack is
+      # not used here: its bundled keyring failed to verify pnpm's
+      # signature in this environment ("Cannot find matching keyid").
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      # Diagnostic output only — does not alter installation or runtime
+      # behavior. Useful for confirming exactly what ran in a given job.
+      - name: Runtime versions
+        run: |
+          node --version
+          pnpm --version
+
+      - name: Resolve pnpm store directory
+        id: pnpm-store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
+      # Uses the committed lockfile as-is; fails instead of silently
+      # updating it if package.json and pnpm-lock.yaml have drifted apart.
+      - name: Install dependencies (frozen lockfile)
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Lint (entire repository, not lint-staged)
+        run: pnpm lint
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Unit/component tests
+        run: pnpm test:run
+
+      - name: Production build
+        run: pnpm build
