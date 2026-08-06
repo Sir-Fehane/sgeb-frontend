@@ -205,3 +205,45 @@ describe('/meseros renders the real waiters UI inside AppShell', () => {
     ).toBeInTheDocument()
   })
 })
+
+describe('/reportes renders the real waiter-performance report UI inside AppShell', () => {
+  it('renders the AppShell chrome and the report content at /reportes', async () => {
+    await renderAt('/reportes')
+
+    expect(
+      screen.getByRole('navigation', { name: 'Navegación principal' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('banner')).toBeInTheDocument()
+    expect(screen.getByRole('table')).toBeInTheDocument()
+  })
+
+  it('does not register /reportes/exportar', async () => {
+    await renderAt('/reportes/exportar')
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
+  })
+
+  it('does not register /reportes/merma — event-specific merma is a separate, out-of-scope feature', async () => {
+    await renderAt('/reportes/merma')
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
+  })
+
+  it('does not register /reportes/pagos — event-specific payments are a separate, out-of-scope feature', async () => {
+    await renderAt('/reportes/pagos')
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
+  })
+
+  it('does not register a /reportes/meseros/:uuid waiter-detail route', async () => {
+    await renderAt('/reportes/meseros/b2c3d4e5-f6a7-4b1c-8d2e-000000000001')
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
+  })
+})

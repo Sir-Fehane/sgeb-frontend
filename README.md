@@ -185,10 +185,9 @@ the same `@/shared/components` barrel as the rest of the design system.
   They still render in the sidebar/drawer, visibly labeled "Ruta pendiente",
   `aria-disabled`, and not keyboard-activatable.
 - **Still pending**: authentication, route guards, and role-based nav/action
-  filtering are not implemented — `/reportes` still renders the shared,
-  unguarded development placeholder (`AppShellPreviewPage`). `/panel`,
-  `/eventos`, and `/meseros` now render real, presentation-only feature UIs
-  instead — see the sections below.
+  filtering are not implemented. `/panel`, `/eventos`, `/meseros`, and
+  `/reportes` all now render real, presentation-only feature UIs — see the
+  sections below.
 
 Visit `/panel`, `/eventos`, `/meseros`, or `/reportes` in dev to see the shell
 with a different nav item active.
@@ -436,6 +435,91 @@ is no admin dashboard, no role switcher, and no inferred "current captain"
   integration, authentication/role resolution, Socket.IO, event-detail and
   live-operation routes, and waiter invitations (same contract gap as the
   Waiters feature).
+
+## Reports UI foundation
+
+A **UI-only** foundation for the waiter-performance report lives under
+`src/features/reports/` (`components/`, `pages/`, `types/`, `fixtures/`,
+`utils/` — no `services/queries/mutations`, since API integration isn't part
+of this foundation yet).
+
+- **Routes**: `/reportes` (inside `AppShell`) is the **only registered
+  reports route** — a real, presentation-only report, replacing the generic
+  `AppShellPreviewPage` placeholder. No `/reportes/:id`,
+  `/reportes/meseros/:uuid`, `/reportes/exportar`, `/reportes/merma`, or
+  `/reportes/pagos` route is registered — no waiter-detail, export, or
+  event-specific route is approved.
+- **Source contract**: `GET /dashboard/meseros`
+  (`docs/api/openapi-sgeb.yaml`, v1.6.0) — a single, separately-paginated
+  endpoint returning one historical aggregate row per waiter
+  (`DesempenoMesero`: attendance, ratings, and payment totals over a date
+  range). This is the **only** backing contract for this screen. Event-specific
+  endpoints (`GET/POST /eventos/{id}/reportes-merma`, `GET /eventos/{id}/cierre`,
+  `GET /eventos/{id}/pagos`, `POST /eventos/{id}/pagos/calcular`,
+  `PATCH /pagos/{id}/pagado`, `PATCH /pagos/{id}/fallido`) are explicitly **not**
+  treated as sources for this general Reports screen — those belong to
+  separate, future Cierre/Pagos features scoped to a specific event.
+- **Scope is historical waiter performance, not a general report center.**
+  The page heading is "Reportes" (rendered by `AppShell`'s `Topbar`, per the
+  established convention); the subtitle honestly states "Desempeño histórico
+  de meseros" — never "reportes generales del sistema," a financial audit, an
+  event report, or a merma report. No functional tabs exist for report
+  categories the current contract doesn't back (attendance/ratings/payments
+  all come from the _same_ `DesempenoMesero` row, so there's nothing to
+  tab between); if the wireframe visually suggests other categories, they
+  are not built here — see "Still pending" below.
+- **Presentation model**: `WaiterPerformanceReportItem`
+  (`src/features/reports/types/report.ts`) mirrors `DesempenoMesero`
+  field-for-field (camelCase). `uuidUsuario` is an opaque string — never
+  parsed, converted to an integer, or displayed anywhere; `clabeVigente` is
+  only ever rendered as "Vigente"/"No vigente" text, never the CLABE itself.
+  No undocumented field exists (no teléfono, correo, employee number, named
+  missed events, trend, rank, or previous-period comparison).
+- **Filters**: native `Desde`/`Hasta` date inputs (local-only inverted-range
+  validation; **no** undocumented maximum-range check, unlike
+  `GET /dashboard/capitan`'s confirmed 366-day limit — `/dashboard/meseros`
+  documents no specific number) and an `orden` `<select>` with exactly the
+  three documented values (Calificación, Asistencias, Monto pagado). No
+  `uuid_usuario` filter is exposed as a raw text input — the endpoint
+  supports it, but no approved waiter-selector integration exists in this
+  branch; a future integration would source it from that selector, never a
+  free-text UUID field. No pagination control (page/page-size) exists either
+  — see "Contract limitation" below.
+- **Page-level state architecture**: `ReportsContent`
+  (`src/features/reports/components/ReportsContent.tsx`) is the
+  presentational composition — header, filters, and exactly one of
+  loading/error/empty/populated, selected purely from its own props
+  (`items`, `isLoading`, `errorMessage`, `onRetry`, `filters`,
+  `onFilterChange`) — mirrors `EventsContent`/`WaitersContent`/
+  `CaptainDashboardContent`'s architecture. Unlike `DashboardCapitan`,
+  `GET /dashboard/meseros` has no documented partial-success behavior (no
+  SGEB-0004-style per-section nullability) — it's a flat array, so only
+  these four whole-screen states exist.
+- **Report table**: a plain semantic `<table>` (this is the first feature
+  needing one — no shared `Table` primitive exists yet, so this isn't a
+  refactor of anything) with `<th scope="col">` headers grouped exactly as
+  documented (Mesero, Participación, Asistencia, Calificación, Pagos,
+  Cuenta), wrapped in its own horizontally-scrolling container so only the
+  table overflows on narrow viewports, never the page. Rows are plain
+  `<tr>`s — never a link or button; no action menu, payment action, or
+  invitation action exists.
+- **Development fixtures**: `src/features/reports/fixtures/reportFixtures.ts`
+  — 4 fictional waiter rows covering zero/some inasistencias, 100%/partial
+  attendance, a `null` `calificacionPromedio`, zero/positive
+  `montoPendiente`, and both `clabeVigente` values; plus an empty-array
+  fixture. `/reportes` always renders the populated fixture, clearly labeled
+  as development data.
+- **Local ordering is demo-only.** `sortWaiterPerformanceReport`
+  (`src/features/reports/utils/`) sorts the in-memory fixture rows when
+  `orden` changes — a stand-in for the server's real ordering, which future
+  API integration owns. Supports exactly the three documented `orden`
+  values, never mutates its input, and sorts a `null` `calificacionPromedio`
+  after every rated waiter (not as a "low" rating) with a stable
+  name-based tie-break for deterministic rendering.
+- **Still pending** (explicitly out of scope for this foundation): SGEB API
+  integration, a `uuid_usuario` waiter-selector, pagination UI, report
+  exports (CSV/PDF), charts, and any event-specific Cierre/Pagos/merma
+  screen (separate future features, not alternate sources for this one).
 
 ## Route-error foundation
 
