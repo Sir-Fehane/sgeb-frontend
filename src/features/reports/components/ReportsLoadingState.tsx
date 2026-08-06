@@ -1,0 +1,23 @@
+import { Skeleton } from '@/shared/components'
+
+const PLACEHOLDER_ROWS = 4
+
+/**
+ * `role="status"` on the wrapper (not the individual `Skeleton`s, which
+ * are `aria-hidden` by design) so assistive technology gets a single,
+ * non-repetitive "loading" announcement — mirrors
+ * `WaitersLoadingState`/`DashboardLoadingState`.
+ */
+export function ReportsLoadingState() {
+  return (
+    <div
+      role="status"
+      aria-label="Cargando reporte de desempeño"
+      className="flex flex-col gap-3"
+    >
+      {Array.from({ length: PLACEHOLDER_ROWS }, (_, index) => (
+        <Skeleton key={index} className="h-16 w-full" />
+      ))}
+    </div>
+  )
+}
