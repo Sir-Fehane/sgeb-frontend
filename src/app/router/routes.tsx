@@ -128,6 +128,26 @@ export const router = createBrowserRouter([
       return { Component: NewPasswordPage }
     },
   },
+  /*
+   * The anonymous public diner (comensal) experience — reached directly
+   * from a table's QR code, architecturally independent of the
+   * captain/admin console (docs/FrontendArchitecture.md §2.2, §12): no
+   * AppShell, no AuthLayout, no SSO, no derived role. `codigoQr` is an
+   * opaque route param, never displayed. Only the mesa-view route is
+   * registered — `/publico/mesas/:codigoQr/calificar` (§17's "Proposed
+   * Routing Structure") is intentionally NOT a separate route; the
+   * rating form is embedded in this one page instead.
+   */
+  {
+    path: '/publico/mesas/:codigoQr',
+    errorElement: <RouteErrorBoundary />,
+    hydrateFallbackElement: <RouteHydrateFallback />,
+    lazy: async () => {
+      const { PublicDinerPage } =
+        await import('@/features/public-diner/pages/PublicDinerPage')
+      return { Component: PublicDinerPage }
+    },
+  },
   {
     path: '*',
     errorElement: <RouteErrorBoundary />,

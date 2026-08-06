@@ -247,3 +247,45 @@ describe('/reportes renders the real waiter-performance report UI inside AppShel
     ).toBeInTheDocument()
   })
 })
+
+describe('/publico/mesas/:codigoQr renders the anonymous public diner experience', () => {
+  it('renders the public diner page, with no AppShell chrome', async () => {
+    await renderAt('/publico/mesas/a1b2c3d4-e5f6-4a1b-8c2d-000000000099')
+
+    expect(screen.getByRole('button', { name: 'Llamar al mesero' })).toBeInTheDocument()
+    expect(
+      screen.queryByRole('navigation', { name: 'Navegación principal' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('renders no AuthLayout content for the public diner route', async () => {
+    await renderAt('/publico/mesas/a1b2c3d4-e5f6-4a1b-8c2d-000000000099')
+
+    expect(
+      screen.queryByRole('heading', { name: 'Iniciar sesión' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('does not register /publico/mesas without a codigoQr — falls through to not-found', async () => {
+    await renderAt('/publico/mesas')
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
+  })
+
+  it('does not register /publico/mesas/:codigoQr/calificar as a separate route', async () => {
+    await renderAt('/publico/mesas/a1b2c3d4-e5f6-4a1b-8c2d-000000000099/calificar')
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
+  })
+
+  it('does not register a bare /publico or /publico/mesas index route', async () => {
+    await renderAt('/publico')
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
+  })
+})

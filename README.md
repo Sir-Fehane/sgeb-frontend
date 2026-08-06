@@ -145,8 +145,8 @@ on shadcn/ui + Radix primitives.
   accept an icon-agnostic `icon?: ReactNode` slot rather than being coupled to a
   specific icon.
 - **Responsive targets**: the authenticated console is desktop-first with full
-  tablet support; the (not-yet-built) comensal experience is mobile-first — see
-  `docs/FrontendArchitecture.md` §10.3.
+  tablet support; the public diner (comensal) experience is mobile-first — see
+  "Public diner UI foundation" below and `docs/FrontendArchitecture.md` §10.3.
 
 ### Running the design-system preview
 
@@ -574,6 +574,75 @@ existing`Spinner` component) with no fake progress and no simulated delay.
   API error handling (envelope parsing, `result.code` mapping) — a
   deliberately separate concern from route-level errors — plus
   authentication, route guards, and role-based authorization.
+
+## Public diner UI foundation
+
+A **UI-only** foundation for the anonymous, QR-based guest (comensal)
+experience lives under `src/features/public-diner/` (`components/`, `pages/`,
+`types/`, `fixtures/`, `schemas/` — no `services/queries/mutations`, since API
+integration isn't part of this foundation yet). It ships in this same
+repository but is **architecturally independent** of the captain/admin
+console: no `AppShell`, no `AuthLayout`, no SSO, no Bearer token, no derived
+role, no shared authenticated state.
+
+- **Route**: `/publico/mesas/:codigoQr` — reached directly from a table's QR
+  code, mounted outside `AppShell`/`AuthLayout` with its own minimal,
+  mobile-first layout (`PublicDinerLayout`, feature-local for now —
+  `docs/FrontendArchitecture.md` §12 proposes promoting this to a shared
+  `PublicLayout` once a second public route genuinely needs it; premature
+  before that). `codigoQr` is an opaque route value — never displayed,
+  parsed, or generated. No `/publico`, `/publico/mesas` (bare), or
+  `/publico/mesas/:codigoQr/calificar` route is registered — the rating form
+  is embedded in this one page instead of a separate route.
+- **Source contract**: `docs/api/openapi-sgeb.yaml` v1.6.0's
+  `/publico/mesas/{codigo_qr}*` endpoints (`GET` for the table/waiter view,
+  `POST .../solicitudes` for the attention request, `POST .../calificaciones`
+  for the rating). `POST .../token`'s relationship to the `GET` response's own
+  `token_comensal` field is a genuine, **unresolved** integration question
+  this branch does not decide — see "Still pending" below.
+- **Current scope**: table label + assigned waiter name, one "Llamar al
+  mesero" action, and a waiter rating form. Nothing else — no menu, no
+  ordering, no payment, no waiter contact info, no QR scanner.
+- **"Pedir cuenta" is intentionally excluded**, per `docs/decisions.md`'s
+  confirmed product decision — SGEB is banquet/event service (a fixed
+  per-event tariff), not restaurant table billing. The backend's `tipo` enum
+  still documents `cuenta` (and `otro`); this UI simply never surfaces
+  either — only `tipo: "atencion"` is exposed.
+- **Presentation model**: `PublicDinerTableViewModel` mirrors the `GET`
+  response's inline `data` object (`etiqueta`, `mesero`, `tokenComensal`)
+  field-for-field — not a named OpenAPI component schema, since the spec
+  documents this response inline. `tokenComensal` is an opaque string,
+  supplied internally to the page from route/session data; never rendered,
+  never user-entered, never persisted to `localStorage`/`sessionStorage`.
+- **Rating validation**: `schemas/ratingSchema.ts` mirrors
+  `POST .../calificaciones`'s documented fields exactly (`puntuacion`:
+  integer 1–5; `comentario`: optional, max 255 chars) via React Hook
+  Form + Zod, this project's existing form stack. `token_comensal` is
+  deliberately not a schema field — it isn't user input. A blank comment
+  normalizes to `undefined`, never an empty string. The score control is a
+  native `<input type="radio">` group (real radiogroup semantics for free),
+  driven through RHF's `Controller` rather than plain `register()` — radio
+  inputs have no native `.valueAsNumber` DOM property, so `Controller`
+  avoids that whole class of silent-`NaN` bugs.
+- **Development fixtures**: `fixtures/publicDinerFixtures.ts` — one
+  fictional table (`PUBLIC_DINER_TABLE_FIXTURE`), an opaque UUID-shaped
+  token, never rendered. `/publico/mesas/:codigoQr` always shows this
+  fixture, clearly labeled as development data; no development-state
+  selector exists.
+- **Demo interaction states are honest, not simulated backend calls.**
+  Pressing "Llamar al mesero" or submitting a rating updates local React
+  state only (no request, no fake delay) and shows an explicit
+  "Demostración: ... aún no se envió al personal" disclosure — never the
+  real components' default "Avisamos a tu mesero." copy, which is reserved
+  for actual integration. Refreshing the page resets all demo state.
+- **Still pending** (explicitly out of scope for this foundation): SGEB API
+  integration; which endpoint (`GET /publico/mesas/{codigo_qr}` vs.
+  `POST .../token`) owns _initial_ `token_comensal` issuance, and whether/how
+  the browser persists it, is a genuine, unresolved integration decision this
+  branch does not make; no diner wireframes exist anywhere in the provided
+  documentation (confirmed in `docs/FrontendArchitecture.md` §2.2), so this
+  foundation is built directly from the OpenAPI contract, conservatively, per
+  existing branding/design-system conventions.
 
 ## High-level architecture
 
