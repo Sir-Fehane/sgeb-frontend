@@ -398,8 +398,87 @@ eventDetailFixtures.ts` — exactly two records (per this branch's
   are all unchanged.
 - **Still pending** (explicitly out of scope for this foundation): SGEB API
   integration, live `DashboardEvento` data, Socket.IO, event attendance,
-  team-selection/montaje/dispensing UI, event editing or status
-  transitions, and the comanda upload contract.
+  montaje/dispensing UI, event editing or status transitions, and the
+  comanda upload contract. "Selección de equipo" is no longer pending —
+  see below.
+
+## Team Selection UI foundation (W-05)
+
+A **UI-only, fixture-backed** foundation for W-05 "Seleccionar equipo"
+lives at `src/features/events/team-selection/` — a subdirectory of the
+existing Events feature (not a competing top-level "team" domain), with
+its own `components/`, `pages/TeamSelectionPage.tsx`, `fixtures/`, and
+`types/`.
+
+- **Route**: `/eventos/:id/equipo` (inside `AppShell`), the first of
+  Event Detail's documented operational children
+  (`docs/FrontendArchitecture.md` §17) to become real. Reuses
+  `parseEventId` from the Events feature directly — the same positive
+  integer SGEB event id as `/eventos/:id`, never a UUID. A malformed
+  parent event id renders `EventDetailUnavailableState` (reused, not
+  duplicated — the exact same "event not found" concern as Event Detail
+  itself).
+- **Source contract**: `GET /eventos/{id_evento}/participaciones?estado=aparto`
+  (`openapi-sgeb.yaml` v1.6.0, `Participaciones`) lists applicants; the
+  captain's action is `PATCH /participaciones/{id_participacion}/estado`
+  with `{"estado": "seleccionado"}`. No dedicated `Participacion` response
+  schema is documented (the list responds with the generic `ExitoLista`
+  envelope), so `TeamSelectionParticipantViewModel`
+  (`team-selection/types/teamSelection.ts`) is a feature-local synthesis,
+  same status as `EventDetailViewModel`/`EventListItemViewModel`.
+- **Only the documented forward transition is modeled: `aparto →
+seleccionado`.** The current contract's own `PATCH .../estado` request
+  body enum (`seleccionado | confirmo_asistencia | asignado | salida`)
+  never lists `aparto` as a valid target — there is no reverse transition
+  in this branch, and none is invented. No deselect, reject, delete, bulk
+  action, or drag-and-drop exists.
+- **Selection is local-only, fixture-backed, and never persisted.**
+  Selecting a candidate invokes a typed callback
+  (`{ idParticipacion, estado: 'seleccionado' }`) that only updates
+  in-memory React state on `TeamSelectionPage` — no Axios call, no
+  TanStack Query hook, no network request of any kind. A real (but
+  instant) microtask yield (`await Promise.resolve()`, never
+  `setTimeout`) makes the `selecting` row state genuinely observable and
+  testable, during which the row's "Seleccionar" button is a real
+  `disabled` button (never `aria-disabled` decoration on a clickable
+  element) — repeated selection is structurally prevented, not just
+  visually discouraged. Refreshing the page resets all demo state.
+- **Candidates and selected participants are two views of the same live
+  list**, partitioned purely by each participant's current `estado` — a
+  selected candidate moves from one section to the other by that field
+  changing, never by a separate "removed" action. The summary section
+  (cupo, selected count, applicant count) reuses `EventDetailViewModel.
+cupoMeseros` from the existing Event Detail fixture — never a second,
+  independently-maintained source of the same number — and never computes
+  or claims "equipo completo" from any guessed staffing rule.
+- **Presentation model fields**: `idParticipacion` (positive integer,
+  never a UUID), `nombre` (presentation-only convenience, same status as
+  `capitanNombre`/`nombreCompleto` elsewhere in this app), `puesto`
+  (`mesero | barra`, from `POST /eventos/{id}/participaciones`'s
+  documented request body — a real domain concept even without a GET
+  response schema to source it from), `estado` (`aparto | seleccionado`
+  only — everything from `confirmo_asistencia` onward belongs to
+  attendance (W-06) and later screens). No phone, email, rating,
+  attendance percentage, experience, photo, payment/bank data, internal
+  numeric user id, or captain UUID exists anywhere on this screen.
+- **Development fixtures**: `team-selection/fixtures/
+teamSelectionFixtures.ts` — keyed by `idEvento`, aligned with
+  `EVENT_DETAIL_FIXTURES`. Event 1001 has both applicants and an
+  already-selected participant (both list states populated at once);
+  event 2001 has only applicants (demonstrates an empty selected list);
+  any other event id naturally has no roster at all (demonstrates an
+  empty candidate list too) — a valid outcome, not a bug.
+- **Event Detail's roadmap now links here.** "Selección de equipo" in
+  `EventDetailRoadmapSection` is a real `Link` to `/eventos/{id}/equipo`;
+  the remaining five entries (Pase de lista, Montaje / asignación de
+  mesas, Bebidas y Cubaitor, Cierre, Pagos) stay exactly as they were —
+  non-interactive, `aria-disabled`, labeled "Próximamente", no `href="#"`.
+- **Still pending** (explicitly out of scope for this foundation): SGEB
+  API integration, event attendance (W-06 — arrival confirmation,
+  biometric results, geofence, `confirmo_asistencia`/`confirmo_llegada`;
+  reserved for `feature/event-attendance-ui-foundation`), table/montaje
+  assignment, dispensing, Socket.IO, and any route guard or OIDC
+  integration (the OIDC client foundation remains untouched).
 
 ## Waiters UI foundation
 

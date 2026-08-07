@@ -47,7 +47,7 @@ export function EventDetailContent({
       <EventDetailScheduleSection evento={evento} />
       <EventDetailLogisticsSection evento={evento} />
       <EventDetailComandaSection evento={evento} />
-      <EventDetailRoadmapSection />
+      <EventDetailRoadmapSection idEvento={evento.idEvento} />
     </div>
   )
 }

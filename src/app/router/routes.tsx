@@ -41,11 +41,12 @@ export const router = createBrowserRouter([
      * docs/FrontendArchitecture.md §17 get a child route here ("Operación
      * en vivo", "Bebidas y Cubaitor", and "Pagos" do not — see the
      * comment on `NAV_ITEMS` in shared/components/layout/nav-items.ts).
-     * `panel`, `eventos`, `eventos/:id`, `meseros` and `reportes` render
-     * the real, presentation-only dashboard/events/event-detail/waiters/
-     * reports features (features/dashboard, features/events,
-     * features/waiters, features/reports) — every child now renders a
-     * real page, not the shared development placeholder.
+     * `panel`, `eventos`, `eventos/:id`, `eventos/:id/equipo`, `meseros`
+     * and `reportes` render the real, presentation-only dashboard/events/
+     * event-detail/team-selection/waiters/reports features
+     * (features/dashboard, features/events, features/waiters,
+     * features/reports) — every child now renders a real page, not the
+     * shared development placeholder.
      */
     errorElement: <RouteErrorBoundary />,
     hydrateFallbackElement: <RouteHydrateFallback />,
@@ -86,6 +87,24 @@ export const router = createBrowserRouter([
           const { EventDetailPage } =
             await import('@/features/events/pages/EventDetailPage')
           return { Component: EventDetailPage }
+        },
+      },
+      {
+        /*
+         * Team Selection — W-05 "Seleccionar equipo"
+         * (feature/event-team-selection-ui-foundation). The route value is
+         * the same positive integer SGEB event id as `eventos/:id`,
+         * parsed/validated inside `TeamSelectionPage`, not here. This is
+         * the first of Event Detail's documented operational children
+         * (docs/FrontendArchitecture.md §17) to become real; the rest
+         * (`/pase-de-lista`, `/montaje`, `/cubaitor`, `/cierre`, `/pagos`)
+         * remain unregistered.
+         */
+        path: 'eventos/:id/equipo',
+        lazy: async () => {
+          const { TeamSelectionPage } =
+            await import('@/features/events/team-selection/pages/TeamSelectionPage')
+          return { Component: TeamSelectionPage }
         },
       },
       {
