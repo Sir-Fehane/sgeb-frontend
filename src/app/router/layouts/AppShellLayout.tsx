@@ -9,7 +9,11 @@ import { AppShell, NAV_ITEMS } from '@/shared/components/layout'
  */
 export function AppShellLayout() {
   const location = useLocation()
-  const activeItem = NAV_ITEMS.find((item) => item.href === location.pathname)
+  const activeItem = NAV_ITEMS.find(
+    (item) =>
+      item.href === location.pathname ||
+      (item.href !== null && location.pathname.startsWith(`${item.href}/`)),
+  )
 
   return (
     <AppShell title={activeItem?.label ?? 'SGEB'}>

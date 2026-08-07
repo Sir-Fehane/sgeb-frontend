@@ -1,13 +1,22 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import { EventList } from '@/features/events/components/EventList'
 import { EVENTOS_FIXTURE } from '@/features/events/fixtures/eventFixtures'
 
+function renderList(props: Parameters<typeof EventList>[0]) {
+  return render(
+    <MemoryRouter>
+      <EventList {...props} />
+    </MemoryRouter>,
+  )
+}
+
 describe('EventList', () => {
   it('renders documented event information (título, fecha, salón, capitán, tipo) for each event', () => {
-    render(<EventList eventos={EVENTOS_FIXTURE} />)
+    renderList({ eventos: EVENTOS_FIXTURE })
 
     const first = EVENTOS_FIXTURE[0]
     if (!first) {
@@ -27,7 +36,7 @@ describe('EventList', () => {
   })
 
   it('renders every documented estado as its text label', () => {
-    render(<EventList eventos={EVENTOS_FIXTURE} />)
+    renderList({ eventos: EVENTOS_FIXTURE })
 
     expect(screen.getByText('Publicado')).toBeInTheDocument()
     expect(screen.getByText('Finalizado')).toBeInTheDocument()
@@ -36,16 +45,19 @@ describe('EventList', () => {
     expect(screen.getByText('Borrador')).toBeInTheDocument()
   })
 
-  it('exposes exactly one interactive control per event — no duplicate accessible names across the responsive presentation', () => {
-    render(<EventList eventos={EVENTOS_FIXTURE} />)
+  it('exposes exactly one select button and one "Ver detalle" link per event — no duplicate accessible names across the responsive presentation', () => {
+    renderList({ eventos: EVENTOS_FIXTURE })
 
     expect(screen.getAllByRole('button')).toHaveLength(EVENTOS_FIXTURE.length)
+    expect(screen.getAllByRole('link', { name: /^Ver detalle de / })).toHaveLength(
+      EVENTOS_FIXTURE.length,
+    )
   })
 
   it('invokes onSelectEvent with the opaque string event id when an event is chosen', async () => {
     const user = userEvent.setup()
     const onSelectEvent = vi.fn()
-    render(<EventList eventos={EVENTOS_FIXTURE} onSelectEvent={onSelectEvent} />)
+    renderList({ eventos: EVENTOS_FIXTURE, onSelectEvent })
 
     const first = EVENTOS_FIXTURE[0]
     if (!first) {
@@ -61,7 +73,7 @@ describe('EventList', () => {
   it('is keyboard-operable — Enter on a focused event activates selection', async () => {
     const user = userEvent.setup()
     const onSelectEvent = vi.fn()
-    render(<EventList eventos={EVENTOS_FIXTURE} onSelectEvent={onSelectEvent} />)
+    renderList({ eventos: EVENTOS_FIXTURE, onSelectEvent })
 
     const buttons = screen.getAllByRole('button')
     const firstButton = buttons[0]
@@ -72,5 +84,14 @@ describe('EventList', () => {
     await user.keyboard('{Enter}')
 
     expect(onSelectEvent).toHaveBeenCalledOnce()
+  })
+
+  it('each "Ver detalle" link points to its matching /eventos/{id}, with an accessible name', () => {
+    renderList({ eventos: EVENTOS_FIXTURE })
+
+    for (const evento of EVENTOS_FIXTURE) {
+      const link = screen.getByRole('link', { name: `Ver detalle de ${evento.titulo}` })
+      expect(link).toHaveAttribute('href', `/eventos/${String(evento.idEvento)}`)
+    }
   })
 })

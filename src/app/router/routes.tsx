@@ -41,11 +41,11 @@ export const router = createBrowserRouter([
      * docs/FrontendArchitecture.md §17 get a child route here ("Operación
      * en vivo", "Bebidas y Cubaitor", and "Pagos" do not — see the
      * comment on `NAV_ITEMS` in shared/components/layout/nav-items.ts).
-     * `panel`, `eventos`, `meseros` and `reportes` render the real,
-     * presentation-only dashboard/events/waiters/reports features
-     * (features/dashboard, features/events, features/waiters,
-     * features/reports) — every child now renders a real page, not the
-     * shared development placeholder.
+     * `panel`, `eventos`, `eventos/:id`, `meseros` and `reportes` render
+     * the real, presentation-only dashboard/events/event-detail/waiters/
+     * reports features (features/dashboard, features/events,
+     * features/waiters, features/reports) — every child now renders a
+     * real page, not the shared development placeholder.
      */
     errorElement: <RouteErrorBoundary />,
     hydrateFallbackElement: <RouteHydrateFallback />,
@@ -67,6 +67,25 @@ export const router = createBrowserRouter([
         lazy: async () => {
           const { EventsPage } = await import('@/features/events/pages/EventsPage')
           return { Component: EventsPage }
+        },
+      },
+      {
+        /*
+         * Event Detail (feature/event-detail-ui-foundation) — the route
+         * value is a positive integer SGEB event id (never a UUID; only
+         * USUARIO's public identifier is a UUID). Parsed/validated inside
+         * `EventDetailPage`, not here — a malformed id renders the
+         * feature's own unavailable state rather than a routing error.
+         * Only this one route is registered; none of its documented
+         * operational children (`/editar`, `/equipo`, `/pase-de-lista`,
+         * `/montaje`, `/cubaitor`, `/cierre`, `/pagos` —
+         * docs/FrontendArchitecture.md §17) exist yet.
+         */
+        path: 'eventos/:id',
+        lazy: async () => {
+          const { EventDetailPage } =
+            await import('@/features/events/pages/EventDetailPage')
+          return { Component: EventDetailPage }
         },
       },
       {

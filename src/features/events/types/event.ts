@@ -108,6 +108,53 @@ export interface EventListItemViewModel {
 }
 
 /**
+ * Presentation model for the Event Detail foundation (`/eventos/:id`) —
+ * NOT a confirmed `GET /eventos/{id_evento}` response DTO. The current
+ * OpenAPI documents that endpoint's 200 response as the generic `Exito`
+ * envelope, not a dedicated `EventDetail` schema, so this type is a
+ * feature-local synthesis of confirmed `EventoCrear` fields plus the
+ * server-generated `estado`, built only so fixtures/components have
+ * something typed to render — same status as `EventListItemViewModel`
+ * (see its own comment).
+ *
+ * Field-by-field sourcing, mirroring `EventListItemViewModel`:
+ * - idEvento/titulo/tipo/fecha/horaPresentacion/inicio/cupoMeseros/
+ *   numMesas/tarifaPorMesero/radioGeocercaM/comandaUrl: `EventoCrear`.
+ * - estado: data dictionary EVENTO table (server-generated).
+ * - salonNombre: NOT part of any documented `/eventos/{id}` response —
+ *   a presentation-only convenience, exactly like
+ *   `EventListItemViewModel.salonNombre`. (`DashboardCapitan.
+ *   proximos_eventos` and `DashboardEvento.resumen` do each document a
+ *   plain `salon: string` field, showing the backend has *a* display-name
+ *   concept for salón elsewhere — but that's a different endpoint's
+ *   response, not this one, so it still doesn't confirm this field for
+ *   `GET /eventos/{id_evento}`.)
+ *
+ * Deliberately excluded: `uuid_capitan`/any captain identifier (no UX
+ * purpose on this page, same reasoning as the list model), any
+ * `DashboardEvento` field (resumen/staffing/montaje/piso/barra/comensal/
+ * cierre/alertas — that's the separate, explicitly out-of-scope
+ * operational dashboard), and any undocumented field (description,
+ * guest count, notes, staffing counts, attendance, ...).
+ */
+export interface EventDetailViewModel {
+  idEvento: number
+  titulo: string
+  tipo: EventType
+  estado: EventStatus
+  salonNombre?: string
+  fecha: string
+  horaPresentacion: string
+  inicio: string
+  cupoMeseros: number
+  numMesas: number
+  tarifaPorMesero: number
+  radioGeocercaM: number
+  /** `EventoCrear.comanda_url` — validated `http(s)://` only, per its documented pattern. Absent/`undefined` when not set. */
+  comandaUrl?: string
+}
+
+/**
  * Local, typed filter state for the events list. Mirrors exactly the
  * four query parameters `GET /eventos` documents (`fecha_desde`,
  * `fecha_hasta`, `estado`, `id_salon`) — no text-search or

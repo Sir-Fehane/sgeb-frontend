@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
@@ -15,13 +16,15 @@ import { DEFAULT_EVENTS_FILTER_STATE } from '@/features/events/types/event'
 function renderContent(overrides: Partial<EventsContentProps> = {}) {
   const onFilterChange = overrides.onFilterChange ?? vi.fn()
   render(
-    <EventsContent
-      events={EVENTOS_FIXTURE}
-      filters={DEFAULT_EVENTS_FILTER_STATE}
-      onFilterChange={onFilterChange}
-      salones={SALON_OPTIONS_FIXTURE}
-      {...overrides}
-    />,
+    <MemoryRouter>
+      <EventsContent
+        events={EVENTOS_FIXTURE}
+        filters={DEFAULT_EVENTS_FILTER_STATE}
+        onFilterChange={onFilterChange}
+        salones={SALON_OPTIONS_FIXTURE}
+        {...overrides}
+      />
+    </MemoryRouter>,
   )
   return { onFilterChange }
 }

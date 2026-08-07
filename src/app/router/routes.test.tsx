@@ -154,15 +154,72 @@ describe('/eventos renders the real events UI inside AppShell', () => {
   it('does not register /eventos/nuevo — the slug is only "Proposed", not confirmed', async () => {
     await renderAt('/eventos/nuevo')
 
-    // Falls through to the catch-all NotFoundPage, not a real creation page.
+    // Now matched by /eventos/:id (feature/event-detail-ui-foundation) —
+    // "nuevo" fails parseEventId's positive-integer check, so this
+    // renders the Event Detail feature's own unavailable state, not the
+    // global catch-all NotFoundPage. Either way, it is never a real
+    // creation page.
+    expect(screen.getByText('No encontramos el evento solicitado.')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Crear evento' })).not.toBeInTheDocument()
+  })
+})
+
+describe('/eventos/:id renders the Event Detail UI inside AppShell', () => {
+  it('renders the AppShell chrome and the event detail content for a known fixture id', async () => {
+    await renderAt('/eventos/1001')
+
+    expect(
+      screen.getByRole('navigation', { name: 'Navegación principal' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('banner')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Evento de demostración — boda' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('keeps the Topbar h1 as "Eventos" (not the generic SGEB fallback) for the nested detail route', async () => {
+    await renderAt('/eventos/1001')
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Eventos' })).toBeInTheDocument()
+  })
+
+  it('renders the unavailable state for a malformed event id, not a routing error', async () => {
+    await renderAt('/eventos/not-a-number')
+
+    expect(screen.getByText('No encontramos el evento solicitado.')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('renders the unavailable state for a well-formed id with no matching fixture, not a redirect', async () => {
+    await renderAt('/eventos/999999')
+
+    expect(screen.getByText('No encontramos el evento solicitado.')).toBeInTheDocument()
+    expect(window.location.pathname).toBe('/eventos/999999')
+  })
+
+  it('does not register /eventos/:id/editar', async () => {
+    await renderAt('/eventos/1001/editar')
+
     expect(
       screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
     ).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Crear evento' })).not.toBeInTheDocument()
   })
 
-  it('does not register an /eventos/:id detail route', async () => {
-    await renderAt('/eventos/1001')
+  it('does not register /eventos/:id/pase-de-lista', async () => {
+    await renderAt('/eventos/1001/pase-de-lista')
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
+  })
+
+  it('does not register /eventos/:id/cierre', async () => {
+    await renderAt('/eventos/1001/cierre')
 
     expect(
       screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),

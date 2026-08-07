@@ -313,10 +313,93 @@ of this foundation yet).
   That requirement is documented where it actually belongs — see
   `EventCreateFieldPrototypeValues` below.
 - **Still pending** (explicitly out of scope for this foundation): SGEB API
-  integration, real salón directories, event detail/editing, and any
+  integration, real salón directories, event editing, and any
   authenticated-user-derived field (including a real `uuid_capitan` source).
-  Selecting an event or requesting creation on `/eventos` shows an inline
-  notice rather than silently doing nothing or faking navigation.
+  Requesting creation on `/eventos` shows an inline notice rather than
+  silently doing nothing or faking navigation. Selecting an event now
+  navigates to `/eventos/:id` — see "Event Detail UI foundation" below.
+
+## Event Detail UI foundation
+
+A **UI-only, fixture-backed** foundation for a single event's detail screen
+lives inside `src/features/events/` (not a competing top-level feature) —
+`components/EventDetail*`, `pages/EventDetailPage.tsx`,
+`fixtures/eventDetailFixtures.ts`, plus a few narrow, feature-local
+utilities (`parseEventId.ts`, `eventDetailFormatting.ts`,
+`comandaUrlSafety.ts`). This is presentation and navigation only — see
+"Still pending" below for everything it deliberately does not do.
+
+- **Route**: `/eventos/:id` (inside `AppShell`) — the route value is a
+  **positive integer** SGEB event id, never a UUID: `USUARIO` is the only
+  domain whose public identifier is a UUID (`docs/FrontendArchitecture.md`
+  §8.1); events, tables, salones, and participations all use plain
+  integers. `parseEventId` rejects empty, zero, negative, decimal,
+  non-numeric, and unsafe-integer values _before_ any fixture lookup — a
+  malformed id renders the feature's own unavailable state, never a
+  redirect and never a raw parsing error. None of the documented
+  operational children (`/editar`, `/equipo`, `/pase-de-lista`,
+  `/montaje`, `/cubaitor`, `/cierre`, `/pagos` —
+  `docs/FrontendArchitecture.md` §17) are registered in this branch.
+- **Source contract**: `GET /eventos/{id_evento}` (`openapi-sgeb.yaml`
+  v1.6.0) currently documents its 200 response as the generic `Exito`
+  envelope, not a dedicated `EventDetail` schema — so
+  `EventDetailViewModel` (`src/features/events/types/event.ts`) is a
+  feature-local presentation synthesis of confirmed `EventoCrear` fields
+  plus the server-generated `estado`, exactly the same status as
+  `EventListItemViewModel` (see its own comment). `salonNombre` is a
+  presentation-only convenience, not a documented `/eventos/{id}` field —
+  reused verbatim from the existing list model's naming, not a new
+  invention.
+- **Confirmed domain fields shown**: título, tipo, estado, salón (display
+  convenience), fecha, hora de presentación, inicio, cupo de meseros,
+  número de mesas, tarifa por mesero (formatted MXN, display only — never
+  a derived payroll calculation), radio de geocerca (meters, no map). No
+  captain identifier, UUID, QR value, or other technical backend
+  identifier is ever displayed — `idEvento` is used only for routing.
+- **Comanda is display-only.** `EventDetailComandaSection` renders an
+  "Abrir comanda" link only when `comandaUrl` passes `isSafeComandaUrl`
+  (mirrors `EventoCrear.comanda_url`'s documented `^https?://` pattern) —
+  opens in a new tab with `rel="noopener noreferrer"`, never a
+  `javascript:` URL. No upload, edit, or generated-file action exists; the
+  comanda-upload origin/path itself remains a known, separate contract gap
+  (`docs/FrontendArchitecture.md` §7.5). Absent/unsafe `comandaUrl` shows a
+  restrained "no comanda disponible" message, never a fake link.
+- **The operation roadmap is non-interactive where routes don't exist
+  yet.** `EventDetailRoadmapSection` lists the six already-documented
+  per-event operational areas (Selección de equipo, Pase de lista, Montaje
+  / asignación de mesas, Bebidas y Cubaitor, Cierre, Pagos) as contextual
+  entry points only — mirrors `NavItem`'s `status: 'route-pending'`
+  treatment (`aria-disabled`, a visible "Próximamente" badge, no `href`,
+  no `href="#"`, no interactive role) rather than implying any of those
+  screens already work.
+- **No API integration, no live dashboard.** `GET
+/eventos/{id_evento}/dashboard` (`DashboardEvento`) is the separate,
+  explicitly out-of-scope operational dashboard (resumen/staffing/
+  montaje/piso/barra/comensal/cierre/alertas) — this page is the stable
+  event-information hub, not a duplicate of it. No polling, no Socket.IO,
+  no attendance implementation, no status-transition/editing action exists
+  anywhere on this page.
+- **Development fixtures**: `src/features/events/fixtures/
+eventDetailFixtures.ts` — exactly two records (per this branch's
+  narrow-fixture instruction): `idEvento 1001` (social, publicado, WITH a
+  comanda URL) aligned with the events list's matching entry, and
+  `idEvento 2001` (empresarial, en_curso, WITHOUT a comanda URL) reachable
+  directly but not linked from the list — none of the list's five existing
+  events combine `tipo: empresarial` with `estado` in
+  `{borrador, en_curso}`. The list's other four events intentionally have
+  no matching detail fixture; visiting their `/eventos/:id` correctly
+  renders the unavailable state, a valid outcome for this fixture-backed
+  foundation.
+- **Events list discoverability**: each row in `/eventos` now has a
+  restrained "Ver detalle" link (`EventListItem`) to `/eventos/{idEvento}`,
+  as a sibling of — never nested inside — the existing whole-row select
+  button (avoids the invalid-HTML/accessibility problem of an `<a>` inside
+  a `<button>`). The existing select button's behavior, tests, and filters
+  are all unchanged.
+- **Still pending** (explicitly out of scope for this foundation): SGEB API
+  integration, live `DashboardEvento` data, Socket.IO, event attendance,
+  team-selection/montaje/dispensing UI, event editing or status
+  transitions, and the comanda upload contract.
 
 ## Waiters UI foundation
 

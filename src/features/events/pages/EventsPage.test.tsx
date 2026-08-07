@@ -67,6 +67,18 @@ describe('EventsPage', () => {
     expect(screen.getByText(/no está conectada a una ruta/)).toBeInTheDocument()
   })
 
+  it('renders a "Ver detalle" link to /eventos/{id} for each visible event, alongside the existing select action', () => {
+    renderPage()
+
+    const first = EVENTOS_FIXTURE[0]
+    if (!first) {
+      throw new Error('Expected at least one fixture event')
+    }
+
+    const link = screen.getByRole('link', { name: `Ver detalle de ${first.titulo}` })
+    expect(link).toHaveAttribute('href', `/eventos/${String(first.idEvento)}`)
+  })
+
   it('applies filters to the visible list', async () => {
     const user = userEvent.setup()
     renderPage()
