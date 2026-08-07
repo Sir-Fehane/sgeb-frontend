@@ -225,6 +225,54 @@ describe('/eventos/:id renders the Event Detail UI inside AppShell', () => {
       screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
     ).toBeInTheDocument()
   })
+
+  it('does not register /eventos/:id/montaje', async () => {
+    await renderAt('/eventos/1001/montaje')
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
+  })
+})
+
+describe('/eventos/:id/equipo renders the Team Selection UI inside AppShell', () => {
+  it('renders the AppShell chrome and the team selection content for a known fixture id', async () => {
+    await renderAt('/eventos/1001/equipo')
+
+    expect(
+      screen.getByRole('navigation', { name: 'Navegación principal' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('banner')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Selección de equipo' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('keeps the Topbar h1 as "Eventos" for the nested team-selection route', async () => {
+    await renderAt('/eventos/1001/equipo')
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Eventos' })).toBeInTheDocument()
+  })
+
+  it('renders the unavailable state for a malformed event id', async () => {
+    await renderAt('/eventos/not-a-number/equipo')
+
+    expect(screen.getByText('No encontramos el evento solicitado.')).toBeInTheDocument()
+  })
+
+  it('/eventos/:id still works — is not shadowed by the equipo child route', async () => {
+    await renderAt('/eventos/1001')
+
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Evento de demostración — boda' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 2, name: 'Selección de equipo' }),
+    ).not.toBeInTheDocument()
+  })
 })
 
 describe('/meseros renders the real waiters UI inside AppShell', () => {

@@ -130,11 +130,10 @@ describe('EventDetailContent — comanda', () => {
 })
 
 describe('EventDetailContent — operation roadmap', () => {
-  it('shows the documented operation labels as non-interactive entries', () => {
+  it('shows the still-pending operation labels as non-interactive entries', () => {
     renderContent({ evento: EVENTO_CON_COMANDA })
 
     for (const label of [
-      'Selección de equipo',
       'Pase de lista',
       'Montaje / asignación de mesas',
       'Bebidas y Cubaitor',
@@ -146,18 +145,33 @@ describe('EventDetailContent — operation roadmap', () => {
       expect(item.closest('[aria-disabled="true"]')).not.toBeNull()
     }
 
-    expect(screen.getAllByText('Próximamente').length).toBe(6)
+    expect(screen.getAllByText('Próximamente').length).toBe(5)
   })
 
-  it('exposes no working navigation for the roadmap entries', () => {
+  it('"Selección de equipo" is a real link to /eventos/{id}/equipo', () => {
     renderContent({ evento: EVENTO_CON_COMANDA })
 
-    expect(
-      screen.queryByRole('link', { name: 'Selección de equipo' }),
-    ).not.toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: 'Selección de equipo' }),
-    ).not.toBeInTheDocument()
+    const link = screen.getByRole('link', { name: 'Selección de equipo' })
+    expect(link).toHaveAttribute(
+      'href',
+      `/eventos/${String(EVENTO_CON_COMANDA.idEvento)}/equipo`,
+    )
+    expect(link.closest('[aria-disabled="true"]')).toBeNull()
+  })
+
+  it('exposes no working navigation for the still-pending roadmap entries', () => {
+    renderContent({ evento: EVENTO_CON_COMANDA })
+
+    for (const label of [
+      'Pase de lista',
+      'Montaje / asignación de mesas',
+      'Bebidas y Cubaitor',
+      'Cierre',
+      'Pagos',
+    ]) {
+      expect(screen.queryByRole('link', { name: label })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument()
+    }
     const hrefHash = document.querySelectorAll('a[href="#"]')
     expect(hrefHash.length).toBe(0)
   })
