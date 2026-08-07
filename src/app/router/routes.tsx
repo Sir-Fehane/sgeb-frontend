@@ -148,6 +148,24 @@ export const router = createBrowserRouter([
       return { Component: PublicDinerPage }
     },
   },
+  /*
+   * The OIDC provider redirects here after `GET /authorize` — outside
+   * both AppShell (no authenticated shell exists to render into yet) and
+   * AuthLayout (that layout is the frozen S1/S3/S5/S6 provider-screen
+   * shell; reusing it here would misleadingly imply this page belongs to
+   * that same frozen family — see features/oidc-client's README section).
+   * Only `/auth/callback` is registered; no `/callback` alias exists.
+   */
+  {
+    path: '/auth/callback',
+    errorElement: <RouteErrorBoundary />,
+    hydrateFallbackElement: <RouteHydrateFallback />,
+    lazy: async () => {
+      const { AuthCallbackPage } =
+        await import('@/features/oidc-client/pages/AuthCallbackPage')
+      return { Component: AuthCallbackPage }
+    },
+  },
   {
     path: '*',
     errorElement: <RouteErrorBoundary />,

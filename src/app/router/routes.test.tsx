@@ -289,3 +289,43 @@ describe('/publico/mesas/:codigoQr renders the anonymous public diner experience
     ).toBeInTheDocument()
   })
 })
+
+describe('/auth/callback renders the OIDC callback page outside AppShell and AuthLayout', () => {
+  it('is registered and renders its own heading, not a not-found page', async () => {
+    await renderAt('/auth/callback')
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Verificando tu inicio de sesión' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('renders with no AppShell chrome', async () => {
+    await renderAt('/auth/callback')
+
+    expect(
+      screen.queryByRole('navigation', { name: 'Navegación principal' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('banner')).not.toBeInTheDocument()
+  })
+
+  it('exposes no Auth provider form (no login/2FA/recovery UI)', async () => {
+    await renderAt('/auth/callback')
+
+    expect(
+      screen.queryByRole('heading', { name: 'Iniciar sesión' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: /correo/i })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/contraseña/i)).not.toBeInTheDocument()
+  })
+
+  it('does not register /callback as an alias', async () => {
+    await renderAt('/callback')
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
+  })
+})

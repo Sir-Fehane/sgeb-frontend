@@ -223,6 +223,16 @@ foundation yet).
   dev-only no-op that visibly states the integration is pending — it never
   claims a user was authenticated. See `docs/FrontendArchitecture.md` §18 for
   the full intended flow once these land.
+- **Frozen pending migration to a separate SSO frontend.** `openapi-sso.yaml`
+  v2.2.0 reclassified S1–S7 as provider-hosted screens (ADR-002,
+  `docs/decisions.md`) — the provider now serves its own login/2FA/recovery
+  UI directly, not this repository. `/login`, `/verificacion-2fa`,
+  `/recuperar`, and `/recuperar/:token` are kept exactly as they were: not
+  connected to `/interno/*`, not redesigned, not turned into route guards.
+  They remain routed and rendering for now, but are not the integration path
+  going forward — see "OIDC client foundation" below for the actual
+  provider-integration route (`/auth/callback`). Removing or migrating these
+  four routes is a separate future refactor, not part of this branch.
 
 ## Events UI foundation
 
@@ -643,6 +653,86 @@ role, no shared authenticated state.
   documentation (confirmed in `docs/FrontendArchitecture.md` §2.2), so this
   foundation is built directly from the OpenAPI contract, conservatively, per
   existing branding/design-system conventions.
+
+## OIDC client foundation
+
+A narrow, contract-backed **OIDC client** foundation lives under
+`src/features/oidc-client/` (`client/`, `components/`, `config/`, `pages/`,
+`protocol/`, `session/`, `storage/`, `types/`, `utils/`). See ADR-002
+(`docs/decisions.md`) for the full architectural decision this implements.
+
+- **sgeb-frontend is an OIDC public client, not an identity provider.**
+  `openapi-sso.yaml` v2.2.0 (`docs/sso/`) reclassified the SSO module as an
+  independent Authorization Code + PKCE provider — S1–S7 (login, 2FA,
+  recovery) are now provider-hosted screens, not something this repository
+  implements. This foundation only initiates the protocol and consumes its
+  responses; it never renders a credentials form. `/interno/*` (the
+  provider's own internal endpoints) is never called from here.
+- **client_id**: `sgeb-web-panel`, a public client — no client secret exists
+  or is ever added; PKCE is what authenticates the client, per the OpenAPI
+  document's own "Clientes públicos, sin secreto" note.
+- **Route**: `/auth/callback` — outside `AppShell` and outside `AuthLayout`
+  (that layout is the frozen S1/S3/S5/S6 provider-screen shell; reusing it
+  here would misleadingly imply this page belongs to that same frozen
+  family). No `/callback` alias is registered.
+- **Flow**: Authorization Code + PKCE (S256) only — no implicit flow, no
+  password grant, no iframe or popup strategy for `prompt=none`.
+  `beginAuthorization()` generates `state`/`nonce`/PKCE, persists the
+  transient transaction, and does a full-page redirect to `GET /authorize`.
+  `/auth/callback` validates the returned `state` against the stored
+  transaction before ever calling `POST /token` — a missing code, missing
+  state, missing transaction, or mismatched state all render a safe generic
+  error and never reach the token endpoint.
+- **Token storage**: the access token (and `id_token`, when returned) live
+  **only in memory**, in a small Zustand store (`session/sessionStore.ts`) —
+  never localStorage, never sessionStorage. A page reload always starts back
+  at `idle`; there is no persisted identity cache. The refresh token is
+  never seen by this code at all: the provider delivers it as an **HttpOnly
+  cookie** it owns, and `POST /token`'s `grant_type=refresh_token` request
+  never includes a `refresh_token` field — the cookie does that implicitly
+  via `credentials: include`. `document.cookie` is never read.
+- **Transaction storage**: `state`, `nonce`, `code_verifier`, `redirect_uri`,
+  and a validated `returnTo` live in **sessionStorage** (one namespaced key)
+  only for the duration of the redirect round-trip, consumed exactly once.
+  An unsafe (external/absolute) `returnTo` is rejected and falls back to
+  `/panel`.
+- **No SGEB/SSO envelope on protocol endpoints.** `/authorize`, `/token`,
+  `/userinfo`, and `/logout` respond in the exact OAuth/OIDC spec shape
+  (`access_token`, `error`, `error_description`, ...), per
+  `openapi-sso.yaml`'s own documented exception — this client never applies
+  `unwrapEnvelope`/`{ result, data }` parsing to them.
+- **Refresh coordination**: same-tab concurrent refresh calls share one
+  in-flight `POST /token` request (`client/tokenClient.ts`); the lock always
+  clears after settling, success or failure. **Cross-tab coordination is a
+  documented gap, not implemented here** — the provider rotates the refresh
+  cookie on every use, so two tabs refreshing concurrently can trigger
+  SSO-1007 (reuse detected, full chain revoked). No `BroadcastChannel` or
+  localStorage-based lock exists; this is required before production.
+- **`id_token` is treated as opaque in this branch.** It may be kept in
+  memory for a future provider-logout `id_token_hint`, but this branch never
+  decodes it and presents its claims as trusted identity — identity comes
+  from `GET /userinfo` instead. Full cryptographic validation (signature via
+  JWKS, issuer, audience, expiration, `nonce`) needs an approved JWT/OIDC
+  validation library, which does not exist in this repository yet — adding
+  one is out of scope here per CLAUDE.md's "no unapproved dependencies"
+  rule. This is a genuine, recorded gap, not a claimed implementation.
+- **`POST /token/revoke` is not implemented.** It requires a `token` field,
+  and the web client's refresh token lives exclusively in an HttpOnly
+  cookie this code cannot read — sending the access token in its place would
+  misrepresent what's being revoked. `GET /logout` (full-page navigation,
+  provider session + full token-chain revocation) is implemented instead;
+  "sign out of only this application" is reserved for a later branch once
+  the web revoke contract is clarified.
+- **No live provider integration is claimed.** The provider may not be
+  reachable during this branch's development; every network-facing piece
+  (`exchangeAuthorizationCode`, `refreshAccessToken`, `fetchUserInfo`) takes
+  an injectable transport and is exercised only against fakes in tests —
+  never a real request.
+- **No route guards yet.** Landing on `/panel`, `/eventos`, `/meseros`, or
+  `/reportes` without a session behaves exactly as before this branch —
+  nothing here redirects an existing visit to `/login` or checks
+  authentication state. Wiring guards is future work once this foundation
+  is exercised against a live provider.
 
 ## High-level architecture
 
