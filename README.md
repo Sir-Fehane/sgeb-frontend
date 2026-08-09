@@ -469,16 +469,92 @@ teamSelectionFixtures.ts` — keyed by `idEvento`, aligned with
   any other event id naturally has no roster at all (demonstrates an
   empty candidate list too) — a valid outcome, not a bug.
 - **Event Detail's roadmap now links here.** "Selección de equipo" in
-  `EventDetailRoadmapSection` is a real `Link` to `/eventos/{id}/equipo`;
-  the remaining five entries (Pase de lista, Montaje / asignación de
-  mesas, Bebidas y Cubaitor, Cierre, Pagos) stay exactly as they were —
-  non-interactive, `aria-disabled`, labeled "Próximamente", no `href="#"`.
+  `EventDetailRoadmapSection` is a real `Link` to `/eventos/{id}/equipo`.
+  "Pase de lista" is now a real link too — see "Event Attendance UI
+  foundation (W-06)" below. The remaining four entries (Montaje /
+  asignación de mesas, Bebidas y Cubaitor, Cierre, Pagos) stay exactly as
+  they were — non-interactive, `aria-disabled`, labeled "Próximamente",
+  no `href="#"`.
 - **Still pending** (explicitly out of scope for this foundation): SGEB
-  API integration, event attendance (W-06 — arrival confirmation,
-  biometric results, geofence, `confirmo_asistencia`/`confirmo_llegada`;
-  reserved for `feature/event-attendance-ui-foundation`), table/montaje
-  assignment, dispensing, Socket.IO, and any route guard or OIDC
-  integration (the OIDC client foundation remains untouched).
+  API integration, table/montaje assignment, dispensing, Socket.IO, and
+  any route guard or OIDC integration (the OIDC client foundation remains
+  untouched). Event attendance (W-06) is no longer pending — see below.
+
+## Event Attendance UI foundation (W-06)
+
+A **UI-only, fixture-backed, read-only** foundation for W-06 "Pase de
+lista" lives at `src/features/events/attendance/` — a subdirectory of the
+existing Events feature, mirroring `team-selection/`'s structure
+(`components/`, `pages/EventAttendancePage.tsx`, `fixtures/`, `types/`,
+`utils/`).
+
+- **This is the captain's web view of attendance — strictly
+  observational.** The mesero's arrival confirmation
+  (`POST /participaciones/{id_participacion}/confirmacion-llegada`)
+  requires mobile/device-originated values this web panel structurally
+  cannot produce: `metodo` (the phone invoking Face ID/Touch ID),
+  `biometrico_verificado` (the device's own self-reported result),
+  `uuid_dispositivo` (the mesero's registered device, kept in Keychain),
+  and `latitud`/`longitud` (device GPS). This branch contains **no**
+  `navigator.geolocation`, **no** `navigator.credentials`/WebAuthn, **no**
+  device-identifier input, and **no** call to this endpoint anywhere —
+  verified by dedicated tests, not just by convention.
+- **Route**: `/eventos/:id/pase-de-lista` (inside `AppShell`). Reuses
+  `parseEventId` directly; a malformed or unknown parent event id renders
+  `EventDetailUnavailableState` (reused, not duplicated).
+- **Participation state and arrival-attempt result are modeled as two
+  separate fields, never conflated.** `estadoParticipacion` (`seleccionado
+| confirmo_asistencia | confirmo_llegada`) is the real SGEB lifecycle
+  subset; `ultimaConfirmacionLlegada` is a possibly-failed attempt that
+  never advances participation state on its own — a participant can be
+  `confirmo_asistencia` with a `fallido` arrival attempt at the same time.
+  No fake participation state (`llegada_fallida`, `biometria_fallida`,
+  `gps_fallido`, `pendiente_revision`, ...) is ever added to the real
+  enum.
+- **Failure/inconclusive motives are not flattened to one bucket.**
+  `fuera_geocerca` (SGEB-4003) and `biometria_fallida` (SGEB-4004) are
+  presented as real failures needing review;
+  `dispositivo_de_otro_usuario` (SGEB-4025) — the documented collusion
+  signal, "se alerta al capitán" — gets the most severe presentation
+  (`tone="danger"`) of the five; `dispositivo_no_vinculado` (SGEB-4024) is
+  presented as a real-but-legitimate scenario (phone replacement);
+  `precision_insuficiente` (SGEB-4026) is presented as **inconclusive**,
+  explicitly never labeled "ausente"/"falta" and never flagged for
+  review — the error dictionary itself states this motive "no se
+  registra como asistencia denegada".
+- **No manual captain action exists — this is a genuine, recorded
+  contract gap, not a guess.** The error dictionary's prose mentions that
+  a `metodo=ninguno`/failed-biometric case "deja la confirmación en manos
+  del capitán", but no endpoint or request shape for a captain's manual
+  confirmation is documented anywhere in `openapi-sgeb.yaml`. This branch
+  does not invent "Confirmar manualmente", "Aprobar llegada", "Marcar
+  presente", or any similar action — a failed/inconclusive attempt
+  renders "Requiere revisión" (or, for the inconclusive case, no review
+  call-out at all) as presentation only.
+- **`uuid_dispositivo` and `id_confirmacion` are never displayed** —
+  neither has a captain-facing presentation purpose.
+- **Development fixtures**: `attendance/fixtures/attendanceFixtures.ts`
+  builds on Team Selection's real `seleccionado` roster for event 1001
+  (one participant, reused by id) plus six new fictional participants
+  (IDs `6001`+, a clearly different range) needed to demonstrate the
+  seven required cases (pending, asistencia confirmed with arrival still
+  pending, successful arrival, and all five failure/inconclusive
+  motives). Team Selection's own fixtures and tests are unmodified and do
+  not depend on this feature. Event 2001 correctly has an empty roster
+  (Team Selection has zero selected participants there), demonstrating
+  the "no selected participants" state without any fixture of its own.
+- **Summary counts are computed only from the local fixture list** —
+  never `GET /eventos/{id}/dashboard` (`DashboardEvento.staffing`, a
+  separate, explicitly out-of-scope live aggregate), no polling, no
+  Socket.IO (`participacion:cambio` real-time updates are a later,
+  explicitly deferred scope).
+- **Still pending** (explicitly out of scope for this foundation): SGEB
+  API integration for this screen's own endpoints
+  (`GET /eventos/{id}/participaciones`, `GET /participaciones/{id}`), live
+  `DashboardEvento`/Socket.IO integration, the exact relation/source for
+  detailed arrival-attempt data during future live integration (a genuine
+  open backend question, not resolved here), and the manual
+  captain-confirmation contract gap noted above.
 
 ## Waiters UI foundation
 

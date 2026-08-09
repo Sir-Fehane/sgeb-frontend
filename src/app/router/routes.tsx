@@ -41,9 +41,10 @@ export const router = createBrowserRouter([
      * docs/FrontendArchitecture.md §17 get a child route here ("Operación
      * en vivo", "Bebidas y Cubaitor", and "Pagos" do not — see the
      * comment on `NAV_ITEMS` in shared/components/layout/nav-items.ts).
-     * `panel`, `eventos`, `eventos/:id`, `eventos/:id/equipo`, `meseros`
-     * and `reportes` render the real, presentation-only dashboard/events/
-     * event-detail/team-selection/waiters/reports features
+     * `panel`, `eventos`, `eventos/:id`, `eventos/:id/equipo`,
+     * `eventos/:id/pase-de-lista`, `meseros` and `reportes` render the
+     * real, presentation-only dashboard/events/event-detail/
+     * team-selection/attendance/waiters/reports features
      * (features/dashboard, features/events, features/waiters,
      * features/reports) — every child now renders a real page, not the
      * shared development placeholder.
@@ -105,6 +106,25 @@ export const router = createBrowserRouter([
           const { TeamSelectionPage } =
             await import('@/features/events/team-selection/pages/TeamSelectionPage')
           return { Component: TeamSelectionPage }
+        },
+      },
+      {
+        /*
+         * Event Attendance — W-06 "Pase de lista"
+         * (feature/event-attendance-ui-foundation). The captain's
+         * OBSERVATIONAL web view only — arrival confirmation itself
+         * (biometric + geofence, `POST /participaciones/{id}/
+         * confirmacion-llegada`) is mobile/device-originated and never
+         * called from here. Same positive integer SGEB event id as the
+         * other `eventos/:id/*` routes, parsed/validated inside
+         * `EventAttendancePage`, not here. `/montaje`, `/cubaitor`,
+         * `/cierre`, `/pagos` remain unregistered.
+         */
+        path: 'eventos/:id/pase-de-lista',
+        lazy: async () => {
+          const { EventAttendancePage } =
+            await import('@/features/events/attendance/pages/EventAttendancePage')
+          return { Component: EventAttendancePage }
         },
       },
       {

@@ -134,7 +134,6 @@ describe('EventDetailContent — operation roadmap', () => {
     renderContent({ evento: EVENTO_CON_COMANDA })
 
     for (const label of [
-      'Pase de lista',
       'Montaje / asignación de mesas',
       'Bebidas y Cubaitor',
       'Cierre',
@@ -145,7 +144,7 @@ describe('EventDetailContent — operation roadmap', () => {
       expect(item.closest('[aria-disabled="true"]')).not.toBeNull()
     }
 
-    expect(screen.getAllByText('Próximamente').length).toBe(5)
+    expect(screen.getAllByText('Próximamente').length).toBe(4)
   })
 
   it('"Selección de equipo" is a real link to /eventos/{id}/equipo', () => {
@@ -159,11 +158,21 @@ describe('EventDetailContent — operation roadmap', () => {
     expect(link.closest('[aria-disabled="true"]')).toBeNull()
   })
 
+  it('"Pase de lista" is a real link to /eventos/{id}/pase-de-lista', () => {
+    renderContent({ evento: EVENTO_CON_COMANDA })
+
+    const link = screen.getByRole('link', { name: 'Pase de lista' })
+    expect(link).toHaveAttribute(
+      'href',
+      `/eventos/${String(EVENTO_CON_COMANDA.idEvento)}/pase-de-lista`,
+    )
+    expect(link.closest('[aria-disabled="true"]')).toBeNull()
+  })
+
   it('exposes no working navigation for the still-pending roadmap entries', () => {
     renderContent({ evento: EVENTO_CON_COMANDA })
 
     for (const label of [
-      'Pase de lista',
       'Montaje / asignación de mesas',
       'Bebidas y Cubaitor',
       'Cierre',

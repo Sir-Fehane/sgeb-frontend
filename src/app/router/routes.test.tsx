@@ -210,14 +210,6 @@ describe('/eventos/:id renders the Event Detail UI inside AppShell', () => {
     ).toBeInTheDocument()
   })
 
-  it('does not register /eventos/:id/pase-de-lista', async () => {
-    await renderAt('/eventos/1001/pase-de-lista')
-
-    expect(
-      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
-    ).toBeInTheDocument()
-  })
-
   it('does not register /eventos/:id/cierre', async () => {
     await renderAt('/eventos/1001/cierre')
 
@@ -272,6 +264,68 @@ describe('/eventos/:id/equipo renders the Team Selection UI inside AppShell', ()
     expect(
       screen.queryByRole('heading', { level: 2, name: 'Selección de equipo' }),
     ).not.toBeInTheDocument()
+  })
+})
+
+describe('/eventos/:id/pase-de-lista renders the Event Attendance UI inside AppShell', () => {
+  it('renders the AppShell chrome and the attendance content for a known fixture id', async () => {
+    await renderAt('/eventos/1001/pase-de-lista')
+
+    expect(
+      screen.getByRole('navigation', { name: 'Navegación principal' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('banner')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Pase de lista' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('keeps the Topbar h1 as "Eventos" for the nested attendance route', async () => {
+    await renderAt('/eventos/1001/pase-de-lista')
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Eventos' })).toBeInTheDocument()
+  })
+
+  it('renders the unavailable state for a malformed event id', async () => {
+    await renderAt('/eventos/not-a-number/pase-de-lista')
+
+    expect(screen.getByText('No encontramos el evento solicitado.')).toBeInTheDocument()
+  })
+
+  it('renders the unavailable state for a well-formed id with no matching event', async () => {
+    await renderAt('/eventos/999999/pase-de-lista')
+
+    expect(screen.getByText('No encontramos el evento solicitado.')).toBeInTheDocument()
+  })
+
+  it('/eventos/:id still works — is not shadowed by the pase-de-lista child route', async () => {
+    await renderAt('/eventos/1001')
+
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Evento de demostración — boda' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 2, name: 'Pase de lista' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('/eventos/:id/equipo still works — is not shadowed by the pase-de-lista sibling route', async () => {
+    await renderAt('/eventos/1001/equipo')
+
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Selección de equipo' }),
+    ).toBeInTheDocument()
+  })
+
+  it('does not register /eventos/:id/montaje', async () => {
+    await renderAt('/eventos/1001/montaje')
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
   })
 })
 
