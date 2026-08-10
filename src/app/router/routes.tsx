@@ -42,10 +42,11 @@ export const router = createBrowserRouter([
      * en vivo", "Bebidas y Cubaitor", and "Pagos" do not — see the
      * comment on `NAV_ITEMS` in shared/components/layout/nav-items.ts).
      * `panel`, `eventos`, `eventos/:id`, `eventos/:id/equipo`,
-     * `eventos/:id/pase-de-lista`, `eventos/:id/montaje`, `meseros` and
-     * `reportes` render the real, presentation-only dashboard/events/
-     * event-detail/team-selection/attendance/montage/waiters/reports
-     * features (features/dashboard, features/events, features/waiters,
+     * `eventos/:id/pase-de-lista`, `eventos/:id/montaje`,
+     * `eventos/:id/cierre`, `meseros` and `reportes` render the real,
+     * presentation-only dashboard/events/event-detail/team-selection/
+     * attendance/montage/closure/waiters/reports features
+     * (features/dashboard, features/events, features/waiters,
      * features/reports) — every child now renders a real page, not the
      * shared development placeholder.
      */
@@ -144,6 +145,26 @@ export const router = createBrowserRouter([
           const { EventMontagePage } =
             await import('@/features/events/montage/pages/EventMontagePage')
           return { Component: EventMontagePage }
+        },
+      },
+      {
+        /*
+         * Event Closure — "Cierre del evento"
+         * (feature/event-closure-ui-foundation). Closure-readiness
+         * diagnostics (`GET /eventos/{id}/cierre`) and merma reporting
+         * (`GET/POST /eventos/{id}/reportes-merma`) only — no payment
+         * calculation/mutation (a separate future
+         * `feature/event-payments-ui-foundation`), no event-finalization
+         * mutation, no W-08 (Bebidas y Cubaitor, still deferred). Same
+         * positive integer SGEB event id as the other `eventos/:id/*`
+         * routes, parsed/validated inside `EventClosurePage`, not here.
+         * `/cubaitor`, `/bebidas`, `/pagos` remain unregistered.
+         */
+        path: 'eventos/:id/cierre',
+        lazy: async () => {
+          const { EventClosurePage } =
+            await import('@/features/events/closure/pages/EventClosurePage')
+          return { Component: EventClosurePage }
         },
       },
       {

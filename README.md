@@ -380,14 +380,18 @@ utilities (`parseEventId.ts`, `eventDetailFormatting.ts`,
   no attendance implementation, no status-transition/editing action exists
   anywhere on this page.
 - **Development fixtures**: `src/features/events/fixtures/
-eventDetailFixtures.ts` — exactly two records (per this branch's
-  narrow-fixture instruction): `idEvento 1001` (social, publicado, WITH a
-  comanda URL) aligned with the events list's matching entry, and
-  `idEvento 2001` (empresarial, en_curso, WITHOUT a comanda URL) reachable
-  directly but not linked from the list — none of the list's five existing
-  events combine `tipo: empresarial` with `estado` in
-  `{borrador, en_curso}`. The list's other four events intentionally have
-  no matching detail fixture; visiting their `/eventos/:id` correctly
+eventDetailFixtures.ts` — originally exactly two records (per this
+  branch's narrow-fixture instruction), later joined by a third when the
+  Event Closure foundation needed a real `estado: 'finalizado'` event to
+  pair with its "ready" readiness fixture (see "Event Closure UI
+  foundation" below): `idEvento 1001` (social, publicado, WITH a comanda
+  URL) aligned with the events list's matching entry; `idEvento 2001`
+  (empresarial, en_curso, WITHOUT a comanda URL) reachable directly but
+  not linked from the list — none of the list's five existing events
+  combine `tipo: empresarial` with `estado` in `{borrador, en_curso}`;
+  `idEvento 3001` (social, finalizado, WITHOUT a comanda URL), used only
+  by Event Closure. The list's other four events intentionally have no
+  matching detail fixture; visiting their `/eventos/:id` correctly
   renders the unavailable state, a valid outcome for this fixture-backed
   foundation.
 - **Events list discoverability**: each row in `/eventos` now has a
@@ -399,8 +403,8 @@ eventDetailFixtures.ts` — exactly two records (per this branch's
 - **Still pending** (explicitly out of scope for this foundation): SGEB API
   integration, live `DashboardEvento` data, Socket.IO, dispensing UI, event
   editing or status transitions, and the comanda upload contract.
-  "Selección de equipo", event attendance, and event montage are no longer
-  pending — see below.
+  "Selección de equipo", event attendance, event montage, and event closure
+  are no longer pending — see below.
 
 ## Team Selection UI foundation (W-05)
 
@@ -470,16 +474,22 @@ teamSelectionFixtures.ts` — keyed by `idEvento`, aligned with
   empty candidate list too) — a valid outcome, not a bug.
 - **Event Detail's roadmap now links here.** "Selección de equipo" in
   `EventDetailRoadmapSection` is a real `Link` to `/eventos/{id}/equipo`.
-  "Pase de lista" and "Montaje / asignación de mesas" are now real links
-  too — see "Event Attendance UI foundation (W-06)" and "Event Montage UI
-  foundation (W-07)" below. The remaining three entries (Bebidas y
-  Cubaitor, Cierre, Pagos) stay exactly as they were — non-interactive,
-  `aria-disabled`, labeled "Próximamente", no `href="#"`.
+  "Pase de lista", "Montaje / asignación de mesas", and "Cierre" are now
+  real links too — see "Event Attendance UI foundation (W-06)", "Event
+  Montage UI foundation (W-07)", and "Event Closure UI foundation" below.
+  The remaining two entries (Bebidas y Cubaitor — W-08, deferred — and
+  Pagos) stay exactly as they were — non-interactive, `aria-disabled`,
+  labeled "Próximamente", no `href="#"`. The roadmap keeps its canonical
+  visual order (Equipo → Pase de lista → Montaje → Bebidas y Cubaitor →
+  Cierre → Pagos) even though Cierre is active and Bebidas y Cubaitor,
+  which appears earlier, is still pending — see the Event Closure
+  section's own note on why the underlying data structure had to change
+  to support that.
 - **Still pending** (explicitly out of scope for this foundation): SGEB
   API integration, dispensing, Socket.IO, and any route guard or OIDC
   integration (the OIDC client foundation remains untouched). Event
-  attendance (W-06) and event montage (W-07) are no longer pending — see
-  below.
+  attendance (W-06), event montage (W-07), and event closure are no
+  longer pending — see below.
 
 ## Event Attendance UI foundation (W-06)
 
@@ -651,12 +661,14 @@ structure (`components/`, `pages/EventMontagePage.tsx`, `fixtures/`,
 - **Event Detail's roadmap now links here too.** "Montaje / asignación de
   mesas" in `EventDetailRoadmapSection` is a real `Link` to
   `/eventos/{id}/montaje`, alongside "Selección de equipo" and "Pase de
-  lista". The remaining three entries (Bebidas y Cubaitor, Cierre, Pagos)
-  stay exactly as they were — non-interactive, `aria-disabled`, labeled
-  "Próximamente", no `href="#"`. This is navigation discoverability only —
-  there is no wizard engine, stepper state, or "complete this step to
-  unlock the next page" logic anywhere; Team Selection → Attendance →
-  Montage is an operational lifecycle, not an irreversible backend wizard.
+  lista". At the time this foundation shipped, the remaining three entries
+  (Bebidas y Cubaitor, Cierre, Pagos) stayed non-interactive,
+  `aria-disabled`, labeled "Próximamente", no `href="#"` — "Cierre" is now
+  a real link too, see "Event Closure UI foundation" below. This is
+  navigation discoverability only — there is no wizard engine, stepper
+  state, or "complete this step to unlock the next page" logic anywhere;
+  Team Selection → Attendance → Montage → Cierre is an operational
+  lifecycle, not an irreversible backend wizard.
 - **Still pending** (explicitly out of scope for this foundation): SGEB
   API integration for this screen's own endpoints, live
   `DashboardEvento`/Socket.IO integration, and whether a single mesa can
@@ -679,6 +691,180 @@ structure (`components/`, `pages/EventMontagePage.tsx`, `fixtures/`,
   (`pending | completed | approved`) is therefore a fixture-backed
   PRESENTATION state only, not a claimed API response field — see
   `types/montage.ts` for the full note.
+
+## Event Closure UI foundation
+
+A **UI-only, fixture-backed** foundation for "Cierre del evento" —
+closure-readiness diagnostics and merma (waste) reporting — lives at
+`src/features/events/closure/` — a subdirectory of the existing Events
+feature, mirroring `montage/`'s structure (`components/`, `pages/
+EventClosurePage.tsx`, `fixtures/`, `schemas/`, `types/`, `utils/`).
+
+- **Route**: `/eventos/:id/cierre` (inside `AppShell`). Reuses
+  `parseEventId` directly; a malformed or unknown parent event id, or a
+  known event with no closure diagnostic fixture, all render
+  `EventDetailUnavailableState` (reused, not duplicated).
+- **Closure vs. Payments — a hard boundary.** This branch is EVENT
+  CLOSURE only: closure-readiness diagnostics (`GET /eventos/{id}/cierre`)
+  and merma reporting (`GET`/`POST /eventos/{id}/reportes-merma`). It does
+  **not** implement `POST /eventos/{id}/pagos/calcular`, `GET
+/eventos/{id}/pagos` as a payments screen, `PATCH /pagos/{id}/pagado`,
+  `PATCH /pagos/{id}/fallido`, payment reference capture, CLABE display,
+  payment status tables, transfer actions, or banking actions — those
+  belong to a separate future `feature/event-payments-ui-foundation`. When
+  the readiness fixture says `listo: true`, the screen may say "Listo para
+  calcular pagos" as plain status copy, but there is no "Calcular pagos"
+  button anywhere — verified by dedicated tests, not just by convention.
+  `/eventos/:id/pagos` is not registered.
+- **Stale pre-v1.6 payment contract, corrected.** `openapi-sgeb.yaml`'s own
+  changelog (v1.5, "cierre pago por pago") confirms `POST
+/eventos/{id}/pagos/aprobar` was retired and replaced by three
+  operations — `POST /eventos/{id}/pagos/calcular`, `PATCH
+/pagos/{id}/pagado`, `PATCH /pagos/{id}/fallido` — specifically because
+  bulk approval had nowhere to store each transfer's own banking
+  reference. `docs/FrontendArchitecture.md` still had two references to
+  the retired bulk-approval endpoint (§2.1, the wireframe→endpoint table);
+  both were corrected on disk to the current payment-by-payment model.
+  This branch does not call any of these endpoints either way — the
+  correction is documentation-only.
+- **Closure-readiness diagnostic** (`EventClosureReadinessViewModel`,
+  `types/closure.ts`) mirrors `GET /eventos/{id_evento}/cierre`'s
+  documented response field-for-field — a rare case in this codebase where
+  a full response schema actually exists, unlike most endpoints here that
+  only echo the generic `Exito`/`ExitoLista` envelope: `eventoFinalizado`,
+  `participacionesTotal`, `participacionesSinSalida`,
+  `meserosSinClabeVigente`, `listo`. `listo` is rendered exactly as
+  received and never recomputed client-side from the other four fields —
+  it is documented as server-derived ("true cuando los tres bloqueos están
+  resueltos"). `participacionesSinSalida`/`meserosSinClabeVigente` are
+  counts only — the endpoint documents no participant/mesero identity
+  alongside them, so no fictional per-person rows are ever rendered from
+  these numbers, and no CLABE/bank details are ever shown (the diagnostic
+  gives a count, not an account).
+- **Blocker wording is restrained and precise.** `eventoFinalizado ===
+false` reads "Evento pendiente de finalizar" — never "Error" or "Pago
+  fallido", since no payment attempt has actually occurred on this screen.
+  No raw SGEB code or `technical_message` is ever shown.
+- **Event-finalization is not this screen's mutation to own.** `PATCH
+/eventos/{id_evento}/estado` (the generic event lifecycle transition,
+  `... → finalizado | cancelado`) is not documented or wireframed as
+  belonging to the closure screen specifically — this foundation only
+  _displays_ `eventoFinalizado`, never adds a "Finalizar evento" button,
+  and never fakes finalization locally to unlock readiness.
+- **"Verificar limpieza" remains an explicit, unresolved contract gap.**
+  `docs/FrontendArchitecture.md` §9/§18 already recorded, before this
+  branch touched anything, that no captain-facing endpoint or
+  checklist-type wiring backs the wireframe's "Verificar limpieza"
+  concept — `SGEB-4015`'s technical diagnostic string mentions "checklist
+  cierre incompleto" only inside its own free-text context, never as a
+  schema or operation. `EventClosureCleanupSection` is therefore purely
+  informational text, with no interactive control, no per-person/per-area
+  rows, no "Marcar limpio"/"Aprobar limpieza" action, and no reuse of the
+  montage checklist's approval flow (a different entity entirely). The one
+  real, documented signal this screen has for outstanding exits is
+  `participacionesSinSalida`, already shown in the readiness section. The
+  engineering reasoning above — the contract gap, `SGEB-4015`, the
+  `docs/FrontendArchitecture.md` cross-reference — lives only in code
+  comments and this README; the rendered end-user copy says none of it,
+  only a plain pointer to the readiness section's verified-exits count,
+  since "contrato"/"endpoint"/"pendiente de definición"-style language has
+  no place in product-facing UI.
+- **Merma request contract mirrors `POST
+/eventos/{id_evento}/reportes-merma`'s body exactly, in snake_case** —
+  `schemas/wasteReportSchema.ts` uses the documented wire field names
+  (`observaciones`, `detalles[].tipo`/`descripcion`/`cantidad`/
+  `costo_estimado`) directly, the same established convention
+  `eventCreateSchema.ts` already uses for a request-shaped form (not the
+  camelCase used everywhere else for read-side view models). Exactly the
+  five documented categories (`vaso_roto`, `plato_roto`, `copa_rota`,
+  `comida_desperdiciada`, `otro`) are supported, nothing invented.
+  `cantidad` (integer 1–65535), `descripcion` (≤150, nullable), `costo_
+estimado` (0–999999.99, nullable), and `observaciones` (≤255, nullable)
+  all mirror the documented constraints exactly.
+- **A real React Hook Form bug was found and fixed while building the
+  form, not just tested around.** React Hook Form syncs a registered
+  `<input>` against `defaultValues` on mount by passing the raw default
+  straight through `setValueAs` — not a DOM string, unlike every
+  subsequent `onChange` call. Since `costo_estimado`'s default is `null`
+  (matching the documented `nullable: true`), a naive `setValueAs: (v) =>
+v === '' ? null : Number(v)` let `Number(null)` (which is `0`, not
+  `NaN`) leak through, so every untouched row silently submitted
+  `costo_estimado: 0` instead of `null`. Confirmed by isolated
+  reproduction against a minimal RHF form before writing the fix
+  (`parseOptionalCosto` in `EventClosureWasteForm.tsx`), not guessed —
+  and now covered by a dedicated test (`'does not require descripcion or
+costo estimado'`).
+- **Merma read-side stays explicitly presentation-only.** `GET
+/eventos/{id}/reportes-merma` responds with the generic `ExitoLista`
+  envelope — no named response schema exists for the list, so
+  `MermaReportViewModel` (`types/closure.ts`) is inferred from the POST
+  body's field names, not a confirmed response DTO; its `fecha` field and
+  `idReporteDemo` React key are both flagged in comments as
+  presentation-only, never claimed as documented response fields or a
+  real backend `id_reporte`. Locally-submitted reports mint
+  `idReporteDemo` from a counter starting well above any fixture-seeded
+  value, for the same reason.
+- **The merma form is local, callback-driven, and allowed because the
+  POST contract is fully documented** — `useFieldArray`-backed dynamic
+  detail rows (the first in this codebase), each with a "Quitar" action
+  that is local form editing only (never described as deleting a recorded
+  report) and is never offered on the last remaining row (mirrors the
+  documented `minItems: 1`). No network call; `onSubmit` is a typed local
+  callback the page wires to in-memory state, appending a new report to
+  the existing-reports list and showing a restrained
+  "Reporte registrado localmente." success message before resetting the
+  form to one empty row.
+- **Roadmap visual order is preserved across an active item sandwiched
+  between two pending ones.** Because W-08 (Bebidas y Cubaitor) is
+  intentionally deferred while Cierre (positioned after it) goes active,
+  `EventDetailRoadmapSection`'s previous two-array shape
+  (`ACTIVE_ROADMAP_ITEMS` rendered as one block, `PENDING_ROADMAP_ITEMS`
+  rendered after it) would have silently reordered the list — every active
+  item before every pending one, moving Cierre ahead of Bebidas y
+  Cubaitor. It was refactored to a single ordered `ROADMAP_ITEMS` array
+  (`{ label, slug: string | null }`), where `slug: null` renders the
+  existing non-interactive "Próximamente" treatment and a real `slug`
+  renders a `Link` — same accessibility behavior as before, but position
+  in the array is now the only thing that decides visual order, verified
+  by a dedicated order-assertion test (`EventDetailContent.test.tsx`).
+- **Development fixtures**: `closure/fixtures/closureFixtures.ts` reuses
+  existing Event Detail identity (events 1001, 2001, and 3001) rather
+  than duplicating event title/type/status inside this feature. Event
+  1001 is the "blocked" fixture (`estado: 'publicado'`, not finalized,
+  real pending exits and banking blockers, `listo: false`, with one
+  existing merma report); event 2001 is an "in progress" fixture
+  (`estado: 'en_curso'`, not finalized but no other blockers, `listo:
+false`, zero existing merma reports); event 3001 is the "ready" fixture
+  (`estado: 'finalizado'`, zero blockers, `listo: true`, zero existing
+  merma reports). `assertReadinessConsistency` is a small,
+  presentation-only dev check (throws if a fixture's `listo` doesn't
+  match the other three documented blockers) that only guards fixture
+  authoring — it is never used to recompute `listo` for real presentation
+  logic, which stays server-derived by design.
+- **Fixture correction: `eventoFinalizado` must never contradict the
+  shared event's own `estado`.** The first version of this foundation's
+  "ready" fixture (`listo: true`) was attached to event 2001, whose
+  shared `EventDetailViewModel.estado` is `en_curso` — a real, navigable
+  contradiction: `/eventos/2001` shows "En curso" while
+  `/eventos/2001/cierre`, reached from that same event's own roadmap
+  link, claimed the event was already finalized.
+  `eventoFinalizado: true` is documented as meaning the event satisfies
+  the `finalizado` prerequisite for payment calculation, so this was a
+  real coherence bug, not a cosmetic one. Fixed by adding `idEvento: 3001`
+  (`estado: 'finalizado'`) to `eventDetailFixtures.ts` specifically for
+  this scenario — 1001 and 2001's existing records, and every other
+  feature's fixtures/tests that depend on them (Team Selection,
+  Attendance, Montage), are unchanged. `closureFixtures.test.ts` now
+  cross-checks, for every fixture event id, that `eventoFinalizado: true`
+  only ever pairs with a shared `estado: 'finalizado'`, and that
+  `listo: true` only ever appears alongside `eventoFinalizado: true` and
+  zero other blockers.
+- **Still pending** (explicitly out of scope for this foundation): SGEB
+  API integration for this screen's own endpoints, live
+  `DashboardEvento`/Socket.IO integration, the Event Payments UI
+  Foundation (a separate future branch), and W-08 Bebidas y Cubaitor
+  (deferred — catalog-scope/product semantics remain unresolved; its
+  roadmap entry stays present and pending, not removed).
 
 ## Waiters UI foundation
 
@@ -829,8 +1015,12 @@ of this foundation yet).
   endpoints (`GET/POST /eventos/{id}/reportes-merma`, `GET /eventos/{id}/cierre`,
   `GET /eventos/{id}/pagos`, `POST /eventos/{id}/pagos/calcular`,
   `PATCH /pagos/{id}/pagado`, `PATCH /pagos/{id}/fallido`) are explicitly **not**
-  treated as sources for this general Reports screen — those belong to
-  separate, future Cierre/Pagos features scoped to a specific event.
+  treated as sources for this general Reports screen — those belong to the
+  separate, event-scoped "Event Closure UI foundation" (`GET /eventos/{id}/
+cierre` and the merma endpoints, now implemented — see its own README
+  section) and a still-future Event Payments UI foundation
+  (`GET /eventos/{id}/pagos`, `POST /eventos/{id}/pagos/calcular`,
+  `PATCH /pagos/{id}/pagado`, `PATCH /pagos/{id}/fallido`).
 - **Scope is historical waiter performance, not a general report center.**
   The page heading is "Reportes" (rendered by `AppShell`'s `Topbar`, per the
   established convention); the subtitle honestly states "Desempeño histórico
@@ -890,8 +1080,9 @@ of this foundation yet).
   name-based tie-break for deterministic rendering.
 - **Still pending** (explicitly out of scope for this foundation): SGEB API
   integration, a `uuid_usuario` waiter-selector, pagination UI, report
-  exports (CSV/PDF), charts, and any event-specific Cierre/Pagos/merma
-  screen (separate future features, not alternate sources for this one).
+  exports (CSV/PDF), and charts. Event-specific closure/merma reporting is
+  a separate screen, not an alternate source for this one — see "Event
+  Closure UI foundation"; event-specific Pagos remains a future feature.
 
 ## Route-error foundation
 

@@ -1,9 +1,10 @@
 import type { EventDetailViewModel } from '@/features/events/types/event'
 
 /**
- * Development/demo fixtures only — NOT live backend data. Deliberately
- * small (two records, per this branch's "do not overproduce fixture
- * data" instruction).
+ * Development/demo fixtures only — NOT live backend data. Kept small (per
+ * this branch's "do not overproduce fixture data" instruction) — three
+ * records, one per distinct demo scenario actually needed by a routed
+ * screen.
  *
  * `idEvento: 1001` is aligned field-for-field with `EVENTOS_FIXTURE`'s
  * matching entry, so "Ver detalle" from the events list leads to a
@@ -20,9 +21,24 @@ import type { EventDetailViewModel } from '@/features/events/types/event'
  * already uniquely represented there). Reachable directly at
  * `/eventos/2001` — see `EventDetailPage.test.tsx`.
  *
- * Covers the two required demo variants:
+ * `idEvento: 3001` — added specifically so the Event Closure foundation's
+ * "ready" readiness fixture (`eventoFinalizado: true`, `listo: true`,
+ * `closure/fixtures/closureFixtures.ts`) is paired with a shared event
+ * whose own documented `estado` is actually `finalizado`. Before this
+ * fixture existed, the closure "ready" scenario used `idEvento: 2001`,
+ * whose shared `estado` is `en_curso` — a real, navigable contradiction:
+ * `/eventos/2001` shows "En curso" while `/eventos/2001/cierre` (reached
+ * via that same event's own roadmap link) claimed the event was already
+ * finalized. `eventoFinalizado: true` is documented as meaning the event
+ * satisfies the `finalizado` prerequisite for payment calculation, so
+ * this needed a real fix, not just a comment. Existing 1001/2001 records
+ * and every route/test that depends on them are unchanged.
+ *
+ * Covers the three required demo variants:
  * - 1001: social, publicado, WITH a comanda URL.
  * - 2001: empresarial, en_curso, WITHOUT a comanda URL.
+ * - 3001: social, finalizado, WITHOUT a comanda URL — backs Event
+ *   Closure's "ready" fixture only.
  */
 export const EVENT_DETAIL_FIXTURES: readonly EventDetailViewModel[] = [
   {
@@ -53,6 +69,20 @@ export const EVENT_DETAIL_FIXTURES: readonly EventDetailViewModel[] = [
     numMesas: 22,
     tarifaPorMesero: 460,
     radioGeocercaM: 130,
+  },
+  {
+    idEvento: 3001,
+    titulo: 'Evento de demostración — aniversario finalizado',
+    tipo: 'social',
+    estado: 'finalizado',
+    salonNombre: 'Salón Roble',
+    fecha: '2026-05-02',
+    horaPresentacion: '17:00',
+    inicio: '2026-05-02T19:00:00',
+    cupoMeseros: 10,
+    numMesas: 15,
+    tarifaPorMesero: 440,
+    radioGeocercaM: 140,
   },
 ]
 

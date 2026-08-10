@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
@@ -133,13 +133,13 @@ describe('EventDetailContent — operation roadmap', () => {
   it('shows the still-pending operation labels as non-interactive entries', () => {
     renderContent({ evento: EVENTO_CON_COMANDA })
 
-    for (const label of ['Bebidas y Cubaitor', 'Cierre', 'Pagos']) {
+    for (const label of ['Bebidas y Cubaitor', 'Pagos']) {
       const item = screen.getByText(label)
       expect(item).toBeInTheDocument()
       expect(item.closest('[aria-disabled="true"]')).not.toBeNull()
     }
 
-    expect(screen.getAllByText('Próximamente').length).toBe(3)
+    expect(screen.getAllByText('Próximamente').length).toBe(2)
   })
 
   it('"Selección de equipo" is a real link to /eventos/{id}/equipo', () => {
@@ -175,15 +175,44 @@ describe('EventDetailContent — operation roadmap', () => {
     expect(link.closest('[aria-disabled="true"]')).toBeNull()
   })
 
+  it('"Cierre" is a real link to /eventos/{id}/cierre', () => {
+    renderContent({ evento: EVENTO_CON_COMANDA })
+
+    const link = screen.getByRole('link', { name: 'Cierre' })
+    expect(link).toHaveAttribute(
+      'href',
+      `/eventos/${String(EVENTO_CON_COMANDA.idEvento)}/cierre`,
+    )
+    expect(link.closest('[aria-disabled="true"]')).toBeNull()
+  })
+
   it('exposes no working navigation for the still-pending roadmap entries', () => {
     renderContent({ evento: EVENTO_CON_COMANDA })
 
-    for (const label of ['Bebidas y Cubaitor', 'Cierre', 'Pagos']) {
+    for (const label of ['Bebidas y Cubaitor', 'Pagos']) {
       expect(screen.queryByRole('link', { name: label })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument()
     }
     const hrefHash = document.querySelectorAll('a[href="#"]')
     expect(hrefHash.length).toBe(0)
+  })
+
+  it('preserves the canonical visual order even though Bebidas y Cubaitor (pending) sits before Cierre (active)', () => {
+    renderContent({ evento: EVENTO_CON_COMANDA })
+
+    const list = screen.getByRole('list', { name: 'Áreas operativas del evento' })
+    const items = within(list)
+      .getAllByRole('listitem')
+      .map((item) => item.textContent?.replace('Próximamente', '').trim())
+
+    expect(items).toEqual([
+      'Selección de equipo',
+      'Pase de lista',
+      'Montaje / asignación de mesas',
+      'Bebidas y Cubaitor',
+      'Cierre',
+      'Pagos',
+    ])
   })
 })
 
