@@ -435,9 +435,88 @@ describe('/eventos/:id/cierre renders the Event Closure UI inside AppShell', () 
       screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
     ).toBeInTheDocument()
   })
+})
 
-  it('does not register /eventos/:id/pagos — a separate future foundation', async () => {
-    await renderAt('/eventos/1001/pagos')
+describe('/eventos/:id/pagos renders the Event Payments UI inside AppShell', () => {
+  it('renders the AppShell chrome and the payments content for a known fixture id', async () => {
+    await renderAt('/eventos/3001/pagos')
+
+    expect(
+      screen.getByRole('navigation', { name: 'Navegación principal' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('banner')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'Pagos' })).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('keeps the Topbar h1 as "Eventos" for the nested payments route', async () => {
+    await renderAt('/eventos/3001/pagos')
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Eventos' })).toBeInTheDocument()
+  })
+
+  it('renders the unavailable state for a malformed event id', async () => {
+    await renderAt('/eventos/not-a-number/pagos')
+
+    expect(screen.getByText('No encontramos el evento solicitado.')).toBeInTheDocument()
+  })
+
+  it('renders the unavailable state for a well-formed id with no matching event', async () => {
+    await renderAt('/eventos/999999/pagos')
+
+    expect(screen.getByText('No encontramos el evento solicitado.')).toBeInTheDocument()
+  })
+
+  it('/eventos/:id still works — is not shadowed by the pagos child route', async () => {
+    await renderAt('/eventos/3001')
+
+    expect(
+      screen.getByRole('heading', {
+        level: 2,
+        name: 'Evento de demostración — aniversario finalizado',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 2, name: 'Pagos' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('/eventos/:id/cierre still works — is not shadowed by the pagos sibling route', async () => {
+    await renderAt('/eventos/3001/cierre')
+
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Cierre del evento' }),
+    ).toBeInTheDocument()
+  })
+
+  it('/eventos/:id/equipo still works', async () => {
+    await renderAt('/eventos/1001/equipo')
+
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Selección de equipo' }),
+    ).toBeInTheDocument()
+  })
+
+  it('/eventos/:id/pase-de-lista still works', async () => {
+    await renderAt('/eventos/1001/pase-de-lista')
+
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Pase de lista' }),
+    ).toBeInTheDocument()
+  })
+
+  it('/eventos/:id/montaje still works', async () => {
+    await renderAt('/eventos/1001/montaje')
+
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Montaje y asignación de mesas' }),
+    ).toBeInTheDocument()
+  })
+
+  it('does not register /eventos/:id/bebidas — W-08 remains deferred', async () => {
+    await renderAt('/eventos/3001/bebidas')
 
     expect(
       screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),

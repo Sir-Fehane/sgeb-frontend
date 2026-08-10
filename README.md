@@ -710,12 +710,15 @@ EventClosurePage.tsx`, `fixtures/`, `schemas/`, `types/`, `utils/`).
   **not** implement `POST /eventos/{id}/pagos/calcular`, `GET
 /eventos/{id}/pagos` as a payments screen, `PATCH /pagos/{id}/pagado`,
   `PATCH /pagos/{id}/fallido`, payment reference capture, CLABE display,
-  payment status tables, transfer actions, or banking actions — those
-  belong to a separate future `feature/event-payments-ui-foundation`. When
-  the readiness fixture says `listo: true`, the screen may say "Listo para
+  payment status tables, transfer actions, or banking actions. When the
+  readiness fixture says `listo: true`, the screen may say "Listo para
   calcular pagos" as plain status copy, but there is no "Calcular pagos"
-  button anywhere — verified by dedicated tests, not just by convention.
-  `/eventos/:id/pagos` is not registered.
+  button anywhere on THIS screen — verified by dedicated tests, not just
+  by convention. **Update:** those payment concerns are now implemented
+  in `feature/event-payments-ui-foundation` — see "Event Payments UI
+  foundation" below; `/eventos/:id/pagos` is registered there, and this
+  Closure screen links to it with a small "Ir a pagos" shortcut, rendered
+  only when `listo: true`.
 - **Stale pre-v1.6 payment contract, corrected.** `openapi-sgeb.yaml`'s own
   changelog (v1.5, "cierre pago por pago") confirms `POST
 /eventos/{id}/pagos/aprobar` was retired and replaced by three
@@ -861,10 +864,151 @@ false`, zero existing merma reports); event 3001 is the "ready" fixture
   zero other blockers.
 - **Still pending** (explicitly out of scope for this foundation): SGEB
   API integration for this screen's own endpoints, live
-  `DashboardEvento`/Socket.IO integration, the Event Payments UI
-  Foundation (a separate future branch), and W-08 Bebidas y Cubaitor
+  `DashboardEvento`/Socket.IO integration, and W-08 Bebidas y Cubaitor
   (deferred — catalog-scope/product semantics remain unresolved; its
   roadmap entry stays present and pending, not removed).
+
+## Event Payments UI foundation
+
+A **UI-only, fixture-backed, local-callback-driven** foundation for
+"Pagos" (Dispersión de pagos) lives at `src/features/events/payments/` —
+a subdirectory of the existing Events feature, mirroring `closure/`'s
+structure (`components/`, `pages/EventPaymentsPage.tsx`, `fixtures/`,
+`schemas/`, `types/`, `utils/`).
+
+- **Route**: `/eventos/:id/pagos` (inside `AppShell`). Reuses
+  `parseEventId` directly; a malformed or unknown parent event id, or a
+  known event with no closure diagnostic fixture, all render
+  `EventDetailUnavailableState` (reused, not duplicated).
+- **Current v1.6 payment model only — the retired bulk flow is never
+  modeled.** `openapi-sgeb.yaml`'s own changelog (v1.5, "cierre pago por
+  pago") confirms `POST /eventos/{id}/pagos/aprobar` was retired and
+  replaced by three per-payment operations, specifically because bulk
+  approval had nowhere to store each transfer's own banking reference.
+  This feature implements exactly those three: `POST
+/eventos/{id}/pagos/calcular` (calculation), `PATCH
+/pagos/{id}/pagado` (record a completed manual transfer), `PATCH
+/pagos/{id}/fallido` (record a rejected one). No "Aprobar todos",
+  "Dispersar todos", or bulk mutation of any kind exists anywhere —
+  verified by dedicated tests.
+- **The bank transfer itself always happens manually, outside SGEB.**
+  `PATCH /pagos/{id}/pagado`'s own documented description says so
+  explicitly: "El pago se hace por transferencia manual, sin integración
+  con banca ni pasarela." This screen only _records_ what already
+  happened — it never says or implies "Transferir", "Enviar dinero",
+  "Conectar banco", "Procesar con banco", or shows any fake transfer
+  progress. Action labels are deliberately "Registrar transferencia
+  realizada"/"Registrar transferencia rechazada", never "Pagar"/
+  "Dispersar ahora".
+- **Reuses Closure's readiness data directly — never a second,
+  independently-maintained copy.** `findEventClosureReadiness` (and
+  `EventClosureReadinessViewModel`) are imported straight from
+  `features/events/closure/`, the same "reuse the fixture/type accessor
+  across sibling sub-features, never cross-import UI components" pattern
+  already established for Attendance→Montage. This feature builds its
+  own `EventPaymentsBlockedSection` to re-frame the SAME three documented
+  blockers with Payments-specific copy ("No se pueden calcular los pagos
+  todavía." + the exact blocker list) rather than reusing Closure's own
+  UI component, and rather than recomputing/reinventing the blocker
+  logic itself.
+- **`Pago.clabe_destino` is ALWAYS masked, and this frontend enforces
+  that at the type level.** The documented field is "Siempre
+  enmascarada... El valor completo nunca sale del servidor, ni en
+  respuestas ni en logs." `EventPaymentViewModel.clabeDestinoEnmascarada`
+  is named specifically so that safety property can't be missed at a
+  call site; fixtures use the documented example shape (`'0121…8909'`),
+  never a raw 18-digit sequence, and there is no editable CLABE input
+  anywhere in this feature. CLABE-safety tests assert no 18-digit
+  sequence ever appears in the rendered UI.
+- **`nombre` is presentation enrichment, not a `Pago` API field.** `Pago`
+  documents only `id_participacion` — no name, email, UUID, or
+  `id_usuario`. No participation fixture exists for event 3001 (this
+  feature's only "payments available" scenario), so `nombre` is
+  hand-authored fixture data (`idParticipacion` 9001–9004, a clearly new
+  range, continuing the "Mesero de demostración `<ordinal>`" naming
+  already used across Team Selection/Attendance/Montage) — not joined
+  from any other feature's fixture, and not invented Attendance/Montage
+  participation history just to back a display name. How the real payee
+  name would be sourced during live integration is a genuine open
+  mapping question, recorded here rather than guessed.
+- **No frontend payment-amount arithmetic, anywhere.** `monto` is always
+  a value already provided by fixture/callback data — this feature never
+  computes `attendance × tarifa` or any other formula. The one place
+  numbers ARE derived locally is the summary's `total` (a presentation-
+  only sum of already-provided `monto` values across non-cancelled rows,
+  explicitly allowed) and the local recalculation fixture (see below,
+  which only filters/carries forward existing rows, never computes a
+  new amount).
+- **Calculate/recalculate is a local callback, not a state-transition
+  engine.** `calculatePaymentsResult` (`fixtures/paymentsFixtures.ts`)
+  takes only `idEvento` — it never reads the current local payments list
+  — and returns a PREBUILT fixture result representing what
+  `/pagos/calcular` would respond with. `pagado`/`cancelado` rows are
+  authored identically to their pre-calculation counterparts (not copied
+  forward by a rule); the `fallido` example is authored already in its
+  post-recalculation `pendiente` shape. No production code infers a
+  payment's next state from its current state. A dedicated test asserts
+  the function's arity is 1 (no payments-list parameter exists to read),
+  and a page-level regression test proves the already-paid row survives
+  a recalculation unchanged.
+- **Failed-payment recovery stays page-level, never a direct shortcut.**
+  A `fallido` row shows "Se recalculará en el próximo cálculo de pagos."
+  and offers no direct "mark as paid" action — the documented recovery
+  path is the next `/pagos/calcular` call, and nothing in the current
+  contract confirms a direct `fallido → pagado` transition, so this
+  foundation does not invent one.
+- **`motivo` is submitted, never displayed as a persisted field.** `Pago`
+  documents no read-side `motivo`/`motivo_fallo` — after a payment
+  becomes `fallido`, its reason is not shown anywhere on reload, matching
+  what a real `GET /pagos` response would actually be able to show.
+- **`pagado` is genuinely terminal.** No undo, no revert, no reopen, no
+  edit-reference action exists anywhere — matching the documented
+  "revertirlo dejaría el registro contradiciendo al banco. Reintentar
+  sobre un pago ya marcado devuelve SGEB-4011."
+- **`cancelado` is display-only — a recorded contract gap, not a
+  guess.** No documented endpoint produces, reverses, or reopens a
+  cancelled payment; this foundation does not invent
+  "Cancelar pago"/"Reactivar pago"/"Reabrir pago".
+- **SGEB-5004's unusual real-API semantic is documented, not
+  reproduced.** `PATCH /pagos/{id}/fallido` has NO documented success
+  response code — only 400/403/404/409/500 — because a "successful"
+  failure-recording call is itself an error response (SGEB-5004, "No
+  pudimos registrar la transferencia. Se reintentará.") even though the
+  record persists as `fallido` server-side. This foundation's local demo
+  callback simply resolves to a local "failure recorded" presentation
+  outcome — it doesn't need to reproduce that unusual HTTP-error-as-
+  success-signal behavior locally, but the README/code comments record it
+  so a future live-integration branch doesn't treat that endpoint like a
+  normal success response.
+- **A local, client-side filter only** (`Todos`/`Pendientes`/
+  `Pagados`/`Fallidos`/`Cancelados`) mirrors `GET /eventos/{id}/pagos`'s
+  optional `estado` query parameter conceptually, documented as a future
+  live-query capability — no request is ever sent.
+- **Optional Closure → Payments handoff.** `EventClosureContent` now
+  renders a small "Ir a pagos" link to `/eventos/{id}/pagos`, ONLY when
+  Closure's `readiness.listo` is true — pure discoverability, no
+  wizard/stepper, no forced navigation. The Event Detail roadmap remains
+  the primary way to reach this screen.
+- **Development fixtures**: `payments/fixtures/paymentsFixtures.ts` keys
+  off the same three events Closure already established. 1001/2001 stay
+  `listo: false` there, so they get zero payment fixtures here too
+  (calculation is unavailable — verified, never independently
+  recomputed). 3001 (`listo: true`) is pre-seeded with one row of each
+  documented `estado` (`pendiente`/`pagado`/`fallido`/`cancelado`) so the
+  full mixed-state UI is visible on first load without requiring any
+  interaction. No existing Closure fixture is mutated.
+- **Event Detail's roadmap now links here too — canonical order
+  unchanged.** "Pagos" in `EventDetailRoadmapSection` is now a real
+  `Link` to `/eventos/{id}/pagos`, the sixth and final item in the
+  already-established single-ordered-array roadmap structure (see the
+  Event Closure section above for why that refactor was necessary). No
+  reordering was needed since Pagos was already the last item; "Bebidas y
+  Cubaitor" (W-08) stays exactly as pending as before.
+- **Still pending** (explicitly out of scope for this foundation): SGEB
+  API integration, OIDC/authenticated-request integration, live
+  `DashboardEvento`/Socket.IO integration, real bank/gateway integration
+  (never planned — the product is manual-transfer recording, not a
+  payment processor), and W-08 Bebidas y Cubaitor (deferred).
 
 ## Waiters UI foundation
 
@@ -1017,10 +1161,10 @@ of this foundation yet).
   `PATCH /pagos/{id}/pagado`, `PATCH /pagos/{id}/fallido`) are explicitly **not**
   treated as sources for this general Reports screen — those belong to the
   separate, event-scoped "Event Closure UI foundation" (`GET /eventos/{id}/
-cierre` and the merma endpoints, now implemented — see its own README
-  section) and a still-future Event Payments UI foundation
+cierre` and the merma endpoints) and "Event Payments UI foundation"
   (`GET /eventos/{id}/pagos`, `POST /eventos/{id}/pagos/calcular`,
-  `PATCH /pagos/{id}/pagado`, `PATCH /pagos/{id}/fallido`).
+  `PATCH /pagos/{id}/pagado`, `PATCH /pagos/{id}/fallido`), both now
+  implemented — see their own README sections.
 - **Scope is historical waiter performance, not a general report center.**
   The page heading is "Reportes" (rendered by `AppShell`'s `Topbar`, per the
   established convention); the subtitle honestly states "Desempeño histórico

@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+
 import { EventDetailSection } from '@/features/events/components/EventDetailSection'
 import { EventDetailUnavailableState } from '@/features/events/components/EventDetailUnavailableState'
 import { EventClosureCleanupSection } from '@/features/events/closure/components/EventClosureCleanupSection'
@@ -13,6 +15,7 @@ import type {
   MermaReportViewModel,
 } from '@/features/events/closure/types/closure'
 import type { EventDetailViewModel } from '@/features/events/types/event'
+import { Button } from '@/shared/components'
 
 export interface EventClosureContentProps {
   /** `null` means "not found" — a fixture-lookup miss or a malformed route id, not a loading gap. Reuses `EventDetailUnavailableState`: same concern as Event Detail's own unavailable event. */
@@ -33,6 +36,15 @@ export interface EventClosureContentProps {
  * one of loading / error / unavailable, selected purely from props. No
  * payment calculation, no payment mutation, no W-08, no event-finalization
  * mutation anywhere in this composition — see this feature's README.
+ *
+ * The one small addition for `feature/event-payments-ui-foundation`: a
+ * restrained "Ir a pagos" link to `/eventos/{id}/pagos`, rendered ONLY
+ * when `readiness.listo` is true. This is discoverability only — no
+ * wizard/stepper, no forced navigation, no implication that Team
+ * Selection → Attendance → Montage → Cierre → Pagos is a locked
+ * sequence. The Event Detail roadmap remains the primary way to reach
+ * Pagos; this is a contextual shortcut for the one moment ("this event
+ * just became ready") where it's genuinely useful.
  */
 export function EventClosureContent({
   evento,
@@ -61,6 +73,12 @@ export function EventClosureContent({
       <EventClosureHeader idEvento={evento.idEvento} tituloEvento={evento.titulo} />
 
       <EventClosureReadinessSection readiness={readiness} />
+
+      {readiness.listo ? (
+        <Button asChild variant="outline" size="sm" className="w-fit">
+          <Link to={`/eventos/${String(evento.idEvento)}/pagos`}>Ir a pagos</Link>
+        </Button>
+      ) : null}
 
       <EventClosureCleanupSection />
 

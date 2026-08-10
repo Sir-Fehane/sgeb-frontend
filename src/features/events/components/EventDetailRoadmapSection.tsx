@@ -32,7 +32,7 @@ const ROADMAP_ITEMS: readonly RoadmapItem[] = [
   { label: 'Montaje / asignación de mesas', slug: 'montaje' },
   { label: 'Bebidas y Cubaitor', slug: null },
   { label: 'Cierre', slug: 'cierre' },
-  { label: 'Pagos', slug: null },
+  { label: 'Pagos', slug: 'pagos' },
 ]
 
 /**

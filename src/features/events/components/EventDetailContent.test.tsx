@@ -133,13 +133,13 @@ describe('EventDetailContent — operation roadmap', () => {
   it('shows the still-pending operation labels as non-interactive entries', () => {
     renderContent({ evento: EVENTO_CON_COMANDA })
 
-    for (const label of ['Bebidas y Cubaitor', 'Pagos']) {
+    for (const label of ['Bebidas y Cubaitor']) {
       const item = screen.getByText(label)
       expect(item).toBeInTheDocument()
       expect(item.closest('[aria-disabled="true"]')).not.toBeNull()
     }
 
-    expect(screen.getAllByText('Próximamente').length).toBe(2)
+    expect(screen.getAllByText('Próximamente').length).toBe(1)
   })
 
   it('"Selección de equipo" is a real link to /eventos/{id}/equipo', () => {
@@ -186,10 +186,21 @@ describe('EventDetailContent — operation roadmap', () => {
     expect(link.closest('[aria-disabled="true"]')).toBeNull()
   })
 
+  it('"Pagos" is a real link to /eventos/{id}/pagos', () => {
+    renderContent({ evento: EVENTO_CON_COMANDA })
+
+    const link = screen.getByRole('link', { name: 'Pagos' })
+    expect(link).toHaveAttribute(
+      'href',
+      `/eventos/${String(EVENTO_CON_COMANDA.idEvento)}/pagos`,
+    )
+    expect(link.closest('[aria-disabled="true"]')).toBeNull()
+  })
+
   it('exposes no working navigation for the still-pending roadmap entries', () => {
     renderContent({ evento: EVENTO_CON_COMANDA })
 
-    for (const label of ['Bebidas y Cubaitor', 'Pagos']) {
+    for (const label of ['Bebidas y Cubaitor']) {
       expect(screen.queryByRole('link', { name: label })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument()
     }

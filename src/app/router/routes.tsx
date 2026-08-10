@@ -43,10 +43,10 @@ export const router = createBrowserRouter([
      * comment on `NAV_ITEMS` in shared/components/layout/nav-items.ts).
      * `panel`, `eventos`, `eventos/:id`, `eventos/:id/equipo`,
      * `eventos/:id/pase-de-lista`, `eventos/:id/montaje`,
-     * `eventos/:id/cierre`, `meseros` and `reportes` render the real,
-     * presentation-only dashboard/events/event-detail/team-selection/
-     * attendance/montage/closure/waiters/reports features
-     * (features/dashboard, features/events, features/waiters,
+     * `eventos/:id/cierre`, `eventos/:id/pagos`, `meseros` and `reportes`
+     * render the real, presentation-only dashboard/events/event-detail/
+     * team-selection/attendance/montage/closure/payments/waiters/reports
+     * features (features/dashboard, features/events, features/waiters,
      * features/reports) — every child now renders a real page, not the
      * shared development placeholder.
      */
@@ -165,6 +165,29 @@ export const router = createBrowserRouter([
           const { EventClosurePage } =
             await import('@/features/events/closure/pages/EventClosurePage')
           return { Component: EventClosurePage }
+        },
+      },
+      {
+        /*
+         * Event Payments — "Dispersión de pagos"
+         * (feature/event-payments-ui-foundation). The current v1.6
+         * payment-by-payment model only — the bulk
+         * `POST /eventos/{id}/pagos/aprobar` was retired in v1.5 and is
+         * never called or modeled here. Calculation
+         * (`POST /eventos/{id}/pagos/calcular`) and per-payment recording
+         * (`PATCH /pagos/{id}/pagado`, `PATCH /pagos/{id}/fallido`) are
+         * local, fixture-backed captain actions only — no network call,
+         * no bank/gateway integration; the actual transfer always happens
+         * manually, outside SGEB. Same positive integer SGEB event id as
+         * the other `eventos/:id/*` routes, parsed/validated inside
+         * `EventPaymentsPage`, not here. `/cubaitor`, `/bebidas` remain
+         * unregistered.
+         */
+        path: 'eventos/:id/pagos',
+        lazy: async () => {
+          const { EventPaymentsPage } =
+            await import('@/features/events/payments/pages/EventPaymentsPage')
+          return { Component: EventPaymentsPage }
         },
       },
       {
