@@ -42,10 +42,10 @@ export const router = createBrowserRouter([
      * en vivo", "Bebidas y Cubaitor", and "Pagos" do not — see the
      * comment on `NAV_ITEMS` in shared/components/layout/nav-items.ts).
      * `panel`, `eventos`, `eventos/:id`, `eventos/:id/equipo`,
-     * `eventos/:id/pase-de-lista`, `meseros` and `reportes` render the
-     * real, presentation-only dashboard/events/event-detail/
-     * team-selection/attendance/waiters/reports features
-     * (features/dashboard, features/events, features/waiters,
+     * `eventos/:id/pase-de-lista`, `eventos/:id/montaje`, `meseros` and
+     * `reportes` render the real, presentation-only dashboard/events/
+     * event-detail/team-selection/attendance/montage/waiters/reports
+     * features (features/dashboard, features/events, features/waiters,
      * features/reports) — every child now renders a real page, not the
      * shared development placeholder.
      */
@@ -125,6 +125,25 @@ export const router = createBrowserRouter([
           const { EventAttendancePage } =
             await import('@/features/events/attendance/pages/EventAttendancePage')
           return { Component: EventAttendancePage }
+        },
+      },
+      {
+        /*
+         * Event Montage — W-07 "Verificar montaje + asignar mesas"
+         * (feature/event-montage-ui-foundation). Presentation-only:
+         * checklist approval (`PATCH /checklist-instancias/{id}/aprobar`)
+         * and table assignment (`POST /participaciones/{id}/asignaciones`,
+         * `DELETE /asignaciones/{id_asignacion}`) are modeled as local,
+         * fixture-backed captain actions only — no network call. Same
+         * positive integer SGEB event id as the other `eventos/:id/*`
+         * routes, parsed/validated inside `EventMontagePage`, not here.
+         * `/cubaitor`, `/cierre`, `/pagos` remain unregistered.
+         */
+        path: 'eventos/:id/montaje',
+        lazy: async () => {
+          const { EventMontagePage } =
+            await import('@/features/events/montage/pages/EventMontagePage')
+          return { Component: EventMontagePage }
         },
       },
       {

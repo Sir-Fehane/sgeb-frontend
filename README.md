@@ -397,10 +397,10 @@ eventDetailFixtures.ts` — exactly two records (per this branch's
   a `<button>`). The existing select button's behavior, tests, and filters
   are all unchanged.
 - **Still pending** (explicitly out of scope for this foundation): SGEB API
-  integration, live `DashboardEvento` data, Socket.IO, event attendance,
-  montaje/dispensing UI, event editing or status transitions, and the
-  comanda upload contract. "Selección de equipo" is no longer pending —
-  see below.
+  integration, live `DashboardEvento` data, Socket.IO, dispensing UI, event
+  editing or status transitions, and the comanda upload contract.
+  "Selección de equipo", event attendance, and event montage are no longer
+  pending — see below.
 
 ## Team Selection UI foundation (W-05)
 
@@ -470,15 +470,16 @@ teamSelectionFixtures.ts` — keyed by `idEvento`, aligned with
   empty candidate list too) — a valid outcome, not a bug.
 - **Event Detail's roadmap now links here.** "Selección de equipo" in
   `EventDetailRoadmapSection` is a real `Link` to `/eventos/{id}/equipo`.
-  "Pase de lista" is now a real link too — see "Event Attendance UI
-  foundation (W-06)" below. The remaining four entries (Montaje /
-  asignación de mesas, Bebidas y Cubaitor, Cierre, Pagos) stay exactly as
-  they were — non-interactive, `aria-disabled`, labeled "Próximamente",
-  no `href="#"`.
+  "Pase de lista" and "Montaje / asignación de mesas" are now real links
+  too — see "Event Attendance UI foundation (W-06)" and "Event Montage UI
+  foundation (W-07)" below. The remaining three entries (Bebidas y
+  Cubaitor, Cierre, Pagos) stay exactly as they were — non-interactive,
+  `aria-disabled`, labeled "Próximamente", no `href="#"`.
 - **Still pending** (explicitly out of scope for this foundation): SGEB
-  API integration, table/montaje assignment, dispensing, Socket.IO, and
-  any route guard or OIDC integration (the OIDC client foundation remains
-  untouched). Event attendance (W-06) is no longer pending — see below.
+  API integration, dispensing, Socket.IO, and any route guard or OIDC
+  integration (the OIDC client foundation remains untouched). Event
+  attendance (W-06) and event montage (W-07) are no longer pending — see
+  below.
 
 ## Event Attendance UI foundation (W-06)
 
@@ -555,6 +556,129 @@ existing Events feature, mirroring `team-selection/`'s structure
   detailed arrival-attempt data during future live integration (a genuine
   open backend question, not resolved here), and the manual
   captain-confirmation contract gap noted above.
+
+## Event Montage UI foundation (W-07)
+
+A **UI-only, fixture-backed** foundation for W-07 "Verificar montaje +
+asignar mesas" lives at `src/features/events/montage/` — a subdirectory of
+the existing Events feature, mirroring `team-selection/`/`attendance/`'s
+structure (`components/`, `pages/EventMontagePage.tsx`, `fixtures/`,
+`types/`, `utils/`).
+
+- **Route**: `/eventos/:id/montaje` (inside `AppShell`). Reuses
+  `parseEventId` directly; a malformed or unknown parent event id renders
+  `EventDetailUnavailableState` (reused, not duplicated).
+- **Read/mutation contract, by actor (future live integration — nothing
+  below is called in this branch, fixtures only):**
+  - **Captain reads** (this screen): `GET
+/participaciones/{id_participacion}/checklist-instancias` (documented
+    to feed both the mesero's own montage screen and this captain
+    approval view) and `GET /eventos/{id_evento}/mesas`.
+  - **Captain mutations** (this screen's three local actions):
+    `PATCH /checklist-instancias/{id}/aprobar`,
+    `POST /participaciones/{id}/asignaciones`,
+    `DELETE /asignaciones/{id_asignacion}`.
+  - **Mesero mutation, never called from here**:
+    `PUT /checklist-instancias/{id}/respuestas` — this is only where the
+    OpenAPI document happens to name the `{id_item, cantidad, hecho}`
+    shape; it is not this screen's read source, and no code or comment in
+    this feature implies the captain reads checklist state through it.
+- **Checklist state and table assignment are two separate concerns, never
+  collapsed into one fake state machine.** `docs/api/openapi-sgeb.yaml`
+  v1.6.0's `GET/POST /participaciones/{id_participacion}/checklist-instancias`
+  proves montage checklists are scoped to **one participación each**, not
+  one checklist for the whole event — correcting a naive "single event
+  checklist" reading. `MontageParticipantViewModel.checklist` is therefore
+  a per-participant field, and the SGEB-4005 approval gate is evaluated
+  per mesero, not globally for the page. `checklist.status`
+  (`pending | completed | approved`) is this feature's own synthesis of
+  the documented `completado` boolean plus whether
+  `PATCH /checklist-instancias/{id}/aprobar` has succeeded — not a
+  literal documented field.
+- **Only two real captain actions exist, and both map exactly to
+  documented endpoints, nothing more:**
+  - "Aprobar checklist" → `PATCH /checklist-instancias/{id}/aprobar`
+    (RF-21, no request body). Only ever rendered enabled when
+    `status === 'completed'`, mirroring SGEB-4005 ("Primero completa y
+    aprueba el checklist de montaje") by construction — there is no
+    captain-override path for an incomplete checklist, and no "reopen an
+    approved checklist" action, since neither is documented anywhere.
+  - "Asignar mesa" → `POST /participaciones/{id}/asignaciones` with
+    **exactly** `{id_mesa}` — nothing invented beyond that one field.
+    Only available once that participant's own checklist is approved,
+    and only lists tables currently `libre` (mirrors SGEB-4006, "esa mesa
+    ya está asignada a otro mesero").
+  - "Liberar mesa" → `DELETE /asignaciones/{id_asignacion}`, verified as a
+    real, documented, captain-owned release endpoint (not assumed) — the
+    only reason a "liberar"/unassign action exists in this branch at all.
+    There is no single "change/move table" action, since no documented
+    endpoint performs that in one step — moving a mesero is only ever
+    release-then-assign, matching the two separate real endpoints.
+- **The montage-approval prerequisite is never faked.** When a
+  participant's checklist isn't `approved`, the assignment area shows only
+  explanatory text ("Requiere aprobar el checklist de montaje de este
+  mesero antes de asignar una mesa.") — no enabled `<select>`, no enabled
+  button, and the local handlers re-check the same prerequisite
+  defensively even though the UI already prevents reaching them.
+- **Mesa status uses exactly the two documented values, `libre | ocupada`**
+  (`GET /eventos/{id_evento}/mesas`) — no `reservada`/`limpieza`/`VIP`/
+  `bloqueada` or any other invented state. `codigo_qr`/`token_comensal` are
+  never modeled or displayed anywhere in this feature, and no QR
+  regeneration action exists (that belongs to a different, unrelated
+  mesa-management concern).
+- **No invented puesto-based eligibility rule.** `POST
+/participaciones/{id}/asignaciones`'s summary text reads "Asignar mesa a
+  un mesero", which is suggestive but not a documented validation or
+  rejection code — this foundation does not block `puesto: barra`
+  participants from the assignment UI. One of the fixture-seeded
+  "approved" demo participants is deliberately `barra`, so this is
+  verified by a test, not left as an unstated assumption. Recorded as an
+  open contract question, not resolved by guessing.
+- **Development fixtures**: `montage/fixtures/montageFixtures.ts` reuses
+  three real participants from Attendance's roster (`5003`, `6001`,
+  `6002` — the same people visible on the Pase de lista screen) by
+  id/nombre/puesto, layering montage-specific checklist/assignment state
+  on top; two new fictional participants (`7001`/`7002`, a clearly
+  different id range) are added because the existing roster cannot
+  demonstrate an approved-and-unassigned state and an
+  approved-and-already-assigned state at the same time. Event 2001
+  correctly has an empty roster (Attendance has zero selected participants
+  there), demonstrating the "no participants" state without any fixture
+  of its own.
+- **Summary counts are computed only from the local fixture list** — never
+  `GET /eventos/{id}/dashboard` (`DashboardEvento`, a separate, explicitly
+  out-of-scope live aggregate), no polling, no Socket.IO.
+- **Event Detail's roadmap now links here too.** "Montaje / asignación de
+  mesas" in `EventDetailRoadmapSection` is a real `Link` to
+  `/eventos/{id}/montaje`, alongside "Selección de equipo" and "Pase de
+  lista". The remaining three entries (Bebidas y Cubaitor, Cierre, Pagos)
+  stay exactly as they were — non-interactive, `aria-disabled`, labeled
+  "Próximamente", no `href="#"`. This is navigation discoverability only —
+  there is no wizard engine, stepper state, or "complete this step to
+  unlock the next page" logic anywhere; Team Selection → Attendance →
+  Montage is an operational lifecycle, not an irreversible backend wizard.
+- **Still pending** (explicitly out of scope for this foundation): SGEB
+  API integration for this screen's own endpoints, live
+  `DashboardEvento`/Socket.IO integration, and whether a single mesa can
+  ever legitimately hold more than one simultaneous assignment or a
+  participation more than one table at once — the current contract
+  doesn't state a cardinality limit either way, so this foundation
+  neither hardcodes "exactly one table forever" nor invents a multi-table
+  UI beyond what the presentation model's array shape already allows.
+- **Approval read-side contract gap (recorded, not resolved):** the
+  current contract documents the approval OPERATION
+  (`PATCH /checklist-instancias/{id}/aprobar`) and the approval
+  PREREQUISITE (SGEB-4005 blocks table assignment when not approved), but
+  does not document the read-side field/schema through which the frontend
+  would learn — from `GET /participaciones/{id}/checklist-instancias` —
+  that a checklist instance has already been approved. No `aprobado`
+  boolean, `fecha_aprobacion` timestamp, or `estado`/`status` enum value
+  is named anywhere in `docs/api/openapi-sgeb.yaml` v1.6 (confirmed by a
+  direct text search); the data dictionary PDF could not be inspected in
+  this environment (no `poppler-utils`). `MontageChecklistViewModel.status`
+  (`pending | completed | approved`) is therefore a fixture-backed
+  PRESENTATION state only, not a claimed API response field — see
+  `types/montage.ts` for the full note.
 
 ## Waiters UI foundation
 

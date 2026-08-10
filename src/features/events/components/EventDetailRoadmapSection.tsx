@@ -11,27 +11,24 @@ export interface EventDetailRoadmapSectionProps {
 /**
  * The already-documented operational areas that are now real, registered
  * routes: "Selección de equipo" (W-05,
- * `feature/event-team-selection-ui-foundation`) and "Pase de lista"
- * (W-06, `feature/event-attendance-ui-foundation`). Rendered as ordinary
- * `Link`s, not placeholders.
+ * `feature/event-team-selection-ui-foundation`), "Pase de lista" (W-06,
+ * `feature/event-attendance-ui-foundation`), and "Montaje / asignación de
+ * mesas" (W-07, `feature/event-montage-ui-foundation`). Rendered as
+ * ordinary `Link`s, not placeholders.
  */
 const ACTIVE_ROADMAP_ITEMS: readonly { label: string; slug: string }[] = [
   { label: 'Selección de equipo', slug: 'equipo' },
   { label: 'Pase de lista', slug: 'pase-de-lista' },
+  { label: 'Montaje / asignación de mesas', slug: 'montaje' },
 ]
 
 /**
  * The remaining still-unimplemented operational areas
  * (docs/FrontendArchitecture.md §17's "Proposed Routing Structure":
- * `/montaje`, `/cubaitor`, `/cierre`, `/pagos`). None of these routes are
- * registered yet.
+ * `/cubaitor`, `/cierre`, `/pagos`). None of these routes are registered
+ * yet.
  */
-const PENDING_ROADMAP_ITEMS: readonly string[] = [
-  'Montaje / asignación de mesas',
-  'Bebidas y Cubaitor',
-  'Cierre',
-  'Pagos',
-]
+const PENDING_ROADMAP_ITEMS: readonly string[] = ['Bebidas y Cubaitor', 'Cierre', 'Pagos']
 
 /**
  * A mix of real entry points and contextual, non-interactive ones — NOT

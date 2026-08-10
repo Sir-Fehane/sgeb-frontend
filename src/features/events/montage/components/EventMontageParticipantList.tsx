@@ -1,0 +1,50 @@
+import { EventMontageParticipantRow } from '@/features/events/montage/components/EventMontageParticipantRow'
+import type {
+  ApproveChecklistRequest,
+  AssignTableRequest,
+  EventTableViewModel,
+  MontageParticipantViewModel,
+  ReleaseAssignmentRequest,
+} from '@/features/events/montage/types/montage'
+import { Text } from '@/shared/components'
+
+export interface EventMontageParticipantListProps {
+  participants: readonly MontageParticipantViewModel[]
+  tables: readonly EventTableViewModel[]
+  onApproveChecklist: (request: ApproveChecklistRequest) => void
+  onAssignTable: (request: AssignTableRequest) => void
+  onReleaseAssignment: (request: ReleaseAssignmentRequest) => void
+}
+
+export function EventMontageParticipantList({
+  participants,
+  tables,
+  onApproveChecklist,
+  onAssignTable,
+  onReleaseAssignment,
+}: EventMontageParticipantListProps) {
+  if (participants.length === 0) {
+    return (
+      <Text size="sm" className="text-muted-foreground">
+        Aún no hay meseros seleccionados para este evento.
+      </Text>
+    )
+  }
+
+  const freeTables = tables.filter((mesa) => mesa.estado === 'libre')
+
+  return (
+    <ul aria-label="Montaje y asignación por mesero" className="flex flex-col gap-3">
+      {participants.map((participant) => (
+        <EventMontageParticipantRow
+          key={participant.idParticipacion}
+          participant={participant}
+          freeTables={freeTables}
+          onApproveChecklist={onApproveChecklist}
+          onAssignTable={onAssignTable}
+          onReleaseAssignment={onReleaseAssignment}
+        />
+      ))}
+    </ul>
+  )
+}

@@ -1,0 +1,95 @@
+import { EventDetailSection } from '@/features/events/components/EventDetailSection'
+import { EventDetailUnavailableState } from '@/features/events/components/EventDetailUnavailableState'
+import type { EventDetailViewModel } from '@/features/events/types/event'
+import { EventMontageErrorState } from '@/features/events/montage/components/EventMontageErrorState'
+import { EventMontageHeader } from '@/features/events/montage/components/EventMontageHeader'
+import { EventMontageLoadingState } from '@/features/events/montage/components/EventMontageLoadingState'
+import { EventMontageParticipantList } from '@/features/events/montage/components/EventMontageParticipantList'
+import { EventMontageSummary } from '@/features/events/montage/components/EventMontageSummary'
+import { EventMontageTablesSection } from '@/features/events/montage/components/EventMontageTablesSection'
+import type {
+  ApproveChecklistRequest,
+  AssignTableRequest,
+  EventTableViewModel,
+  MontageParticipantViewModel,
+  ReleaseAssignmentRequest,
+} from '@/features/events/montage/types/montage'
+
+export interface EventMontageContentProps {
+  /** `null` means "not found" — a fixture-lookup miss or a malformed route id, not a loading gap. Reuses `EventDetailUnavailableState`: same concern as Event Detail's own unavailable event. */
+  evento: EventDetailViewModel | null
+  isLoading?: boolean
+  errorMessage?: string
+  onRetry?: (() => void) | undefined
+  participants: readonly MontageParticipantViewModel[]
+  tables: readonly EventTableViewModel[]
+  onApproveChecklist: (request: ApproveChecklistRequest) => void
+  onAssignTable: (request: AssignTableRequest) => void
+  onReleaseAssignment: (request: ReleaseAssignmentRequest) => void
+}
+
+/**
+ * The reusable presentational composition — header + summary + table
+ * availability + per-mesero checklist/assignment list, or exactly one of
+ * loading / error / unavailable, selected purely from props. All summary
+ * counts are plain derivations of `participants`/`tables` — never a
+ * second, independently-maintained source (see `EventMontageSummary`),
+ * and never `DashboardEvento`.
+ */
+export function EventMontageContent({
+  evento,
+  isLoading = false,
+  errorMessage,
+  onRetry,
+  participants,
+  tables,
+  onApproveChecklist,
+  onAssignTable,
+  onReleaseAssignment,
+}: EventMontageContentProps) {
+  if (isLoading) {
+    return <EventMontageLoadingState />
+  }
+
+  if (errorMessage) {
+    return <EventMontageErrorState errorMessage={errorMessage} onRetry={onRetry} />
+  }
+
+  if (!evento) {
+    return <EventDetailUnavailableState />
+  }
+
+  const checklistAprobadoTotal = participants.filter(
+    (participant) => participant.checklist?.status === 'approved',
+  ).length
+  const mesasLibresTotal = tables.filter((mesa) => mesa.estado === 'libre').length
+  const conMesaAsignadaTotal = participants.filter(
+    (participant) => participant.assignedTables.length > 0,
+  ).length
+
+  return (
+    <div className="flex flex-col gap-6">
+      <EventMontageHeader idEvento={evento.idEvento} tituloEvento={evento.titulo} />
+
+      <EventMontageSummary
+        participantsTotal={participants.length}
+        checklistAprobadoTotal={checklistAprobadoTotal}
+        mesasLibresTotal={mesasLibresTotal}
+        mesasTotal={tables.length}
+        conMesaAsignadaTotal={conMesaAsignadaTotal}
+      />
+
+      <EventMontageTablesSection tables={tables} />
+
+      <EventDetailSection title="Meseros seleccionados">
+        <EventMontageParticipantList
+          participants={participants}
+          tables={tables}
+          onApproveChecklist={onApproveChecklist}
+          onAssignTable={onAssignTable}
+          onReleaseAssignment={onReleaseAssignment}
+        />
+      </EventDetailSection>
+    </div>
+  )
+}

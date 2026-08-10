@@ -217,14 +217,6 @@ describe('/eventos/:id renders the Event Detail UI inside AppShell', () => {
       screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
     ).toBeInTheDocument()
   })
-
-  it('does not register /eventos/:id/montaje', async () => {
-    await renderAt('/eventos/1001/montaje')
-
-    expect(
-      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
-    ).toBeInTheDocument()
-  })
 })
 
 describe('/eventos/:id/equipo renders the Team Selection UI inside AppShell', () => {
@@ -320,8 +312,70 @@ describe('/eventos/:id/pase-de-lista renders the Event Attendance UI inside AppS
     ).toBeInTheDocument()
   })
 
-  it('does not register /eventos/:id/montaje', async () => {
+  it('does not register /eventos/:id/cubaitor', async () => {
+    await renderAt('/eventos/1001/cubaitor')
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
+  })
+})
+
+describe('/eventos/:id/montaje renders the Event Montage UI inside AppShell', () => {
+  it('renders the AppShell chrome and the montage content for a known fixture id', async () => {
     await renderAt('/eventos/1001/montaje')
+
+    expect(
+      screen.getByRole('navigation', { name: 'Navegación principal' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('banner')).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Montaje y asignación de mesas' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('keeps the Topbar h1 as "Eventos" for the nested montage route', async () => {
+    await renderAt('/eventos/1001/montaje')
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Eventos' })).toBeInTheDocument()
+  })
+
+  it('renders the unavailable state for a malformed event id', async () => {
+    await renderAt('/eventos/not-a-number/montaje')
+
+    expect(screen.getByText('No encontramos el evento solicitado.')).toBeInTheDocument()
+  })
+
+  it('renders the unavailable state for a well-formed id with no matching event', async () => {
+    await renderAt('/eventos/999999/montaje')
+
+    expect(screen.getByText('No encontramos el evento solicitado.')).toBeInTheDocument()
+  })
+
+  it('/eventos/:id still works — is not shadowed by the montaje child route', async () => {
+    await renderAt('/eventos/1001')
+
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Evento de demostración — boda' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 2, name: 'Montaje y asignación de mesas' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('/eventos/:id/pase-de-lista still works — is not shadowed by the montaje sibling route', async () => {
+    await renderAt('/eventos/1001/pase-de-lista')
+
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Pase de lista' }),
+    ).toBeInTheDocument()
+  })
+
+  it('does not register /eventos/:id/cubaitor', async () => {
+    await renderAt('/eventos/1001/cubaitor')
 
     expect(
       screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
