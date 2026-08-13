@@ -47,7 +47,8 @@ function isValidTransactionShape(value: unknown): value is OidcAuthorizationTran
     candidate.codeVerifier.length > 0 &&
     typeof candidate.redirectUri === 'string' &&
     candidate.redirectUri.length > 0 &&
-    isSafeReturnTo(candidate.returnTo)
+    isSafeReturnTo(candidate.returnTo) &&
+    (candidate.silent === undefined || typeof candidate.silent === 'boolean')
   )
 }
 
@@ -73,6 +74,10 @@ export function saveAuthorizationTransaction(
     codeVerifier: transaction.codeVerifier,
     redirectUri: transaction.redirectUri,
     returnTo: transaction.returnTo,
+    // Omitted entirely (never written as `false`) for a normal visible
+    // request, so existing stored/round-tripped transactions stay
+    // byte-identical to before this field existed.
+    ...(transaction.silent ? { silent: true as const } : {}),
   }
 
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify(clean))

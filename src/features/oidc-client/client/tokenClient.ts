@@ -1,6 +1,11 @@
 import axios from 'axios'
 
 import { getOidcConfig } from '@/features/oidc-client/config/oidcConfig'
+import {
+  RefreshLockUnavailableError,
+  withRefreshLock,
+  type WithRefreshLock,
+} from '@/features/oidc-client/session/refreshLock'
 import type {
   OAuthErrorResponse,
   WebTokenResponse,
@@ -92,17 +97,21 @@ export async function exchangeAuthorizationCode(
  * in-flight call settles (success or failure), so a later call always
  * starts a fresh attempt — a failure never leaves this permanently locked.
  *
- * This is same-tab only. The provider rotates the refresh cookie on every
- * use, so two browser tabs refreshing concurrently can each present an
- * already-rotated cookie and trigger SSO-1007 (reuse detected, full
- * session revoked) — this module does not attempt to prevent that. See
- * the README's "Refresh coordination" section: cross-tab serialization
- * (a `BroadcastChannel`/lock-based coordinator) is a documented gap, not
- * implemented here.
+ * This is same-tab only — it composes with, but does not replace, the
+ * cross-tab lock `performRefresh` acquires below via
+ * `session/refreshLock.ts` around the actual network call. Layering it
+ * this way (same-tab dedup first, cross-tab lock only around the one
+ * deduped attempt) is what keeps "concurrent callers inside the same tab
+ * share one promise" true even with cross-tab coordination in place —
+ * acquiring the cross-tab lock once per same-tab caller would instead
+ * serialize them into N separate network calls.
  */
 let inFlightRefresh: Promise<TokenResult> | null = null
 
-async function performRefresh(transport: TokenTransport): Promise<TokenResult> {
+async function performRefresh(
+  transport: TokenTransport,
+  withLock: WithRefreshLock,
+): Promise<TokenResult> {
   const config = getOidcConfig()
   const body = new URLSearchParams()
   body.set('grant_type', 'refresh_token')
@@ -110,11 +119,24 @@ async function performRefresh(transport: TokenTransport): Promise<TokenResult> {
 
   let response: TokenHttpResponse
   try {
-    response = await transport(`${config.issuer}/token`, body)
-  } catch {
+    response = await withLock(() => transport(`${config.issuer}/token`, body))
+  } catch (error) {
+    // `withLock` never calls `transport` unless it actually holds the
+    // cross-tab lock (`session/refreshLock.ts`'s own fail-safe guarantee)
+    // — so this branch covers both "coordination itself could not be
+    // established" (`RefreshLockUnavailableError`: unsupported browser,
+    // timed-out wait, or a lock-manager failure — `transport` was never
+    // called) and "the locked network call itself failed." Both resolve
+    // to the same existing `network-error` outcome — callers already
+    // treat any non-`success` refresh outcome identically by falling back
+    // to `prompt=none` (`protocol/bootstrap.ts`), so no new outcome kind
+    // is needed — only a clearer message for the coordination case.
     return {
       outcome: 'network-error',
-      message: 'No pudimos renovar tu sesión.',
+      message:
+        error instanceof RefreshLockUnavailableError
+          ? 'No pudimos coordinar la renovación de tu sesión entre pestañas.'
+          : 'No pudimos renovar tu sesión.',
     }
   }
 
@@ -131,12 +153,22 @@ async function performRefresh(transport: TokenTransport): Promise<TokenResult> {
  * module never reads (`document.cookie` is never touched) and never
  * claims to know the presence of. A 401/`invalid_grant` response here is a
  * normal, expected outcome (no cookie, expired, or already rotated) —
- * callers decide what to do next (e.g. fall back to `prompt=none`).
+ * callers decide what to do next (e.g. fall back to `prompt=none`, see
+ * `protocol/bootstrap.ts`).
+ *
+ * The actual HTTP call is serialized across browser tabs by
+ * `session/refreshLock.ts` (`withLock`, injectable for tests). That
+ * module is fail-safe, not fail-open: if cross-tab coordination cannot
+ * be established, `withLock` rejects with `RefreshLockUnavailableError`
+ * and `transport` is never invoked unlocked — see that module's own doc
+ * comment for why reuse-detection revocation makes this required, not
+ * just an optimization.
  */
 export function refreshAccessToken(
   transport: TokenTransport = defaultTokenTransport,
+  withLock: WithRefreshLock = withRefreshLock,
 ): Promise<TokenResult> {
-  inFlightRefresh ??= performRefresh(transport).finally(() => {
+  inFlightRefresh ??= performRefresh(transport, withLock).finally(() => {
     inFlightRefresh = null
   })
   return inFlightRefresh

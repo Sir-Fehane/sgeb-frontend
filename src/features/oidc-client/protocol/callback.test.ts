@@ -274,6 +274,84 @@ describe('processAuthorizationCallback — token exchange failures', () => {
   })
 })
 
+describe('processAuthorizationCallback — silent (prompt=none) login_required retry', () => {
+  const SILENT_TRANSACTION: OidcAuthorizationTransaction = {
+    ...TRANSACTION,
+    silent: true,
+  }
+
+  it('returns retry-visible for login_required when the consumed transaction was silent', async () => {
+    saveAuthorizationTransaction(SILENT_TRANSACTION)
+    const exchange = vi.fn()
+
+    const outcome = await processAuthorizationCallback(
+      { code: null, state: 'the-original-state', error: 'login_required' },
+      { exchange },
+    )
+
+    expect(exchange).not.toHaveBeenCalled()
+    expect(outcome).toEqual({ kind: 'retry-visible' })
+  })
+
+  it('does not retry-visible for a different error on a silent transaction — shows the normal error', async () => {
+    saveAuthorizationTransaction(SILENT_TRANSACTION)
+
+    const outcome = await processAuthorizationCallback(
+      { code: null, state: 'the-original-state', error: 'access_denied' },
+      {},
+    )
+
+    expect(outcome).toMatchObject({
+      kind: 'error',
+      message: 'Tu cuenta está desactivada. Contacta a tu capitán.',
+    })
+  })
+
+  it('does not retry-visible for login_required on a normal (non-silent) transaction', async () => {
+    saveAuthorizationTransaction(TRANSACTION)
+
+    const outcome = await processAuthorizationCallback(
+      { code: null, state: 'the-original-state', error: 'login_required' },
+      {},
+    )
+
+    expect(outcome).toMatchObject({
+      kind: 'error',
+      message: 'Necesitas iniciar sesión para continuar.',
+    })
+  })
+
+  it('does not retry-visible when the state does not verify, even for a silent transaction', async () => {
+    saveAuthorizationTransaction(SILENT_TRANSACTION)
+
+    const outcome = await processAuthorizationCallback(
+      { code: null, state: 'a-different-state', error: 'login_required' },
+      {},
+    )
+
+    expect(outcome).toMatchObject({
+      kind: 'error',
+      message: 'No pudimos completar el inicio de sesión. Vuelve a intentarlo.',
+    })
+  })
+
+  it('still consumes the transaction on a retry-visible outcome, bounding it to a single automatic retry', async () => {
+    saveAuthorizationTransaction(SILENT_TRANSACTION)
+
+    await processAuthorizationCallback(
+      { code: null, state: 'the-original-state', error: 'login_required' },
+      {},
+    )
+
+    const secondOutcome = await processAuthorizationCallback(
+      { code: null, state: 'the-original-state', error: 'login_required' },
+      {},
+    )
+
+    expect(secondOutcome).toMatchObject({ kind: 'error' })
+  })
+})
+
 describe('processAuthorizationCallback — provider error state verification', () => {
   it('trusts and maps the specific provider error when state matches a stored transaction', async () => {
     saveAuthorizationTransaction(TRANSACTION)

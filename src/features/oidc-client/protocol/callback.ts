@@ -20,6 +20,20 @@ export type CallbackOutcome =
       session: Omit<OidcAuthenticatedSession, 'status'>
     }
   | { kind: 'error'; message: string; canRestart: boolean }
+  /**
+   * The one bounded exception to "never silently retry": a cold-start
+   * silent-restore attempt (`protocol/bootstrap.ts`, `prompt=none`) came
+   * back with the documented, expected `login_required` response — not a
+   * real error, per `RESPUESTAS-frontend-FINAL.md` ("No es error: es la
+   * respuesta esperada de la renovación silenciosa en web"). The caller
+   * should immediately start a normal, VISIBLE authorization request
+   * instead of showing an error screen. Only ever produced when the
+   * consumed transaction itself was marked `silent` — a normal, visible
+   * flow's own `login_required` (which should not happen, but is not
+   * trusted to never happen) still falls through to a real error, so this
+   * can never chain into a second automatic redirect.
+   */
+  | { kind: 'retry-visible' }
 
 export interface ProcessCallbackDependencies {
   consumeTransaction?: typeof consumeAuthorizationTransaction
@@ -59,6 +73,14 @@ export async function processAuthorizationCallback(
     const transaction = consumeTransaction()
     const isVerifiedProviderError =
       transaction !== null && params.state === transaction.state
+
+    if (
+      isVerifiedProviderError &&
+      transaction.silent &&
+      params.error === 'login_required'
+    ) {
+      return { kind: 'retry-visible' }
+    }
 
     return {
       kind: 'error',

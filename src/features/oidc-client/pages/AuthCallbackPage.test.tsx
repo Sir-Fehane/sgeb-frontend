@@ -4,6 +4,7 @@ import type * as ReactRouterDom from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AuthCallbackPage } from '@/features/oidc-client/pages/AuthCallbackPage'
+import * as authorizationRequestModule from '@/features/oidc-client/protocol/authorizationRequest'
 import * as callbackModule from '@/features/oidc-client/protocol/callback'
 import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 
@@ -102,5 +103,25 @@ describe('AuthCallbackPage', () => {
     if (session.status === 'authenticated') {
       expect(session.user.sub).toBe('uuid-1')
     }
+  })
+
+  it('on a retry-visible outcome, starts a normal visible authorization request and shows no error', async () => {
+    vi.spyOn(callbackModule, 'processAuthorizationCallback').mockResolvedValue({
+      kind: 'retry-visible',
+    })
+    const beginAuthorizationSpy = vi
+      .spyOn(authorizationRequestModule, 'beginAuthorization')
+      .mockResolvedValue('https://auth.sgeb.mediocres.mx/authorize?prompt=undefined')
+
+    renderAt('?error=login_required&state=xyz')
+
+    await waitFor(() => {
+      expect(beginAuthorizationSpy).toHaveBeenCalledOnce()
+    })
+    expect(beginAuthorizationSpy).toHaveBeenCalledWith()
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Verificando tu inicio de sesión' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 })

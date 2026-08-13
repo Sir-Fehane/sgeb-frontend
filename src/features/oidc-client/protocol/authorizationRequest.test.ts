@@ -159,6 +159,22 @@ describe('beginAuthorization', () => {
     expect(transaction?.returnTo).toBe('/reportes')
   })
 
+  it('marks the stored transaction silent when prompt=none is requested', async () => {
+    const navigate = vi.fn()
+    await beginAuthorization({ prompt: 'none' }, navigate)
+
+    const transaction = consumeAuthorizationTransaction()
+    expect(transaction?.silent).toBe(true)
+  })
+
+  it('does not mark the stored transaction silent for a normal request', async () => {
+    const navigate = vi.fn()
+    await beginAuthorization({}, navigate)
+
+    const transaction = consumeAuthorizationTransaction()
+    expect(transaction?.silent).toBeUndefined()
+  })
+
   it('never performs a network request merely by being called', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch')
     const navigate = vi.fn()

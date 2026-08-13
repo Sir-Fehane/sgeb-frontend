@@ -116,6 +116,25 @@ describe('saveAuthorizationTransaction / consumeAuthorizationTransaction', () =>
   })
 })
 
+describe('silent flag', () => {
+  it('round-trips silent: true', () => {
+    saveAuthorizationTransaction({ ...VALID_TRANSACTION, silent: true })
+
+    expect(consumeAuthorizationTransaction()).toEqual({
+      ...VALID_TRANSACTION,
+      silent: true,
+    })
+  })
+
+  it('omits the field entirely for a normal (non-silent) transaction, keeping it byte-identical to before this field existed', () => {
+    saveAuthorizationTransaction({ ...VALID_TRANSACTION, silent: false })
+
+    const raw = sessionStorage.getItem('sgeb.oidc.authorization-transaction')
+    expect(raw).not.toContain('silent')
+    expect(consumeAuthorizationTransaction()).toEqual(VALID_TRANSACTION)
+  })
+})
+
 describe('clearAuthorizationTransaction', () => {
   it('removes a stored transaction without needing to read it', () => {
     saveAuthorizationTransaction(VALID_TRANSACTION)

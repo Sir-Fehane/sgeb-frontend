@@ -63,6 +63,16 @@ export function AuthCallbackPage({ navigate: navigateProp }: AuthCallbackPagePro
         return
       }
 
+      if (outcome.kind === 'retry-visible') {
+        // A cold-start silent restore (`prompt=none`) came back
+        // `login_required` — the documented, expected "no live provider
+        // session" answer, not an error. Stay on the processing view (no
+        // error flash) and immediately start a normal, visible
+        // authorization request instead.
+        void beginAuthorization()
+        return
+      }
+
       setError(outcome.message)
       setView({ state: 'error', message: outcome.message })
     })

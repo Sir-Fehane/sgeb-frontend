@@ -103,6 +103,7 @@ export async function beginAuthorization(
     codeVerifier,
     redirectUri: config.redirectUri,
     returnTo,
+    ...(options.prompt === 'none' ? { silent: true } : {}),
   })
 
   const url = buildAuthorizeUrl(config, {
