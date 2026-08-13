@@ -1,8 +1,56 @@
-import { render, screen } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import { RouterProvider } from 'react-router-dom'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { router } from '@/app/router/routes'
+import { beginAuthorization } from '@/features/oidc-client/protocol/authorizationRequest'
+import * as bootstrapModule from '@/features/oidc-client/protocol/bootstrap'
+import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
+
+/**
+ * Hoisted, whole-module mock — deliberately not a per-test `vi.spyOn` — so
+ * the REAL `beginAuthorization` (and therefore the real `getOidcConfig()`,
+ * which requires `VITE_OIDC_*` env vars this test environment intentionally
+ * never provides — see `.env.test`'s own comment on why OIDC config is not
+ * duplicated there) can never execute. This matters specifically here
+ * because `AppShellLayout` is loaded through React Router's `lazy()` — a
+ * dynamic `import()` resolved at navigation time, not at this file's static
+ * top — so a per-test `vi.spyOn` risks a window where the real
+ * implementation is what a private route's guard effect actually calls.
+ * `vi.mock` is hoisted above every import in this file and intercepts
+ * module resolution itself, so every consumer — including one reached only
+ * through a later dynamic import — receives the mock unconditionally.
+ */
+vi.mock('@/features/oidc-client/protocol/authorizationRequest', () => ({
+  beginAuthorization: vi.fn(),
+}))
+
+const mockedBeginAuthorization = vi.mocked(beginAuthorization)
+
+const FIXTURE_USER = { sub: 'uuid-test-user', rol: 'capitan' as const }
+
+function authenticate() {
+  useOidcSessionStore.getState().setAuthenticated({
+    accessToken: 'test-access-token',
+    accessTokenExpiresAt: Date.now() + 900_000,
+    user: FIXTURE_USER,
+  })
+}
+
+/**
+ * Every existing describe block in this file renders a private
+ * (`AppShellLayout`) route and asserts on its real content, so an
+ * authenticated session is seeded by default here rather than at each of
+ * the many call sites below — the dedicated "private route boundary"
+ * describe block further down overrides this per-test to exercise the
+ * guard itself (idle/authenticating/anonymous/error).
+ */
+beforeEach(() => {
+  useOidcSessionStore.getState().reset()
+  vi.restoreAllMocks()
+  mockedBeginAuthorization.mockReset()
+  authenticate()
+})
 
 async function renderAt(path: string) {
   await router.navigate(path)
@@ -680,6 +728,134 @@ describe('/auth/callback renders the OIDC callback page outside AppShell and Aut
 
     expect(
       screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
+  })
+})
+
+/**
+ * Router-level coverage for the private authentication route boundary
+ * (`feature/private-route-guard`) — proves the protection exists at the
+ * actual routing/layout composition (`AppShellLayout` as the parent
+ * element of every private child route), not merely that an isolated
+ * component can conditionally render children. Real feature-page content
+ * (`CaptainDashboardPage`'s "Resumen de eventos", the events list copy) is
+ * used as the private-content marker, exactly as the rest of this file
+ * already does.
+ */
+describe('Private route boundary — authentication guard', () => {
+  it('does not render private content while the session is idle/restoring', async () => {
+    useOidcSessionStore.getState().reset()
+    vi.spyOn(bootstrapModule, 'bootstrapSession').mockReturnValue(
+      new Promise(() => undefined),
+    )
+
+    await renderAt('/panel')
+
+    expect(screen.queryByText('Resumen de eventos')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('navigation', { name: 'Navegación principal' }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('status')).toBeInTheDocument()
+  })
+
+  it('renders private content once the session is authenticated', async () => {
+    await renderAt('/panel')
+
+    expect(
+      screen.getByRole('navigation', { name: 'Navegación principal' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Resumen de eventos')).toBeInTheDocument()
+  })
+
+  it('on a definitively anonymous session, never renders private content and starts visible authorization exactly once', async () => {
+    useOidcSessionStore.getState().setAnonymous()
+    mockedBeginAuthorization.mockResolvedValue('https://auth.sgeb.mediocres.mx/authorize')
+
+    await renderAt('/eventos')
+
+    await waitFor(() => {
+      expect(mockedBeginAuthorization).toHaveBeenCalledOnce()
+    })
+    expect(mockedBeginAuthorization).toHaveBeenCalledWith({ returnTo: '/eventos' })
+    expect(
+      screen.queryByText('Consulta y filtra los eventos registrados.'),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('navigation', { name: 'Navegación principal' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('does not start a second visible authorization on a later re-render while still anonymous (no redirect loop)', async () => {
+    useOidcSessionStore.getState().setAnonymous()
+    mockedBeginAuthorization.mockResolvedValue('https://auth.sgeb.mediocres.mx/authorize')
+
+    const { rerender } = await renderAt('/panel')
+    await waitFor(() => {
+      expect(mockedBeginAuthorization).toHaveBeenCalledOnce()
+    })
+
+    rerender(<RouterProvider router={router} />)
+
+    expect(mockedBeginAuthorization).toHaveBeenCalledOnce()
+  })
+
+  it('does not restart bootstrap or trigger visible authorization when navigating between private routes while already authenticated', async () => {
+    const bootstrapSpy = vi.spyOn(bootstrapModule, 'bootstrapSession')
+
+    await renderAt('/panel')
+    await renderAt('/eventos')
+    await renderAt('/reportes')
+
+    expect(bootstrapSpy).not.toHaveBeenCalled()
+    expect(mockedBeginAuthorization).not.toHaveBeenCalled()
+  })
+
+  it('stops exposing private content once an authenticated session resets to anonymous (no local resurrection)', async () => {
+    mockedBeginAuthorization.mockResolvedValue('https://auth.sgeb.mediocres.mx/authorize')
+
+    await renderAt('/panel')
+    expect(screen.getByText('Resumen de eventos')).toBeInTheDocument()
+
+    act(() => {
+      useOidcSessionStore.getState().setAnonymous()
+    })
+
+    expect(screen.queryByText('Resumen de eventos')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('navigation', { name: 'Navegación principal' }),
+    ).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(mockedBeginAuthorization).toHaveBeenCalledOnce()
+    })
+  })
+
+  it('does not invoke the private OIDC bootstrap for the public Diner route', async () => {
+    useOidcSessionStore.getState().reset()
+    const bootstrapSpy = vi.spyOn(bootstrapModule, 'bootstrapSession')
+
+    await renderAt('/publico/mesas/a1b2c3d4-e5f6-4a1b-8c2d-000000000099')
+
+    expect(bootstrapSpy).not.toHaveBeenCalled()
+    expect(useOidcSessionStore.getState().session.status).toBe('idle')
+  })
+
+  it('does not invoke the private OIDC bootstrap for /login', async () => {
+    useOidcSessionStore.getState().reset()
+    const bootstrapSpy = vi.spyOn(bootstrapModule, 'bootstrapSession')
+
+    await renderAt('/login')
+
+    expect(bootstrapSpy).not.toHaveBeenCalled()
+    expect(useOidcSessionStore.getState().session.status).toBe('idle')
+  })
+
+  it('/auth/callback remains reachable and unguarded even with an anonymous session', async () => {
+    useOidcSessionStore.getState().setAnonymous()
+
+    await renderAt('/auth/callback')
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Verificando tu inicio de sesión' }),
     ).toBeInTheDocument()
   })
 })

@@ -9,8 +9,13 @@ import { RouteHydrateFallback } from '@/features/route-errors/components/RouteHy
  * Uses React Router's own route-level `lazy` loading (rather than raw
  * `React.lazy` + a manual `<Suspense>` boundary), which is the pattern the
  * rest of the app should follow as business routes are added — see
- * docs/FrontendArchitecture.md §17 for the full planned route map. No
- * route guards exist yet because there is no auth contract to guard with.
+ * docs/FrontendArchitecture.md §17 for the full planned route map. The
+ * private authentication route boundary (`feature/private-route-guard`)
+ * lives at `AppShellLayout`, not here — see that component's own doc
+ * comment. `/login`/`/verificacion-2fa`/`/recuperar`/`/recuperar/:token`,
+ * `/publico/mesas/:codigoQr`, and `/auth/callback` are deliberately
+ * registered as siblings of the `AppShellLayout` route, not children of
+ * it, so none of them is ever gated by the private guard.
  *
  * `errorElement`/`hydrateFallbackElement` are attached directly (not via
  * each route's own `lazy()` loader) so both stay effective even if a
@@ -36,7 +41,9 @@ export const router = createBrowserRouter([
   },
   {
     /**
-     * Authenticated shell — no route guard yet (§10.1). Only the 4 nav
+     * Authenticated shell, guarded at `AppShellLayout` — every route below
+     * requires a resolved, authenticated OIDC session before its content
+     * mounts (`feature/private-route-guard`). Only the 4 nav
      * items with an approved top-level route in
      * docs/FrontendArchitecture.md §17 get a child route here ("Operación
      * en vivo", "Bebidas y Cubaitor", and "Pagos" do not — see the
