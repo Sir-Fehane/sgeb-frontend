@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
+  applyRefreshedAccessToken,
+  getOidcAccessToken,
   resetOidcSession,
   useOidcSessionStore,
 } from '@/features/oidc-client/session/sessionStore'
@@ -82,5 +84,61 @@ describe('useOidcSessionStore', () => {
 
     expect(localStorage.length).toBe(0)
     expect(sessionStorage.getItem('the-access-token')).toBeNull()
+  })
+})
+
+describe('getOidcAccessToken', () => {
+  it('returns undefined when there is no authenticated session', () => {
+    expect(getOidcAccessToken()).toBeUndefined()
+
+    useOidcSessionStore.getState().setAnonymous()
+    expect(getOidcAccessToken()).toBeUndefined()
+  })
+
+  it('returns the current access token when authenticated', () => {
+    useOidcSessionStore.getState().setAuthenticated({
+      accessToken: 'the-access-token',
+      accessTokenExpiresAt: Date.now() + 900_000,
+      user: { sub: 'uuid-1' },
+    })
+
+    expect(getOidcAccessToken()).toBe('the-access-token')
+  })
+})
+
+describe('applyRefreshedAccessToken', () => {
+  it('returns false and leaves state unchanged when not authenticated', () => {
+    useOidcSessionStore.getState().setAnonymous()
+
+    const applied = applyRefreshedAccessToken({
+      accessToken: 'new-token',
+      accessTokenExpiresAt: Date.now() + 900_000,
+    })
+
+    expect(applied).toBe(false)
+    expect(useOidcSessionStore.getState().session).toEqual({ status: 'anonymous' })
+  })
+
+  it('updates the access token while preserving the existing user', () => {
+    useOidcSessionStore.getState().setAuthenticated({
+      accessToken: 'old-token',
+      accessTokenExpiresAt: Date.now() + 900_000,
+      user: { sub: 'uuid-1', rol: 'capitan' },
+    })
+
+    const applied = applyRefreshedAccessToken({
+      accessToken: 'new-token',
+      accessTokenExpiresAt: Date.now() + 1_800_000,
+      scope: 'openid perfil sgeb.api',
+    })
+
+    expect(applied).toBe(true)
+    const session = useOidcSessionStore.getState().session
+    expect(session.status).toBe('authenticated')
+    if (session.status === 'authenticated') {
+      expect(session.accessToken).toBe('new-token')
+      expect(session.user).toEqual({ sub: 'uuid-1', rol: 'capitan' })
+      expect(session.scope).toBe('openid perfil sgeb.api')
+    }
   })
 })
