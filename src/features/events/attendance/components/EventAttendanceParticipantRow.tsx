@@ -30,11 +30,21 @@ const PUESTO_LABELS: Record<EventAttendanceParticipantViewModel['puesto'], strin
  * muted text below the primary status — and never includes
  * `uuid_dispositivo` or `id_confirmacion`, neither of which has a
  * captain-facing purpose.
+ *
+ * The "Llegada confirmada" branch keys off `estadoParticipacion` alone
+ * (not `ultimaConfirmacionLlegada`'s presence): live data never populates
+ * `ultimaConfirmacionLlegada` (no backend endpoint exposes arrival-attempt
+ * detail to the captain — see `types/attendance.ts`), so requiring it
+ * here would incorrectly show "Llegada pendiente" for every real arrival.
+ * `arrivalTimestamp` prefers `ultimaConfirmacionLlegada.timestamp`
+ * (fixture/demo data) and falls back to `participant.fechaLlegada` (the
+ * live signal); the time element is omitted only if neither is present.
  */
 export function EventAttendanceParticipantRow({
   participant,
 }: EventAttendanceParticipantRowProps) {
-  const { estadoParticipacion, ultimaConfirmacionLlegada } = participant
+  const { estadoParticipacion, ultimaConfirmacionLlegada, fechaLlegada } = participant
+  const arrivalTimestamp = ultimaConfirmacionLlegada?.timestamp ?? fechaLlegada
 
   return (
     <li className="border-border bg-card flex flex-col gap-2 rounded-lg border p-4">
@@ -49,12 +59,18 @@ export function EventAttendanceParticipantRow({
         </Badge>
       </div>
 
-      {estadoParticipacion === 'confirmo_llegada' && ultimaConfirmacionLlegada ? (
+      {estadoParticipacion === 'confirmo_llegada' ? (
         <Text size="sm">
-          Llegada confirmada ·{' '}
-          <time dateTime={ultimaConfirmacionLlegada.timestamp}>
-            {formatArrivalTime(ultimaConfirmacionLlegada.timestamp)}
-          </time>
+          {arrivalTimestamp ? (
+            <>
+              Llegada confirmada ·{' '}
+              <time dateTime={arrivalTimestamp}>
+                {formatArrivalTime(arrivalTimestamp)}
+              </time>
+            </>
+          ) : (
+            'Llegada confirmada'
+          )}
         </Text>
       ) : ultimaConfirmacionLlegada ? (
         <div className="flex flex-col gap-1">

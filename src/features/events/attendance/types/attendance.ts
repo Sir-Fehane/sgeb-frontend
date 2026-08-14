@@ -9,19 +9,26 @@
  * can produce; see `docs/FrontendArchitecture.md` §2.1/§10.3 and this
  * feature's README section for the full ownership boundary).
  *
- * Documentation gap (flagged, not resolved): no dedicated `Participacion`
- * response schema exists anywhere in the OpenAPI document — same status
- * as `TeamSelectionParticipantViewModel`/`EventDetailViewModel` (see
- * their own comments). The *relation* between a participation row and
- * its full arrival-attempt history is not explicitly documented either —
+ * Documentation gap (flagged, confirmed during live integration — feature/
+ * attendance-live-integration): no dedicated `Participacion` response
+ * schema exists anywhere in the OpenAPI document — same status as
+ * `TeamSelectionParticipantViewModel`/`EventDetailViewModel` (see their
+ * own comments). The *relation* between a participation row and its full
+ * arrival-attempt history is not explicitly documented either —
  * `GET /participaciones/{id_participacion}` only says it returns "hitos,
  * checklists y mesas asignadas", without an explicit schema naming
- * `ultima_confirmacion_llegada` or equivalent. This type's nested
- * `ultimaConfirmacionLlegada` is this feature's own presentation
- * synthesis of the documented `ConfirmacionLlegada` schema, not a claimed
- * literal API response shape — the exact source/relation for this data
- * during live integration is a genuine open question for a later branch,
- * not invented here.
+ * `ultima_confirmacion_llegada` or equivalent, and the pinned backend's
+ * `ParticipacionEvento` model/serializer confirms there is genuinely no
+ * such field or endpoint: `ConfirmacionLlegada` rows are persisted (one
+ * per attempt, evidence for a captain's attendance dispute) but never
+ * exposed to any captain-facing read. This type's nested
+ * `ultimaConfirmacionLlegada` remains this feature's own presentation
+ * synthesis of the documented `ConfirmacionLlegada` schema — still
+ * fixture/demo-only today, never populated by
+ * `services/attendanceApi.ts`'s live mapper, which honestly leaves it
+ * `undefined` rather than fabricate a substitute. `fechaLlegada` below is
+ * the one live signal a successful arrival actually has:
+ * `Participacion.fecha_llegada`, present directly on the roster row.
  *
  * Critical modeling rule: participation state and arrival-attempt result
  * are DIFFERENT concerns, kept as separate fields on purpose. A
@@ -39,9 +46,15 @@
 /**
  * The subset of the documented 7-value lifecycle this screen renders —
  * only the three states relevant to attendance/arrival. `aparto` never
- * reaches this screen (not yet selected); `asignado`, `vinculo`, `salida`
- * belong to montaje/table-assignment and event-closing, out of scope
- * here.
+ * reaches this screen (not yet selected — filtered out by
+ * `services/attendanceApi.ts` before mapping). `asignado`, `vinculo`,
+ * `salida` are real states a live participant can be in (montaje/
+ * table-assignment and event-closing have moved them forward), but the
+ * pinned backend's state machine is forward-only from `confirmo_llegada`
+ * (see `participacion_service.ts`'s `TRANSICIONES` map) — reaching any of
+ * them requires arrival to have already been confirmed, so
+ * `services/attendanceApi.ts` buckets all three into `confirmo_llegada`
+ * for this screen's purposes rather than adding fake extra states here.
  */
 export type AttendanceParticipationEstado =
   'seleccionado' | 'confirmo_asistencia' | 'confirmo_llegada'
@@ -102,4 +115,13 @@ export interface EventAttendanceParticipantViewModel {
   estadoParticipacion: AttendanceParticipationEstado
   /** Absent when no arrival attempt has been recorded yet ("Llegada pendiente"). */
   ultimaConfirmacionLlegada?: ArrivalConfirmationViewModel
+  /**
+   * `Participacion.fecha_llegada` — only ever present alongside
+   * `estadoParticipacion: 'confirmo_llegada'`. This is the live
+   * integration's honest replacement for reading a timestamp off
+   * `ultimaConfirmacionLlegada` (which live data never populates, see
+   * above): the roster row itself carries the real arrival moment even
+   * though it carries none of the verification detail.
+   */
+  fechaLlegada?: string
 }

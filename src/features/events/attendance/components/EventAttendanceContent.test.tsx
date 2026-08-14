@@ -250,6 +250,42 @@ describe('EventAttendanceContent — successful arrival', () => {
   })
 })
 
+describe('EventAttendanceContent — live-shaped arrival (fechaLlegada, no ultimaConfirmacionLlegada)', () => {
+  it('shows "Llegada confirmada" with a formatted time sourced from fechaLlegada alone — the live mapper never populates ultimaConfirmacionLlegada', () => {
+    const LLEGADA_VIVA: EventAttendanceParticipantViewModel = {
+      idParticipacion: 9001,
+      nombre: 'Mesero en vivo',
+      puesto: 'mesero',
+      estadoParticipacion: 'confirmo_llegada',
+      fechaLlegada: '2026-09-12T18:10:00Z',
+    }
+
+    renderContent({ participants: [LLEGADA_VIVA] })
+
+    const row = screen.getByText(LLEGADA_VIVA.nombre).closest('li')
+    expect(row).toHaveTextContent('Llegada confirmada')
+    const timeEl = row?.querySelector('time')
+    expect(timeEl).not.toBeNull()
+    expect(timeEl).toHaveAttribute('dateTime', '2026-09-12T18:10:00Z')
+  })
+
+  it('a downstream state bucketed as confirmo_llegada (asignado/vinculo/salida) with no fechaLlegada still renders "Llegada confirmada" without a time, never crashing or showing "undefined"', () => {
+    const SIN_FECHA: EventAttendanceParticipantViewModel = {
+      idParticipacion: 9002,
+      nombre: 'Mesero sin fecha',
+      puesto: 'mesero',
+      estadoParticipacion: 'confirmo_llegada',
+    }
+
+    expect(() => renderContent({ participants: [SIN_FECHA] })).not.toThrow()
+
+    const row = screen.getByText(SIN_FECHA.nombre).closest('li')
+    expect(row).toHaveTextContent('Llegada confirmada')
+    expect(row?.querySelector('time')).toBeNull()
+    expect(row?.textContent?.toLowerCase()).not.toContain('undefined')
+  })
+})
+
 describe('EventAttendanceContent — failed/inconclusive arrival reasons', () => {
   it('fuera_geocerca renders a safe explicit label', () => {
     renderContent()

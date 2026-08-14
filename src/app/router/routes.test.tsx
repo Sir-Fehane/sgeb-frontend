@@ -442,7 +442,7 @@ describe('/eventos/:id/pase-de-lista renders the Event Attendance UI inside AppS
     ).toBeInTheDocument()
     expect(screen.getByRole('banner')).toBeInTheDocument()
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Pase de lista' }),
+      await screen.findByRole('heading', { level: 2, name: 'Pase de lista' }),
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { level: 1, name: 'Página no encontrada' }),
@@ -464,7 +464,9 @@ describe('/eventos/:id/pase-de-lista renders the Event Attendance UI inside AppS
   it('renders the unavailable state for a well-formed id with no matching event', async () => {
     await renderAt('/eventos/999999/pase-de-lista')
 
-    expect(screen.getByText('No encontramos el evento solicitado.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('No encontramos el evento solicitado.'),
+    ).toBeInTheDocument()
   })
 
   it('/eventos/:id still works — is not shadowed by the pase-de-lista child route', async () => {
@@ -550,7 +552,7 @@ describe('/eventos/:id/montaje renders the Event Montage UI inside AppShell', ()
     await renderAt('/eventos/1001/pase-de-lista')
 
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Pase de lista' }),
+      await screen.findByRole('heading', { level: 2, name: 'Pase de lista' }),
     ).toBeInTheDocument()
   })
 
@@ -694,7 +696,7 @@ describe('/eventos/:id/pagos renders the Event Payments UI inside AppShell', () 
     await renderAt('/eventos/1001/pase-de-lista')
 
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Pase de lista' }),
+      await screen.findByRole('heading', { level: 2, name: 'Pase de lista' }),
     ).toBeInTheDocument()
   })
 
