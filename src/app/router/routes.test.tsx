@@ -63,6 +63,12 @@ const DETAIL_RECORD_3001: EventoApiRecord = {
  * (`feature/team-selection-live-integration`) resolve to an empty roster —
  * this file's Team Selection assertions only need the page to reach its
  * populated (non-error, non-loading) state, not any specific participant.
+ *
+ * `/eventos/{1001,3001}/cierre` and `/eventos/{1001,3001}/reportes-merma`
+ * (`feature/closure-live-integration`) resolve to a not-yet-ready
+ * diagnostic and an empty report list, respectively — this file's Closure
+ * assertions only need the page to reach its populated state, same
+ * reasoning as Team Selection above.
  */
 function configureDefaultRequestSgebMock() {
   vi.mocked(requestSgeb).mockImplementation(
@@ -92,6 +98,30 @@ function configureDefaultRequestSgebMock() {
         return Promise.resolve({
           result: { code: 'SGEB-0002', message: 'Sin resultados.' },
           data: [],
+        })
+      }
+      if (
+        config.url === '/eventos/1001/cierre' ||
+        config.url === '/eventos/3001/cierre'
+      ) {
+        return Promise.resolve({
+          result: { code: 'SGEB-0000', message: 'ok' },
+          data: {
+            evento_finalizado: false,
+            participaciones_total: 0,
+            participaciones_sin_salida: 0,
+            meseros_sin_clabe_vigente: 0,
+            listo: false,
+          },
+        })
+      }
+      if (
+        config.url === '/eventos/1001/reportes-merma' ||
+        config.url === '/eventos/3001/reportes-merma'
+      ) {
+        return Promise.resolve({
+          result: { code: 'SGEB-0002', message: 'Sin resultados.' },
+          data: { reportes: [], costo_total: 0, piezas_sin_costear: 0 },
         })
       }
       if (config.url === '/checklists') {
@@ -589,7 +619,7 @@ describe('/eventos/:id/cierre renders the Event Closure UI inside AppShell', () 
     ).toBeInTheDocument()
     expect(screen.getByRole('banner')).toBeInTheDocument()
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Cierre del evento' }),
+      await screen.findByRole('heading', { level: 2, name: 'Cierre del evento' }),
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { level: 1, name: 'Página no encontrada' }),
@@ -611,7 +641,9 @@ describe('/eventos/:id/cierre renders the Event Closure UI inside AppShell', () 
   it('renders the unavailable state for a well-formed id with no matching event', async () => {
     await renderAt('/eventos/999999/cierre')
 
-    expect(screen.getByText('No encontramos el evento solicitado.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('No encontramos el evento solicitado.'),
+    ).toBeInTheDocument()
   })
 
   it('/eventos/:id still works — is not shadowed by the cierre child route', async () => {
@@ -698,7 +730,7 @@ describe('/eventos/:id/pagos renders the Event Payments UI inside AppShell', () 
     await renderAt('/eventos/3001/cierre')
 
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Cierre del evento' }),
+      await screen.findByRole('heading', { level: 2, name: 'Cierre del evento' }),
     ).toBeInTheDocument()
   })
 

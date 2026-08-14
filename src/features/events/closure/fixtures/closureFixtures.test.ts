@@ -132,11 +132,11 @@ describe('findMermaReports', () => {
     expect(findMermaReports(999999)).toEqual([])
   })
 
-  it('never includes a report/detail id that looks like a claimed backend identifier beyond the demo key', () => {
+  it('every report has a positive numeric idReporte', () => {
     const reports = findMermaReports(1001)
 
     for (const report of reports) {
-      expect(report.idReporteDemo).toMatch(/^demo-/)
+      expect(report.idReporte).toBeGreaterThan(0)
     }
   })
 })

@@ -166,7 +166,7 @@ describe('EventClosureWasteForm — submission', () => {
     })
   })
 
-  it('shows a restrained local success message and resets the form after submission', async () => {
+  it('shows a restrained success message and resets the form after submission', async () => {
     const user = userEvent.setup()
     renderForm()
 
@@ -176,7 +176,7 @@ describe('EventClosureWasteForm — submission', () => {
     )
     await user.click(screen.getByRole('button', { name: 'Registrar reporte de merma' }))
 
-    expect(await screen.findByText('Reporte registrado localmente.')).toBeInTheDocument()
+    expect(await screen.findByText('Reporte registrado.')).toBeInTheDocument()
     expect(
       screen.getByRole<HTMLSelectElement>('combobox', { name: /Tipo de artículo 1/ })
         .value,
@@ -191,5 +191,24 @@ describe('EventClosureWasteForm — submission', () => {
     ).toBeDisabled()
     expect(screen.getByRole('combobox', { name: /Tipo de artículo 1/ })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Agregar artículo' })).toBeDisabled()
+  })
+
+  it('leaves the row exactly as entered and shows no success message when onSubmit rejects', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn().mockRejectedValue(new Error('SGEB-4013'))
+    renderForm(onSubmit)
+
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: /Tipo de artículo 1/ }),
+      'otro',
+    )
+    await user.click(screen.getByRole('button', { name: 'Registrar reporte de merma' }))
+
+    await vi.waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1))
+    expect(screen.queryByText('Reporte registrado.')).not.toBeInTheDocument()
+    expect(
+      screen.getByRole<HTMLSelectElement>('combobox', { name: /Tipo de artículo 1/ })
+        .value,
+    ).toBe('otro')
   })
 })

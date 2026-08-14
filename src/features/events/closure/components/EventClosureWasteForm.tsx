@@ -11,7 +11,7 @@ import { WASTE_TYPE_LABELS } from '@/features/events/closure/utils/closurePresen
 import { Button, FormField, Input, Select, Text, Textarea } from '@/shared/components'
 
 export interface EventClosureWasteFormProps {
-  /** Local, fixture-backed submission only — no network call. Always resolves; there is no real failure path in this branch. */
+  /** May reject (e.g. a business-rule error from the real `POST`) — `submit` below catches that and leaves the row as-is, rather than resetting/showing success, so the caller's own error UI (`EventClosureContent`'s `wasteReportErrorMessage`) stays the single source of truth for what went wrong. */
   onSubmit: (values: CreateWasteReportFormValues) => Promise<void>
   isSubmitting?: boolean
 }
@@ -57,13 +57,13 @@ function parseOptionalCosto(value: string | number | null | undefined): number |
 }
 
 /**
- * A local, callback-driven merma report form — allowed because
- * `POST /eventos/{id_evento}/reportes-merma`'s request contract is fully
- * documented (see `schemas/wasteReportSchema.ts`). No network call is
- * made from here; `onSubmit` is a typed local callback the page wires to
- * in-memory state. Adding/removing a row is local form editing only —
- * never described as deleting a recorded report — and the last remaining
- * row can never be removed (mirrors the documented `minItems: 1`).
+ * A `useFieldArray`-backed merma report form. `onSubmit` is a typed
+ * callback the page wires to the real `POST
+ * /eventos/{id_evento}/reportes-merma` mutation — this component itself
+ * stays agnostic of the network, just like before this branch went live.
+ * Adding/removing a row is local form editing only — never described as
+ * deleting a recorded report — and the last remaining row can never be
+ * removed (mirrors the documented `minItems: 1`).
  */
 export function EventClosureWasteForm({
   onSubmit,
@@ -89,7 +89,16 @@ export function EventClosureWasteForm({
 
   async function submit(values: CreateWasteReportFormValues) {
     setShowSuccess(false)
-    await onSubmit(values)
+    try {
+      await onSubmit(values)
+    } catch {
+      // The caller's own error UI (`EventClosureContent`'s
+      // `wasteReportErrorMessage`, sourced from the mutation's error
+      // state) already surfaces what went wrong — this form just leaves
+      // the row exactly as the captain left it, so they can fix it and
+      // resubmit rather than losing their input to a false reset.
+      return
+    }
     reset({ observaciones: null, detalles: [createEmptyDetailRow()] })
     setShowSuccess(true)
   }
@@ -230,7 +239,7 @@ export function EventClosureWasteForm({
 
       {showSuccess ? (
         <Text size="sm" className="text-success" role="status">
-          Reporte registrado localmente.
+          Reporte registrado.
         </Text>
       ) : null}
 

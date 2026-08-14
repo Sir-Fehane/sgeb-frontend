@@ -12,11 +12,10 @@ export interface EventClosureWasteReportsSectionProps {
 }
 
 /**
- * Read-only presentation of existing merma reports. `GET
- * /eventos/{id}/reportes-merma` responds with the generic `ExitoLista`
- * envelope (no named schema), so every field here is explicitly
- * presentation-only — see `types/closure.ts`. `idReporteDemo` is never
- * rendered; it exists purely as a React list key.
+ * Read-only presentation of existing merma reports, from the live `GET
+ * /eventos/{id}/reportes-merma` response (see `types/closure.ts`).
+ * `idReporte` (the real backend id) is never rendered as text; it exists
+ * purely as a React list key.
  */
 export function EventClosureWasteReportsSection({
   reports,
@@ -42,17 +41,15 @@ export function EventClosureWasteReportsSection({
 
           return (
             <li
-              key={report.idReporteDemo}
+              key={report.idReporte}
               className="border-border bg-card flex flex-col gap-2 rounded-lg border p-4"
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                {report.fecha ? (
-                  <Caption>
-                    <time dateTime={report.fecha}>
-                      {formatMermaReportDate(report.fecha)}
-                    </time>
-                  </Caption>
-                ) : null}
+                <Caption>
+                  <time dateTime={report.fecha}>
+                    {formatMermaReportDate(report.fecha)}
+                  </time>
+                </Caption>
                 <Text size="sm" className="font-medium">
                   {report.detalles.length} artículo(s) reportado(s)
                 </Text>

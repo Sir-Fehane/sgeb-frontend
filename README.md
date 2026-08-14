@@ -694,11 +694,62 @@ structure (`components/`, `pages/EventMontagePage.tsx`, `fixtures/`,
 
 ## Event Closure UI foundation
 
-A **UI-only, fixture-backed** foundation for "Cierre del evento" —
-closure-readiness diagnostics and merma (waste) reporting — lives at
-`src/features/events/closure/` — a subdirectory of the existing Events
-feature, mirroring `montage/`'s structure (`components/`, `pages/
-EventClosurePage.tsx`, `fixtures/`, `schemas/`, `types/`, `utils/`).
+**Update (`feature/closure-live-integration`):** this screen is now LIVE.
+`EventClosurePage` reads closure-readiness (`GET /eventos/{id}/cierre`)
+and existing merma reports (`GET /eventos/{id}/reportes-merma`) through
+`queries/useEventClosureReadinessQuery`/`useMermaReportsQuery`, and
+registers new reports through `queries/useCreateMermaReportMutation` →
+`POST /eventos/{id}/reportes-merma` — following the same
+`services/*Api.ts` + `queries/*QueryKeys.ts` + `use*Query`/`use*Mutation`
+convention Team Selection/Attendance/Montage already established
+(`services/closureApi.ts`, `queries/closureQueryKeys.ts`). The "Datos de
+desarrollo" banner is removed; there is no remaining fixture-backed
+sub-section on this screen (unlike Montage's table-assignment gap).
+`closureFixtures.ts` stays in the tree — still used by this feature's own
+tests and by `EventPaymentsPage` (which reads `findEventClosureReadiness`
+directly and is unaffected by this branch; Payments gets its own
+live-integration branch later).
+
+**Confirmed contract mismatch, corrected in code:** the real backend's
+merma-registration validator (`app/modules/cierre/validators/cierre_validator.ts`)
+requires camelCase `costoEstimado` in the `POST` request body, not the
+`costo_estimado` `openapi-sgeb.yaml` documents — confirmed against the
+backend's own unit tests (`tests/unit/cierre.spec.ts`), not guessed. The
+form/schema keep the documented `costo_estimado` field name (no user- or
+test-visible change); `useCreateMermaReportMutation` translates it to the
+real wire key immediately before the request is sent. See
+`services/closureApi.ts`'s `CreateMermaDetalleRequest` comment.
+
+**Identifier correction:** `MermaReportViewModel.idReporteDemo` (a
+presentation-only demo string) is now `idReporte: number` — the real
+backend `id_reporte`, confirmed via direct inspection of
+`app/modules/cierre/models/reporte_merma.ts`. `fecha`/`descripcion`/
+`costoEstimado` are equally now known-always-present fields rather than
+inferred-optional ones (see `types/closure.ts`).
+
+**Event finalization and participant `salida` remain untouched and
+distinct, exactly as before.** Direct backend inspection (not inference
+from route names) confirms: there is no dedicated "finalize event"
+endpoint — finalization is the generic `PATCH /eventos/{id}/estado`
+transition, capitán/admin-only, reachable only from `en_curso`, terminal.
+Participation `salida` is set via the equally generic `PATCH
+/participaciones/{id}/estado`, also capitán/admin-only (not a mesero
+self-action), and is fully independent — neither state machine triggers
+the other. This screen still only ever _displays_
+`readiness.eventoFinalizado`/`participacionesSinSalida` (both server-derived
+counts) and never adds a finalize button or a "mark salida" action, per
+this section's original "Event-finalization is not this screen's
+mutation to own" note below, which remains accurate.
+
+The rest of this section (below) describes the original foundation this
+branch built on top of; treat every "fixture"/"local"/"no network call"
+statement below as historical, superseded by the live wiring above.
+
+A foundation for "Cierre del evento" — closure-readiness diagnostics and
+merma (waste) reporting — lives at `src/features/events/closure/` — a
+subdirectory of the existing Events feature, mirroring `montage/`'s
+structure (`components/`, `pages/EventClosurePage.tsx`, `fixtures/`,
+`queries/`, `schemas/`, `services/`, `types/`, `utils/`).
 
 - **Route**: `/eventos/:id/cierre` (inside `AppShell`). Reuses
   `parseEventId` directly; a malformed or unknown parent event id, or a

@@ -4,14 +4,19 @@ import type {
 } from '@/features/events/closure/types/closure'
 
 /**
- * Development/demo fixtures only — NOT live backend data. Reuses existing
- * Event Detail identity (events 1001/2001/3001) rather than duplicating
- * event title/type/status inside this feature. `listo` is hand-authored
- * per fixture as the SERVER-DERIVED value it would be in live integration
- * — `assertReadinessConsistency` below is a small, presentation-only dev
- * check that fixture authors kept it logically coherent with the other
- * four fields; it is never used to recompute `listo` for real
- * presentation logic (see `types/closure.ts`).
+ * Development/demo fixtures — NOT live backend data. `EventClosurePage`
+ * no longer reads these (it uses `queries/useEventClosureReadinessQuery`/
+ * `useMermaReportsQuery` against the real backend); this file stays for
+ * this feature's own tests and for `EventPaymentsPage`, which still
+ * imports `findEventClosureReadiness` directly (Payments gets its own
+ * live-integration branch later — see `docs/decisions.md`). Reuses
+ * existing Event Detail identity (events 1001/2001/3001) rather than
+ * duplicating event title/type/status inside this feature. `listo` is
+ * hand-authored per fixture as the SERVER-DERIVED value it is in the live
+ * response — `assertReadinessConsistency` below is a small,
+ * presentation-only dev check that fixture authors kept it logically
+ * coherent with the other four fields; it is never used to recompute
+ * `listo` for real presentation logic (see `types/closure.ts`).
  *
  * Each fixture's `eventoFinalizado` is kept coherent with that SAME
  * event id's `EventDetailViewModel.estado` in
@@ -84,7 +89,7 @@ const CLOSURE_READINESS: Readonly<Record<number, EventClosureReadinessViewModel>
 const MERMA_REPORTS: Readonly<Record<number, readonly MermaReportViewModel[]>> = {
   1001: [
     {
-      idReporteDemo: 'demo-merma-1',
+      idReporte: 1,
       fecha: '2026-09-12T23:10:00Z',
       observaciones: 'Se rompieron al recoger el salón.',
       detalles: [

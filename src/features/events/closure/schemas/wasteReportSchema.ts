@@ -22,14 +22,26 @@ export const WASTE_TYPES = [
 
 /**
  * Mirrors `POST /eventos/{id_evento}/reportes-merma`'s documented request
- * body field-for-field, in the exact documented snake_case wire names —
- * same established convention as `eventCreateSchema.ts` (this schema's
- * own keys are the shape a future integration layer would send verbatim
- * to the API, not a camelCase UI-only convenience). `costo_estimado` and
- * `descripcion` are registered with RHF's `setValueAs` (see
- * `EventClosureWasteForm.tsx`) so an empty input normalizes to `null`
- * rather than an accidental empty string or `NaN` — matching the
- * documented `nullable: true` on both fields.
+ * body field-for-field, using the documented snake_case names — the same
+ * established convention as `eventCreateSchema.ts` for the RHF-bound form
+ * values.
+ *
+ * CONFIRMED MISMATCH (direct inspection of the pinned backend,
+ * `app/modules/cierre/validators/cierre_validator.ts` and
+ * `tests/unit/cierre.spec.ts`): the real request body requires camelCase
+ * `costoEstimado`, not the `costo_estimado` `openapi-sgeb.yaml` documents.
+ * This schema's field stays `costo_estimado` — matching this form's own
+ * labels/RHF registration and every other domain type in this feature —
+ * and `services/closureApi.ts`'s `createMermaReport` is responsible for
+ * translating it to the real wire key before the request is sent, exactly
+ * like `mapEventoToListItem`/`mapEventoToDetail` already own view-model
+ * ↔ wire translation elsewhere. Do not send this schema's keys directly
+ * as a request body.
+ *
+ * `costo_estimado` and `descripcion` are registered with RHF's
+ * `setValueAs` (see `EventClosureWasteForm.tsx`) so an empty input
+ * normalizes to `null` rather than an accidental empty string or `NaN` —
+ * matching the documented `nullable: true` on both fields.
  */
 const wasteDetailSchema = z.object({
   tipo: z.enum(WASTE_TYPES, { error: 'Selecciona un tipo de artículo.' }),

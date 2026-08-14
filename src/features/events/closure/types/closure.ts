@@ -46,38 +46,32 @@ export type WasteType =
   'vaso_roto' | 'plato_roto' | 'copa_rota' | 'comida_desperdiciada' | 'otro'
 
 /**
- * One existing merma detail line, for READ-side presentation only.
- * `GET /eventos/{id}/reportes-merma` responds with the generic
- * `ExitoLista` envelope — no named response schema exists for this list,
- * so this shape is inferred from the POST body's field names
- * (`tipo`/`descripcion`/`cantidad`/`costo_estimado`), not a confirmed
- * response DTO. Do not treat this as a literal documented read shape.
+ * One existing merma detail line. `GET /eventos/{id}/reportes-merma`
+ * responds with the generic `ExitoLista` envelope — no named response
+ * schema is documented in `openapi-sgeb.yaml` — but the exact shape is now
+ * confirmed by direct inspection of the pinned backend
+ * (`app/modules/cierre/models/merma_detalle.ts`): every field is always
+ * present (nullable columns still serialize, never omitted).
  */
 export interface MermaDetailViewModel {
   tipo: WasteType
-  descripcion?: string | null
+  descripcion: string | null
   cantidad: number
-  costoEstimado?: number | null
+  costoEstimado: number | null
 }
 
 /**
- * One existing merma report, for READ-side presentation only — same
- * documentation-gap caveat as `MermaDetailViewModel`.
+ * One existing merma report. Same documentation-gap-but-backend-confirmed
+ * status as `MermaDetailViewModel` — shape confirmed against
+ * `app/modules/cierre/models/reporte_merma.ts`.
  *
- * `idReporteDemo` is an explicitly PRESENTATION-ONLY/demo React key, never
- * a claimed backend `id_reporte` — no such identifier is documented on
- * the GET response, and this frontend never fabricates one for real use.
- * `fecha` is a presentation-only convenience with the same status as
- * `EventListItemViewModel.salonNombre` elsewhere in this app: `REPORTE_MERMA`
- * is a real named entity in the data dictionary's module table, so a
- * creation timestamp plausibly exists on it, but no exact field name is
- * confirmed in `openapi-sgeb.yaml` or the (unreadable in this environment)
- * data dictionary PDF for this specific response — never claimed as wire
- * truth.
+ * `idReporte` is the real backend `id_reporte` (a plain auto-increment
+ * integer, per `ReporteMerma`'s `@column({ isPrimary: true, columnName:
+ * 'id_reporte' })`) — no longer a presentation-only demo key.
  */
 export interface MermaReportViewModel {
-  idReporteDemo: string
-  fecha?: string
-  observaciones?: string | null
+  idReporte: number
+  fecha: string
+  observaciones: string | null
   detalles: readonly MermaDetailViewModel[]
 }

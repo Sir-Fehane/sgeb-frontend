@@ -15,10 +15,10 @@ import type {
   MermaReportViewModel,
 } from '@/features/events/closure/types/closure'
 import type { EventDetailViewModel } from '@/features/events/types/event'
-import { Button } from '@/shared/components'
+import { Alert, Button } from '@/shared/components'
 
 export interface EventClosureContentProps {
-  /** `null` means "not found" — a fixture-lookup miss or a malformed route id, not a loading gap. Reuses `EventDetailUnavailableState`: same concern as Event Detail's own unavailable event. */
+  /** `null` means "not found" — a malformed route id or an event the backend doesn't recognize, not a loading gap. Reuses `EventDetailUnavailableState`: same concern as Event Detail's own unavailable event. */
   evento: EventDetailViewModel | null
   isLoading?: boolean
   errorMessage?: string
@@ -28,6 +28,8 @@ export interface EventClosureContentProps {
   mermaReports: readonly MermaReportViewModel[]
   onSubmitWasteReport: (values: CreateWasteReportFormValues) => Promise<void>
   isSubmittingWasteReport?: boolean
+  /** A safe, user-facing message for the most recent failed `POST /reportes-merma` attempt — never `technical_message`. Scoped to the form only, distinct from `errorMessage` (a whole-page read failure). */
+  wasteReportErrorMessage?: string
 }
 
 /**
@@ -55,6 +57,7 @@ export function EventClosureContent({
   mermaReports,
   onSubmitWasteReport,
   isSubmittingWasteReport = false,
+  wasteReportErrorMessage,
 }: EventClosureContentProps) {
   if (isLoading) {
     return <EventClosureLoadingState />
@@ -85,10 +88,17 @@ export function EventClosureContent({
       <EventClosureWasteReportsSection reports={mermaReports} />
 
       <EventDetailSection title="Registrar reporte de merma">
-        <EventClosureWasteForm
-          onSubmit={onSubmitWasteReport}
-          isSubmitting={isSubmittingWasteReport}
-        />
+        <div className="flex flex-col gap-4">
+          {wasteReportErrorMessage ? (
+            <Alert tone="danger" title="No se pudo registrar el reporte">
+              <p>{wasteReportErrorMessage}</p>
+            </Alert>
+          ) : null}
+          <EventClosureWasteForm
+            onSubmit={onSubmitWasteReport}
+            isSubmitting={isSubmittingWasteReport}
+          />
+        </div>
       </EventDetailSection>
     </div>
   )

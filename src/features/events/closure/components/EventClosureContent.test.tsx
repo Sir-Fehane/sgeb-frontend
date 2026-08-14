@@ -46,7 +46,7 @@ const READINESS_READY: EventClosureReadinessViewModel = {
 
 const MERMA_REPORTS: readonly MermaReportViewModel[] = [
   {
-    idReporteDemo: 'demo-merma-1',
+    idReporte: 1,
     fecha: '2026-09-12T23:10:00Z',
     observaciones: 'Se rompieron al recoger el salón.',
     detalles: [
@@ -250,12 +250,6 @@ describe('EventClosureContent — existing merma reports', () => {
       within(reportsSection).getByText('Se rompieron al recoger el salón.'),
     ).toBeInTheDocument()
   })
-
-  it('never renders the presentation-only demo report key anywhere', () => {
-    renderContent({ mermaReports: MERMA_REPORTS })
-
-    expect(screen.queryByText(/demo-merma-1/)).not.toBeInTheDocument()
-  })
 })
 
 describe('EventClosureContent — merma form wiring', () => {
@@ -271,6 +265,21 @@ describe('EventClosureContent — merma form wiring', () => {
     await user.click(screen.getByRole('button', { name: 'Registrar reporte de merma' }))
 
     await vi.waitFor(() => expect(onSubmitWasteReport).toHaveBeenCalledTimes(1))
+  })
+
+  it('shows a safe wasteReportErrorMessage inline near the form, never technical_message', () => {
+    renderContent({ wasteReportErrorMessage: 'El evento no está en la etapa requerida.' })
+
+    expect(
+      screen.getByText('El evento no está en la etapa requerida.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/technical_message/)).not.toBeInTheDocument()
+  })
+
+  it('renders no form-level error alert when wasteReportErrorMessage is absent', () => {
+    renderContent()
+
+    expect(screen.queryByText('No se pudo registrar el reporte')).not.toBeInTheDocument()
   })
 })
 
