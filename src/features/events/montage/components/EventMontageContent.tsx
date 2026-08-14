@@ -10,6 +10,7 @@ import { EventMontageTablesSection } from '@/features/events/montage/components/
 import type {
   ApproveChecklistRequest,
   AssignTableRequest,
+  ChecklistApprovalStatus,
   EventTableViewModel,
   MontageParticipantViewModel,
   ReleaseAssignmentRequest,
@@ -23,6 +24,8 @@ export interface EventMontageContentProps {
   onRetry?: (() => void) | undefined
   participants: readonly MontageParticipantViewModel[]
   tables: readonly EventTableViewModel[]
+  checklistApprovalStatuses: Readonly<Record<number, ChecklistApprovalStatus>>
+  checklistApprovalErrorMessages?: Readonly<Record<number, string>>
   onApproveChecklist: (request: ApproveChecklistRequest) => void
   onAssignTable: (request: AssignTableRequest) => void
   onReleaseAssignment: (request: ReleaseAssignmentRequest) => void
@@ -43,6 +46,8 @@ export function EventMontageContent({
   onRetry,
   participants,
   tables,
+  checklistApprovalStatuses,
+  checklistApprovalErrorMessages,
   onApproveChecklist,
   onAssignTable,
   onReleaseAssignment,
@@ -85,6 +90,8 @@ export function EventMontageContent({
         <EventMontageParticipantList
           participants={participants}
           tables={tables}
+          checklistApprovalStatuses={checklistApprovalStatuses}
+          {...(checklistApprovalErrorMessages ? { checklistApprovalErrorMessages } : {})}
           onApproveChecklist={onApproveChecklist}
           onAssignTable={onAssignTable}
           onReleaseAssignment={onReleaseAssignment}

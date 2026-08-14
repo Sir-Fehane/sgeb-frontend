@@ -94,6 +94,12 @@ function configureDefaultRequestSgebMock() {
           data: [],
         })
       }
+      if (config.url === '/checklists') {
+        return Promise.resolve({
+          result: { code: 'SGEB-0002', message: 'Sin resultados.' },
+          data: [],
+        })
+      }
       return Promise.reject(
         new SgebApplicationError(404, {
           code: 'SGEB-3001',
@@ -508,8 +514,15 @@ describe('/eventos/:id/montaje renders the Event Montage UI inside AppShell', ()
       screen.getByRole('navigation', { name: 'Navegación principal' }),
     ).toBeInTheDocument()
     expect(screen.getByRole('banner')).toBeInTheDocument()
+    // The roster/checklist now load through TanStack Query
+    // (`feature/montage-live-integration`) — `findByRole` awaits the mocked
+    // `GET /eventos/1001`, `GET /eventos/1001/participaciones`, and
+    // `GET /checklists` resolving instead of asserting mid-fetch.
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Montaje y asignación de mesas' }),
+      await screen.findByRole('heading', {
+        level: 2,
+        name: 'Montaje y asignación de mesas',
+      }),
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { level: 1, name: 'Página no encontrada' }),
@@ -531,7 +544,9 @@ describe('/eventos/:id/montaje renders the Event Montage UI inside AppShell', ()
   it('renders the unavailable state for a well-formed id with no matching event', async () => {
     await renderAt('/eventos/999999/montaje')
 
-    expect(screen.getByText('No encontramos el evento solicitado.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('No encontramos el evento solicitado.'),
+    ).toBeInTheDocument()
   })
 
   it('/eventos/:id still works — is not shadowed by the montaje child route', async () => {
@@ -617,7 +632,10 @@ describe('/eventos/:id/cierre renders the Event Closure UI inside AppShell', () 
     await renderAt('/eventos/1001/montaje')
 
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Montaje y asignación de mesas' }),
+      await screen.findByRole('heading', {
+        level: 2,
+        name: 'Montaje y asignación de mesas',
+      }),
     ).toBeInTheDocument()
   })
 
@@ -704,7 +722,10 @@ describe('/eventos/:id/pagos renders the Event Payments UI inside AppShell', () 
     await renderAt('/eventos/1001/montaje')
 
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Montaje y asignación de mesas' }),
+      await screen.findByRole('heading', {
+        level: 2,
+        name: 'Montaje y asignación de mesas',
+      }),
     ).toBeInTheDocument()
   })
 

@@ -2,6 +2,7 @@ import { EventMontageParticipantRow } from '@/features/events/montage/components
 import type {
   ApproveChecklistRequest,
   AssignTableRequest,
+  ChecklistApprovalStatus,
   EventTableViewModel,
   MontageParticipantViewModel,
   ReleaseAssignmentRequest,
@@ -11,6 +12,8 @@ import { Text } from '@/shared/components'
 export interface EventMontageParticipantListProps {
   participants: readonly MontageParticipantViewModel[]
   tables: readonly EventTableViewModel[]
+  checklistApprovalStatuses: Readonly<Record<number, ChecklistApprovalStatus>>
+  checklistApprovalErrorMessages?: Readonly<Record<number, string>>
   onApproveChecklist: (request: ApproveChecklistRequest) => void
   onAssignTable: (request: AssignTableRequest) => void
   onReleaseAssignment: (request: ReleaseAssignmentRequest) => void
@@ -19,6 +22,8 @@ export interface EventMontageParticipantListProps {
 export function EventMontageParticipantList({
   participants,
   tables,
+  checklistApprovalStatuses,
+  checklistApprovalErrorMessages,
   onApproveChecklist,
   onAssignTable,
   onReleaseAssignment,
@@ -40,6 +45,15 @@ export function EventMontageParticipantList({
           key={participant.idParticipacion}
           participant={participant}
           freeTables={freeTables}
+          isApprovingChecklist={
+            checklistApprovalStatuses[participant.idParticipacion] === 'approving'
+          }
+          {...(checklistApprovalErrorMessages?.[participant.idParticipacion]
+            ? {
+                approveChecklistErrorMessage:
+                  checklistApprovalErrorMessages[participant.idParticipacion],
+              }
+            : {})}
           onApproveChecklist={onApproveChecklist}
           onAssignTable={onAssignTable}
           onReleaseAssignment={onReleaseAssignment}

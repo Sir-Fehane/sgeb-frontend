@@ -14,6 +14,9 @@ export interface EventMontageChecklistSectionProps {
   idParticipacion: number
   nombreParticipante: string
   checklist?: MontageChecklistViewModel | undefined
+  isApproving?: boolean
+  /** Safe, backend-approved `SgebApplicationError`/`SgebNetworkError` message. Falls back to a generic message when absent — never a `technical_message`. */
+  approveErrorMessage?: string
   onApproveChecklist: (request: ApproveChecklistRequest) => void
 }
 
@@ -39,6 +42,8 @@ export function EventMontageChecklistSection({
   idParticipacion,
   nombreParticipante,
   checklist,
+  isApproving = false,
+  approveErrorMessage,
   onApproveChecklist,
 }: EventMontageChecklistSectionProps) {
   if (!checklist) {
@@ -86,21 +91,29 @@ export function EventMontageChecklistSection({
       </ul>
 
       {checklist.status === 'completed' ? (
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="w-fit"
-          aria-label={`Aprobar checklist de ${nombreParticipante}`}
-          onClick={() =>
-            onApproveChecklist({
-              idParticipacion,
-              idChecklistInstancia: checklist.idChecklistInstancia,
-            })
-          }
-        >
-          Aprobar checklist
-        </Button>
+        <div className="flex flex-col items-start gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-fit"
+            loading={isApproving}
+            aria-label={`Aprobar checklist de ${nombreParticipante}`}
+            onClick={() =>
+              onApproveChecklist({
+                idParticipacion,
+                idChecklistInstancia: checklist.idChecklistInstancia,
+              })
+            }
+          >
+            Aprobar checklist
+          </Button>
+          {approveErrorMessage ? (
+            <Text size="sm" className="text-destructive">
+              {approveErrorMessage}
+            </Text>
+          ) : null}
+        </div>
       ) : null}
     </div>
   )

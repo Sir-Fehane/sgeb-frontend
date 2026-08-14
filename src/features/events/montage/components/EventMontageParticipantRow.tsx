@@ -12,6 +12,8 @@ import { Badge } from '@/shared/components'
 export interface EventMontageParticipantRowProps {
   participant: MontageParticipantViewModel
   freeTables: readonly EventTableViewModel[]
+  isApprovingChecklist?: boolean
+  approveChecklistErrorMessage?: string
   onApproveChecklist: (request: ApproveChecklistRequest) => void
   onAssignTable: (request: AssignTableRequest) => void
   onReleaseAssignment: (request: ReleaseAssignmentRequest) => void
@@ -32,6 +34,8 @@ const PUESTO_LABELS: Record<MontageParticipantViewModel['puesto'], string> = {
 export function EventMontageParticipantRow({
   participant,
   freeTables,
+  isApprovingChecklist,
+  approveChecklistErrorMessage,
   onApproveChecklist,
   onAssignTable,
   onReleaseAssignment,
@@ -47,6 +51,10 @@ export function EventMontageParticipantRow({
         idParticipacion={participant.idParticipacion}
         nombreParticipante={participant.nombre}
         checklist={participant.checklist}
+        isApproving={isApprovingChecklist ?? false}
+        {...(approveChecklistErrorMessage
+          ? { approveErrorMessage: approveChecklistErrorMessage }
+          : {})}
         onApproveChecklist={onApproveChecklist}
       />
 

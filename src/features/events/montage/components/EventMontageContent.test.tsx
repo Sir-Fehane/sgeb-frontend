@@ -152,6 +152,7 @@ function renderContent(props: Partial<EventMontageContentProps> = {}) {
         isLoading={false}
         participants={ALL_PARTICIPANTS}
         tables={ALL_TABLES}
+        checklistApprovalStatuses={{}}
         onApproveChecklist={vi.fn()}
         onAssignTable={vi.fn()}
         onReleaseAssignment={vi.fn()}
@@ -267,6 +268,34 @@ describe('EventMontageContent — checklist states', () => {
       idParticipacion: 6002,
       idChecklistInstancia: 9002,
     })
+  })
+
+  it('shows the approve button as loading/disabled while this participant is approving', () => {
+    renderContent({
+      checklistApprovalStatuses: {
+        [CHECKLIST_COMPLETO_SIN_APROBAR.idParticipacion]: 'approving',
+      },
+    })
+
+    const row = screen.getByText(CHECKLIST_COMPLETO_SIN_APROBAR.nombre).closest('li')
+    expect(
+      within(row as HTMLElement).getByRole('button', { name: /Aprobar checklist/ }),
+    ).toBeDisabled()
+  })
+
+  it('shows the backend-approved error message inline when approval fails, never technical_message', () => {
+    renderContent({
+      checklistApprovalStatuses: {
+        [CHECKLIST_COMPLETO_SIN_APROBAR.idParticipacion]: 'error',
+      },
+      checklistApprovalErrorMessages: {
+        [CHECKLIST_COMPLETO_SIN_APROBAR.idParticipacion]:
+          'Este checklist ya no está disponible para aprobar.',
+      },
+    })
+
+    const row = screen.getByText(CHECKLIST_COMPLETO_SIN_APROBAR.nombre).closest('li')
+    expect(row).toHaveTextContent('Este checklist ya no está disponible para aprobar.')
   })
 })
 
