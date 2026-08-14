@@ -1,45 +1,58 @@
-import { IconInfoCircle } from '@tabler/icons-react'
 import { useState } from 'react'
 
 import { EventsContent } from '@/features/events/components/EventsContent'
-import {
-  EVENTOS_FIXTURE,
-  SALON_OPTIONS_FIXTURE,
-} from '@/features/events/fixtures/eventFixtures'
+import { useEventsListQuery } from '@/features/events/queries/useEventsListQuery'
 import {
   DEFAULT_EVENTS_FILTER_STATE,
   type EventsFilterState,
 } from '@/features/events/types/event'
-import { filterEvents } from '@/features/events/utils/filterEvents'
-import { Alert, Text } from '@/shared/components'
+import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
+import { Alert } from '@/shared/components'
 
 /**
- * Routed at /eventos. A thin, fixture-backed wiring layer around
- * `EventsContent` — the actual presentational composition (header,
- * filters, and the loading/error/empty/populated branching) lives
- * there and already supports all four states through explicit props.
- * This page always passes `isLoading={false}` and no `errorMessage`
- * since there is no real request to fail or wait on yet; a later branch
- * wires those two props to TanStack Query state without touching
- * `EventsContent` itself. There is no development-state selector.
+ * Never renders `technical_message` — `SgebApplicationError.message` is
+ * already `result.message`, the approved user-facing copy
+ * (docs/FrontendArchitecture.md §4.1). `SgebNetworkError.message` is a
+ * locally authored, safe message for transport-level failures. Anything
+ * else (a bug, not a modeled SGEB/network outcome) falls back to a
+ * generic, still-safe message rather than exposing an unknown error's
+ * internals.
+ */
+function toSafeErrorMessage(error: unknown): string {
+  if (isSgebApplicationError(error) || isSgebNetworkError(error)) {
+    return error.message
+  }
+  return 'Ocurrió un error inesperado al cargar los eventos.'
+}
+
+/**
+ * Routed at /eventos. Live wiring layer around `EventsContent`: fetches
+ * the real events list through `useEventsListQuery` and maps its
+ * loading/error/data states onto the same props `EventsContent` already
+ * exposed for the fixture-backed foundation — no change to that
+ * component was needed.
  *
- * `EVENTOS_FIXTURE` is development/demo data, never a real backend
- * response (see features/events/fixtures) — the only state reachable
- * here besides the populated list is `EventsEmptyState`, when the
- * user's own filters happen to match zero fixture events (a real,
- * filter-driven outcome, not a simulated one).
+ * The salón filter has no live data source in this branch: the pinned
+ * backend's `GET /eventos` has no server-side `id_salon` filter (absent
+ * from `filtrosEventoValidator`), and there is no in-scope, non-fabricated
+ * source of real salón names (`GET /salones` is a different module, out of
+ * this branch's Events-list scope; the `salon` object embedded on each
+ * `Evento` response is undocumented backend-implementation detail, not a
+ * contract field). Passing an empty `salones` list keeps the existing
+ * `EventsFilters` control rendering (only "Todos" is selectable) without
+ * fabricating options — see the branch report for the full reasoning.
  *
- * Selecting an event or requesting creation does not navigate anywhere:
- * neither `/eventos/nuevo` nor `/eventos/:id` is an approved route yet
- * (docs/FrontendArchitecture.md §17 marks them "Proposed", not
- * confirmed) — both actions show an honest inline notice instead of
- * silently doing nothing or faking navigation.
+ * Selecting an event or requesting creation still shows an honest inline
+ * notice rather than navigating: Event Detail stays fixture-only in this
+ * branch (out of scope), and Event Creation has no existing, approved,
+ * routed flow to wire up yet (`EventCreateForm` remains an unrouted field
+ * prototype — see `EventCreateFieldPrototypePage`).
  */
 export function EventsPage() {
   const [filters, setFilters] = useState<EventsFilterState>(DEFAULT_EVENTS_FILTER_STATE)
   const [notice, setNotice] = useState<string | null>(null)
 
-  const filteredEventos = filterEvents(EVENTOS_FIXTURE, filters)
+  const eventsQuery = useEventsListQuery(filters)
 
   function handleSelectEvent(id: string) {
     setNotice(`La vista de detalle del evento ${id} aún no está disponible en esta base.`)
@@ -51,25 +64,18 @@ export function EventsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <Alert
-        tone="info"
-        icon={<IconInfoCircle aria-hidden="true" />}
-        title="Datos de desarrollo"
-      >
-        <Text size="sm">
-          Los eventos mostrados son datos de desarrollo (
-          <code>features/events/fixtures</code>), no información real.
-        </Text>
-      </Alert>
-
       {notice ? <Alert tone="info">{notice}</Alert> : null}
 
       <EventsContent
-        events={filteredEventos}
-        isLoading={false}
+        events={eventsQuery.data ?? []}
+        isLoading={eventsQuery.isPending}
+        {...(eventsQuery.error
+          ? { errorMessage: toSafeErrorMessage(eventsQuery.error) }
+          : {})}
+        onRetry={() => void eventsQuery.refetch()}
         filters={filters}
         onFilterChange={setFilters}
-        salones={SALON_OPTIONS_FIXTURE}
+        salones={[]}
         onSelectEvent={handleSelectEvent}
         onCreate={handleCreate}
       />

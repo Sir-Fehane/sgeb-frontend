@@ -1,4 +1,6 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen, waitFor } from '@testing-library/react'
+import { useState, type ReactNode } from 'react'
 import { RouterProvider } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -52,9 +54,28 @@ beforeEach(() => {
   authenticate()
 })
 
+/**
+ * A fresh `QueryClient` per call, with retries disabled — this file
+ * exercises the router directly (not `App.tsx`, so no `AppProviders`),
+ * and `/eventos` now reads through TanStack Query
+ * (`feature/events-live-integration`). Every existing `renderAt` call
+ * site needs a working `QueryClientProvider` in the tree even though most
+ * never touch it, and disabling retries keeps an unmocked, real network
+ * failure (there is no `requestSgeb` mock in this file) from retrying and
+ * leaking a pending timer past the end of its test. `wrapper` (not a
+ * one-off `render` call) so `rerender(<RouterProvider .../>)` below stays
+ * wrapped in the same provider instance instead of losing it.
+ */
+function TestQueryProvider({ children }: { children: ReactNode }) {
+  const [queryClient] = useState(
+    () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+  )
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+}
+
 async function renderAt(path: string) {
   await router.navigate(path)
-  return render(<RouterProvider router={router} />)
+  return render(<RouterProvider router={router} />, { wrapper: TestQueryProvider })
 }
 
 describe('public auth routes render outside AppShell, using AuthLayout', () => {
