@@ -9,12 +9,14 @@ import { Text } from '@/shared/components'
 export interface TeamSelectionCandidateListProps {
   candidates: readonly TeamSelectionParticipantViewModel[]
   rowStatuses: Readonly<Record<number, TeamSelectionRowStatus>>
+  rowErrorMessages?: Readonly<Record<number, string>>
   onSelect: (request: SelectParticipantRequest) => void
 }
 
 export function TeamSelectionCandidateList({
   candidates,
   rowStatuses,
+  rowErrorMessages,
   onSelect,
 }: TeamSelectionCandidateListProps) {
   if (candidates.length === 0) {
@@ -27,14 +29,18 @@ export function TeamSelectionCandidateList({
 
   return (
     <ul aria-label="Candidatos apartados" className="flex flex-col gap-3">
-      {candidates.map((participant) => (
-        <TeamSelectionCandidateRow
-          key={participant.idParticipacion}
-          participant={participant}
-          rowStatus={rowStatuses[participant.idParticipacion] ?? 'idle'}
-          onSelect={onSelect}
-        />
-      ))}
+      {candidates.map((participant) => {
+        const errorMessage = rowErrorMessages?.[participant.idParticipacion]
+        return (
+          <TeamSelectionCandidateRow
+            key={participant.idParticipacion}
+            participant={participant}
+            rowStatus={rowStatuses[participant.idParticipacion] ?? 'idle'}
+            {...(errorMessage ? { errorMessage } : {})}
+            onSelect={onSelect}
+          />
+        )
+      })}
     </ul>
   )
 }

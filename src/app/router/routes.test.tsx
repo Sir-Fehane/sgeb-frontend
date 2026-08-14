@@ -58,6 +58,11 @@ const DETAIL_RECORD_3001: EventoApiRecord = {
  * this file's route/AppShell assertions actually navigate to); any other
  * `/eventos/:id` — e.g. `999999` — resolves not-found (`SGEB-3001`),
  * matching the pinned backend's real behavior for an unknown id.
+ *
+ * `/eventos/1001/participaciones` and `/eventos/3001/participaciones`
+ * (`feature/team-selection-live-integration`) resolve to an empty roster —
+ * this file's Team Selection assertions only need the page to reach its
+ * populated (non-error, non-loading) state, not any specific participant.
  */
 function configureDefaultRequestSgebMock() {
   vi.mocked(requestSgeb).mockImplementation(
@@ -78,6 +83,15 @@ function configureDefaultRequestSgebMock() {
         return Promise.resolve({
           result: { code: 'SGEB-0000', message: 'ok' },
           data: DETAIL_RECORD_3001,
+        })
+      }
+      if (
+        config.url === '/eventos/1001/participaciones' ||
+        config.url === '/eventos/3001/participaciones'
+      ) {
+        return Promise.resolve({
+          result: { code: 'SGEB-0002', message: 'Sin resultados.' },
+          data: [],
         })
       }
       return Promise.reject(
@@ -380,8 +394,12 @@ describe('/eventos/:id/equipo renders the Team Selection UI inside AppShell', ()
       screen.getByRole('navigation', { name: 'Navegación principal' }),
     ).toBeInTheDocument()
     expect(screen.getByRole('banner')).toBeInTheDocument()
+    // The roster now loads through TanStack Query
+    // (`feature/team-selection-live-integration`) — `findByRole` awaits the
+    // mocked `GET /eventos/1001` and `GET /eventos/1001/participaciones`
+    // resolving instead of asserting mid-fetch.
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Selección de equipo' }),
+      await screen.findByRole('heading', { level: 2, name: 'Selección de equipo' }),
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { level: 1, name: 'Página no encontrada' }),
@@ -467,7 +485,7 @@ describe('/eventos/:id/pase-de-lista renders the Event Attendance UI inside AppS
     await renderAt('/eventos/1001/equipo')
 
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Selección de equipo' }),
+      await screen.findByRole('heading', { level: 2, name: 'Selección de equipo' }),
     ).toBeInTheDocument()
   })
 
@@ -668,7 +686,7 @@ describe('/eventos/:id/pagos renders the Event Payments UI inside AppShell', () 
     await renderAt('/eventos/1001/equipo')
 
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Selección de equipo' }),
+      await screen.findByRole('heading', { level: 2, name: 'Selección de equipo' }),
     ).toBeInTheDocument()
   })
 

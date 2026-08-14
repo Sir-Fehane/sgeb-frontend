@@ -1,52 +1,84 @@
-import { IconInfoCircle } from '@tabler/icons-react'
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 
-import { findEventDetailFixture } from '@/features/events/fixtures/eventDetailFixtures'
+import { useEventDetailQuery } from '@/features/events/queries/useEventDetailQuery'
+import { isEventoNotFoundError } from '@/features/events/services/eventsApi'
 import { TeamSelectionContent } from '@/features/events/team-selection/components/TeamSelectionContent'
-import { findTeamSelectionParticipants } from '@/features/events/team-selection/fixtures/teamSelectionFixtures'
+import { useSelectParticipantMutation } from '@/features/events/team-selection/queries/useSelectParticipantMutation'
+import { useTeamSelectionParticipantsQuery } from '@/features/events/team-selection/queries/useTeamSelectionParticipantsQuery'
 import type {
   SelectParticipantRequest,
-  TeamSelectionParticipantViewModel,
   TeamSelectionRowStatus,
 } from '@/features/events/team-selection/types/teamSelection'
 import { parseEventId } from '@/features/events/utils/parseEventId'
-import { Alert, Text } from '@/shared/components'
+import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
 
 /**
- * Routed at /eventos/:id/equipo (W-05 "Seleccionar equipo"). Entirely
- * presentation-only, exactly like `EventDetailPage`:
- * `findTeamSelectionParticipants` is development/demo data, never a real
- * `GET /eventos/{id_evento}/participaciones` response. No Axios, no
- * TanStack Query, no network request of any kind.
+ * Never renders `technical_message` — same helper as `EventDetailPage`/
+ * `EventsPage` (duplicated locally per those files' own comments: two more
+ * call sites, both feature-local, CLAUDE.md prefers this over a premature
+ * cross-page abstraction).
+ */
+function toSafeErrorMessage(error: unknown): string {
+  if (isSgebApplicationError(error) || isSgebNetworkError(error)) {
+    return error.message
+  }
+  return 'Ocurrió un error inesperado al cargar el equipo.'
+}
+
+/**
+ * Routed at /eventos/:id/equipo (W-05 "Seleccionar equipo"). Live wiring
+ * layer around `TeamSelectionContent`, mirroring `EventDetailPage`'s
+ * relationship to `EventDetailContent`.
  *
- * `handleSelectParticipant` models only the documented forward transition
- * (`aparto → seleccionado`) entirely in local component state — never
- * persisted, never sent anywhere. The `await Promise.resolve()` yield is
- * a real microtask boundary (so `selecting` is an actual, observable,
- * testable intermediate render), not a `setTimeout`-simulated network
- * delay. The `rowStatuses[...] === 'selecting'` guard plus the
- * candidate row's native `disabled` button together prevent a repeated
- * selection while one is already in flight.
+ * Reuses `useEventDetailQuery` for the event header/cupo context instead
+ * of a second, independent fetch — same query key as the Event Detail
+ * page, so navigating here from an already-visited event reuses that
+ * cache entry rather than duplicating the request.
+ *
+ * The roster (`GET /eventos/{id}/participaciones`) never 404s for an
+ * unknown event — the pinned backend's `listarPorEvento` has no event
+ * existence check and simply returns an empty array — so "not found" is
+ * driven entirely by the event detail query, exactly as `EventDetailPage`
+ * already does.
+ *
+ * `rowStatuses`/`rowErrors` are local, per-row UI state for the in-flight
+ * selection action — never a mirror of server data. On success, the
+ * mutation invalidates the roster query; the real refetch (not an
+ * optimistic guess) is what actually moves a row from candidates to
+ * selected.
  */
 export function TeamSelectionPage() {
   const { id } = useParams<{ id: string }>()
   const idEvento = parseEventId(id)
-  const evento = idEvento === null ? null : findEventDetailFixture(idEvento)
 
-  const [participants, setParticipants] = useState<TeamSelectionParticipantViewModel[]>(
-    () =>
-      idEvento === null
-        ? []
-        : findTeamSelectionParticipants(idEvento).map((participant) => ({
-            ...participant,
-          })),
-  )
+  const eventDetailQuery = useEventDetailQuery(idEvento)
+  const participantsQuery = useTeamSelectionParticipantsQuery(idEvento)
+  const selectParticipantMutation = useSelectParticipantMutation(idEvento ?? -1)
+
   const [rowStatuses, setRowStatuses] = useState<Record<number, TeamSelectionRowStatus>>(
     {},
   )
+  const [rowErrors, setRowErrors] = useState<Record<number, string>>({})
 
-  async function handleSelectParticipant(request: SelectParticipantRequest) {
+  const notFound = idEvento === null || isEventoNotFoundError(eventDetailQuery.error)
+  const evento = notFound ? null : (eventDetailQuery.data ?? null)
+  const isLoading =
+    idEvento !== null && (eventDetailQuery.isPending || participantsQuery.isPending)
+  const hasRealError =
+    idEvento !== null &&
+    !notFound &&
+    (eventDetailQuery.isError || participantsQuery.isError)
+  const errorMessage = hasRealError
+    ? toSafeErrorMessage(eventDetailQuery.error ?? participantsQuery.error)
+    : undefined
+
+  function handleRetry() {
+    void eventDetailQuery.refetch()
+    void participantsQuery.refetch()
+  }
+
+  function handleSelectParticipant(request: SelectParticipantRequest) {
     if (rowStatuses[request.idParticipacion] === 'selecting') {
       return
     }
@@ -55,43 +87,45 @@ export function TeamSelectionPage() {
       ...previous,
       [request.idParticipacion]: 'selecting',
     }))
+    setRowErrors((previous) => {
+      if (!(request.idParticipacion in previous)) {
+        return previous
+      }
+      const next = { ...previous }
+      delete next[request.idParticipacion]
+      return next
+    })
 
-    await Promise.resolve()
-
-    setParticipants((previous) =>
-      previous.map((participant) =>
-        participant.idParticipacion === request.idParticipacion
-          ? { ...participant, estado: request.estado }
-          : participant,
-      ),
-    )
-    setRowStatuses((previous) => ({ ...previous, [request.idParticipacion]: 'selected' }))
+    selectParticipantMutation.mutate(request.idParticipacion, {
+      onSuccess: () => {
+        setRowStatuses((previous) => ({
+          ...previous,
+          [request.idParticipacion]: 'selected',
+        }))
+      },
+      onError: (error) => {
+        setRowStatuses((previous) => ({
+          ...previous,
+          [request.idParticipacion]: 'error',
+        }))
+        setRowErrors((previous) => ({
+          ...previous,
+          [request.idParticipacion]: toSafeErrorMessage(error),
+        }))
+      },
+    })
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <Alert
-        tone="info"
-        icon={<IconInfoCircle aria-hidden="true" />}
-        title="Datos de desarrollo"
-      >
-        <Text size="sm">
-          El equipo mostrado usa datos de desarrollo (
-          <code>features/events/team-selection/fixtures</code>), no información real.
-          Seleccionar a un candidato no envía ninguna solicitud ni se conserva al recargar
-          la página.
-        </Text>
-      </Alert>
-
-      <TeamSelectionContent
-        evento={evento}
-        isLoading={false}
-        participants={participants}
-        rowStatuses={rowStatuses}
-        onSelectParticipant={(request) => {
-          void handleSelectParticipant(request)
-        }}
-      />
-    </div>
+    <TeamSelectionContent
+      evento={evento}
+      isLoading={isLoading}
+      {...(errorMessage ? { errorMessage } : {})}
+      onRetry={handleRetry}
+      participants={participantsQuery.data ?? []}
+      rowStatuses={rowStatuses}
+      rowErrorMessages={rowErrors}
+      onSelectParticipant={handleSelectParticipant}
+    />
   )
 }

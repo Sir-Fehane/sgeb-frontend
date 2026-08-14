@@ -21,6 +21,7 @@ export interface TeamSelectionContentProps {
   onRetry?: (() => void) | undefined
   participants: readonly TeamSelectionParticipantViewModel[]
   rowStatuses: Readonly<Record<number, TeamSelectionRowStatus>>
+  rowErrorMessages?: Readonly<Record<number, string>>
   onSelectParticipant: (request: SelectParticipantRequest) => void
 }
 
@@ -40,6 +41,7 @@ export function TeamSelectionContent({
   onRetry,
   participants,
   rowStatuses,
+  rowErrorMessages,
   onSelectParticipant,
 }: TeamSelectionContentProps) {
   if (isLoading) {
@@ -55,9 +57,11 @@ export function TeamSelectionContent({
   }
 
   const candidates = participants.filter((participant) => participant.estado === 'aparto')
-  const selected = participants.filter(
-    (participant) => participant.estado === 'seleccionado',
-  )
+  // Everything past `aparto` (seleccionado through salida) is shown here —
+  // those later states belong to Attendance/Montage, out of scope for this
+  // screen, but a participant who has progressed must still be visible
+  // somewhere rather than silently disappear from the roster.
+  const selected = participants.filter((participant) => participant.estado !== 'aparto')
 
   return (
     <div className="flex flex-col gap-6">
@@ -73,6 +77,7 @@ export function TeamSelectionContent({
         <TeamSelectionCandidateList
           candidates={candidates}
           rowStatuses={rowStatuses}
+          {...(rowErrorMessages ? { rowErrorMessages } : {})}
           onSelect={onSelectParticipant}
         />
       </EventDetailSection>

@@ -10,6 +10,8 @@ import { Badge, Button, Caption, Text } from '@/shared/components'
 export interface TeamSelectionCandidateRowProps {
   participant: TeamSelectionParticipantViewModel
   rowStatus: TeamSelectionRowStatus
+  /** Safe, backend-approved `SgebApplicationError`/`SgebNetworkError` message. Falls back to a generic message when absent (e.g. a synthetic/unmapped failure) — never a `technical_message`. */
+  errorMessage?: string
   onSelect: (request: SelectParticipantRequest) => void
 }
 
@@ -29,6 +31,7 @@ const PUESTO_LABELS: Record<TeamSelectionParticipantViewModel['puesto'], string>
 export function TeamSelectionCandidateRow({
   participant,
   rowStatus,
+  errorMessage,
   onSelect,
 }: TeamSelectionCandidateRowProps) {
   return (
@@ -59,7 +62,7 @@ export function TeamSelectionCandidateRow({
         </Button>
         {rowStatus === 'error' ? (
           <Text size="sm" className="text-destructive">
-            No pudimos seleccionar a este candidato. Intenta de nuevo.
+            {errorMessage ?? 'No pudimos seleccionar a este candidato. Intenta de nuevo.'}
           </Text>
         ) : null}
       </div>
