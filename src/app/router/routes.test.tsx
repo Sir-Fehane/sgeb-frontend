@@ -7,7 +7,88 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { router } from '@/app/router/routes'
 import { beginAuthorization } from '@/features/oidc-client/protocol/authorizationRequest'
 import * as bootstrapModule from '@/features/oidc-client/protocol/bootstrap'
+import type { EventoApiRecord } from '@/features/events/services/eventsApi'
 import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
+import { SgebApplicationError } from '@/shared/api/sgebApiError'
+import { requestSgeb, type SgebRequestConfig } from '@/shared/api/sgebClient'
+import type { ApiEnvelope } from '@/shared/types/api'
+
+/**
+ * `/eventos` and `/eventos/:id` both read through TanStack Query + the
+ * shared SGEB transport (`feature/events-live-integration`,
+ * `feature/event-detail-live-integration`) — `requestSgeb` is mocked here,
+ * file-wide, so every `renderAt` call site gets deterministic data instead
+ * of an unmocked real network call. `event-detail`-specific behavior
+ * (loading/error/not-found/mapping) has its own focused coverage in
+ * `EventDetailPage.test.tsx`; this file only needs enough of a fixed
+ * fixture set to keep its own AppShell/routing assertions meaningful.
+ */
+vi.mock('@/shared/api/sgebClient', () => ({
+  requestSgeb: vi.fn(),
+}))
+
+const DETAIL_RECORD_1001: EventoApiRecord = {
+  id_evento: 1001,
+  id_salon: 1,
+  titulo: 'Evento de demostración — boda',
+  tipo: 'social',
+  fecha: '2026-09-12',
+  hora_presentacion: '16:00',
+  inicio: '2026-09-12T18:00:00',
+  fin: null,
+  cupo_meseros: 12,
+  num_mesas: 20,
+  tarifa_por_mesero: 450,
+  radio_geocerca_m: 150,
+  estado: 'publicado',
+  creado_en: '2026-07-01T09:00:00',
+}
+
+const DETAIL_RECORD_3001: EventoApiRecord = {
+  ...DETAIL_RECORD_1001,
+  id_evento: 3001,
+  titulo: 'Evento de demostración — aniversario finalizado',
+  estado: 'finalizado',
+}
+
+/**
+ * URL-aware default: `/eventos` (list) resolves empty (no test in this
+ * file asserts on list content beyond its header); `/eventos/1001` and
+ * `/eventos/3001` resolve to their matching detail record (the two ids
+ * this file's route/AppShell assertions actually navigate to); any other
+ * `/eventos/:id` — e.g. `999999` — resolves not-found (`SGEB-3001`),
+ * matching the pinned backend's real behavior for an unknown id.
+ */
+function configureDefaultRequestSgebMock() {
+  vi.mocked(requestSgeb).mockImplementation(
+    (config: SgebRequestConfig): Promise<ApiEnvelope<unknown>> => {
+      if (config.url === '/eventos') {
+        return Promise.resolve({
+          result: { code: 'SGEB-0002', message: 'Sin resultados.' },
+          data: [],
+        })
+      }
+      if (config.url === '/eventos/1001') {
+        return Promise.resolve({
+          result: { code: 'SGEB-0000', message: 'ok' },
+          data: DETAIL_RECORD_1001,
+        })
+      }
+      if (config.url === '/eventos/3001') {
+        return Promise.resolve({
+          result: { code: 'SGEB-0000', message: 'ok' },
+          data: DETAIL_RECORD_3001,
+        })
+      }
+      return Promise.reject(
+        new SgebApplicationError(404, {
+          code: 'SGEB-3001',
+          message: 'No encontramos la información solicitada.',
+        }),
+      )
+    },
+  )
+}
 
 /**
  * Hoisted, whole-module mock — deliberately not a per-test `vi.spyOn` — so
@@ -51,6 +132,7 @@ beforeEach(() => {
   useOidcSessionStore.getState().reset()
   vi.restoreAllMocks()
   mockedBeginAuthorization.mockReset()
+  configureDefaultRequestSgebMock()
   authenticate()
 })
 
@@ -234,15 +316,21 @@ describe('/eventos renders the real events UI inside AppShell', () => {
 })
 
 describe('/eventos/:id renders the Event Detail UI inside AppShell', () => {
-  it('renders the AppShell chrome and the event detail content for a known fixture id', async () => {
+  it('renders the AppShell chrome and the event detail content for a known event id', async () => {
     await renderAt('/eventos/1001')
 
     expect(
       screen.getByRole('navigation', { name: 'Navegación principal' }),
     ).toBeInTheDocument()
     expect(screen.getByRole('banner')).toBeInTheDocument()
+    // The detail content itself now loads through TanStack Query
+    // (`feature/event-detail-live-integration`) — `findByRole` awaits the
+    // mocked `GET /eventos/1001` resolving instead of asserting mid-fetch.
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Evento de demostración — boda' }),
+      await screen.findByRole('heading', {
+        level: 2,
+        name: 'Evento de demostración — boda',
+      }),
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { level: 1, name: 'Página no encontrada' }),
@@ -264,10 +352,14 @@ describe('/eventos/:id renders the Event Detail UI inside AppShell', () => {
     ).not.toBeInTheDocument()
   })
 
-  it('renders the unavailable state for a well-formed id with no matching fixture, not a redirect', async () => {
+  it('renders the unavailable state for a well-formed id the backend does not recognize, not a redirect', async () => {
     await renderAt('/eventos/999999')
 
-    expect(screen.getByText('No encontramos el evento solicitado.')).toBeInTheDocument()
+    // SGEB-3001 (not found) is a rejected, awaited query — `findByText`
+    // waits for it to settle instead of asserting mid-fetch.
+    expect(
+      await screen.findByText('No encontramos el evento solicitado.'),
+    ).toBeInTheDocument()
     expect(window.location.pathname).toBe('/eventos/999999')
   })
 
@@ -312,7 +404,10 @@ describe('/eventos/:id/equipo renders the Team Selection UI inside AppShell', ()
     await renderAt('/eventos/1001')
 
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Evento de demostración — boda' }),
+      await screen.findByRole('heading', {
+        level: 2,
+        name: 'Evento de demostración — boda',
+      }),
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { level: 2, name: 'Selección de equipo' }),
@@ -358,7 +453,10 @@ describe('/eventos/:id/pase-de-lista renders the Event Attendance UI inside AppS
     await renderAt('/eventos/1001')
 
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Evento de demostración — boda' }),
+      await screen.findByRole('heading', {
+        level: 2,
+        name: 'Evento de demostración — boda',
+      }),
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { level: 2, name: 'Pase de lista' }),
@@ -420,7 +518,10 @@ describe('/eventos/:id/montaje renders the Event Montage UI inside AppShell', ()
     await renderAt('/eventos/1001')
 
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Evento de demostración — boda' }),
+      await screen.findByRole('heading', {
+        level: 2,
+        name: 'Evento de demostración — boda',
+      }),
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { level: 2, name: 'Montaje y asignación de mesas' }),
@@ -482,7 +583,10 @@ describe('/eventos/:id/cierre renders the Event Closure UI inside AppShell', () 
     await renderAt('/eventos/1001')
 
     expect(
-      screen.getByRole('heading', { level: 2, name: 'Evento de demostración — boda' }),
+      await screen.findByRole('heading', {
+        level: 2,
+        name: 'Evento de demostración — boda',
+      }),
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { level: 2, name: 'Cierre del evento' }),
@@ -542,7 +646,7 @@ describe('/eventos/:id/pagos renders the Event Payments UI inside AppShell', () 
     await renderAt('/eventos/3001')
 
     expect(
-      screen.getByRole('heading', {
+      await screen.findByRole('heading', {
         level: 2,
         name: 'Evento de demostración — aniversario finalizado',
       }),

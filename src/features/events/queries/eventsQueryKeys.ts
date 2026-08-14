@@ -11,4 +11,6 @@ export const eventsQueryKeys = {
   all: ['eventos'] as const,
   lists: () => [...eventsQueryKeys.all, 'lista'] as const,
   list: (params: EventsListParams) => [...eventsQueryKeys.lists(), params] as const,
+  /** Never collides with `list()` — `'detalle'` differs from `'lista'` at the same key position. */
+  detail: (idEvento: number) => [...eventsQueryKeys.all, 'detalle', idEvento] as const,
 }

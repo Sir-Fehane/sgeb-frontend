@@ -1,5 +1,7 @@
+import { isSgebApplicationError, SgebNetworkError } from '@/shared/api/sgebApiError'
 import { requestSgeb } from '@/shared/api/sgebClient'
 import type {
+  EventDetailViewModel,
   EventListItemViewModel,
   EventStatus,
   EventType,
@@ -104,4 +106,96 @@ export async function fetchEventos(
     ...(signal ? { signal } : {}),
   })
   return (envelope.data ?? []).map(mapEventoToListItem)
+}
+
+/**
+ * `SGEB-3001` — the pinned backend's generic "not found" business code
+ * (`app/shared/errors/sgeb_error.ts`'s `errores.noEncontrado`, HTTP 404),
+ * thrown by `EventoService.obtener` when `GET /eventos/{id_evento}` finds
+ * no matching row. Not registered in `shared/api/sgebCodes.ts` — that file
+ * is deliberately limited to transport-level codes (token/auth), and
+ * `SGEB-3001` is a plain, feature-owned business outcome (per
+ * docs/decisions.md ADR-005: business codes belong to the feature that
+ * owns them).
+ */
+const EVENT_NOT_FOUND_CODE = 'SGEB-3001'
+
+/**
+ * True for the specific, deterministic "no such event" outcome — as
+ * opposed to any other `SgebApplicationError`/`SgebNetworkError`. Callers
+ * use this to render the existing "not found" UI (`EventDetailUnavailableState`)
+ * instead of the generic error state, exactly as a malformed route id
+ * already does.
+ */
+export function isEventoNotFoundError(error: unknown): boolean {
+  return isSgebApplicationError(error) && error.code === EVENT_NOT_FOUND_CODE
+}
+
+/**
+ * Maps one `Evento` wire record to the Event Detail presentation model.
+ *
+ * Deliberately narrower than `mapEventoToListItem`:
+ * `EventDetailViewModel` has no `idSalon`/`fin`/`creadoEn` fields (the
+ * existing foundation never displays them), and two fields are
+ * INTENTIONALLY never populated from the live response even though the
+ * backend sends them:
+ *
+ * - `salonNombre` — `EventoService.obtener` does `.preload('salon')`, and
+ *   Lucid serializes that as an undocumented `salon: {...}` object (the
+ *   `@belongsTo` relation has no `serializeAs: null`). This is the same
+ *   undocumented-implementation-detail question already decided against
+ *   in `mapEventoToListItem` (see that comment) — not part of the
+ *   documented `Evento` schema, so not depended on here either. Stays
+ *   `undefined`; `EventDetailScheduleSection` already renders the
+ *   "pendiente de integración" fallback for it.
+ * - `comandaUrl` — `record.comanda_url` is real and always present in the
+ *   wire response, but documents an **internal object-storage key**, never
+ *   a public URL (`Evento.comanda_url`'s own OpenAPI description: "NO es
+ *   una URL pública" — see the branch report's contract-mismatch writeup).
+ *   Comanda is out of scope for this branch (docs/decisions.md ADR-007);
+ *   mapping this field live would risk `EventDetailComandaSection`
+ *   rendering an internal storage key as a clickable link if it ever
+ *   happened to match `isSafeComandaUrl`'s `http(s)://` pattern. Left
+ *   `undefined` so the section always renders its existing "no comanda"
+ *   fallback for live events, foundation-only until a dedicated Comanda
+ *   integration branch replaces this whole section.
+ */
+export function mapEventoToDetail(record: EventoApiRecord): EventDetailViewModel {
+  return {
+    idEvento: record.id_evento,
+    titulo: record.titulo,
+    tipo: record.tipo,
+    estado: record.estado,
+    fecha: record.fecha,
+    horaPresentacion: record.hora_presentacion,
+    inicio: record.inicio,
+    cupoMeseros: record.cupo_meseros,
+    numMesas: record.num_mesas,
+    tarifaPorMesero: record.tarifa_por_mesero,
+    radioGeocercaM: record.radio_geocerca_m,
+  }
+}
+
+/**
+ * Fetches one event's detail through the shared authenticated SGEB
+ * transport. Lets `SgebApplicationError`/`SgebNetworkError` propagate
+ * unchanged — including `SGEB-3001` (not found) — so the caller (the
+ * query hook / page) decides how to present each outcome; this function
+ * only fetches and maps, it never swallows an error into a fixed value.
+ */
+export async function fetchEventoDetalle(
+  idEvento: number,
+  signal?: AbortSignal,
+): Promise<EventDetailViewModel> {
+  const envelope = await requestSgeb<EventoApiRecord>({
+    url: `/eventos/${String(idEvento)}`,
+    ...(signal ? { signal } : {}),
+  })
+  if (envelope.data === null) {
+    // Never observed against the pinned backend (a 200 for a single
+    // resource always carries the record; "no such event" is SGEB-3001,
+    // not a null-data success) — guarded defensively rather than assumed.
+    throw new SgebNetworkError('No pudimos interpretar la respuesta del servidor.')
+  }
+  return mapEventoToDetail(envelope.data)
 }
