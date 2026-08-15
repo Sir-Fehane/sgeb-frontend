@@ -17,8 +17,10 @@
 export type PaymentStatus = 'pendiente' | 'pagado' | 'fallido' | 'cancelado'
 
 /**
- * `Pago` (`docs/api/openapi-sgeb.yaml` v1.6.0), field-for-field, plus one
- * presentation enrichment:
+ * `Pago` (`docs/api/openapi-sgeb.yaml` v1.6.0), field-for-field — exactly
+ * what `GET /eventos/{id}/pagos`, `POST /pagos/calcular`, and
+ * `PATCH /pagos/{id}/pagado` return, mapped in
+ * `services/paymentsApi.ts`'s `mapPago`:
  *
  * - idPago ← `id_pago`
  * - idParticipacion ← `id_participacion`
@@ -27,37 +29,43 @@ export type PaymentStatus = 'pendiente' | 'pagado' | 'fallido' | 'cancelado'
  * - clabeDestinoEnmascarada ← `clabe_destino` — documented as **ALWAYS
  *   MASKED** in every API response ("El valor completo nunca sale del
  *   servidor, ni en respuestas ni en logs"). The full 18-digit CLABE is a
- *   database-only value this frontend never receives, never fixtures,
- *   never renders, and never accepts as input — the field is named
- *   `...Enmascarada` specifically so that safety property can't be missed
- *   at a call site. Fixtures use the documented example shape
- *   (`'0121…8909'`), never a raw 18-digit sequence.
+ *   database-only value this frontend never receives, never renders, and
+ *   never accepts as input — the field is named `...Enmascarada`
+ *   specifically so that safety property can't be missed at a call site.
  * - estado ← `estado`
  * - referencia ← `referencia` (nullable until `/pagado` is called)
  * - fechaPago ← `fecha_pago` (nullable until `/pagado` is called)
- * - **nombre is PRESENTATION ENRICHMENT, not a `Pago` API field.** `Pago`
- *   documents only `id_participacion` — no waiter name, email, UUID, or
- *   `id_usuario`. No participation fixture exists for event 3001 (the one
- *   event this feature's "ready" scenario uses — see
- *   `fixtures/paymentsFixtures.ts`), so `nombre` here is hand-authored
- *   fixture data, never joined from a documented response. A future live
- *   branch must resolve how the real payee name is sourced (a genuine
- *   open mapping question, not resolved here).
  *
  * Deliberately excluded: raw CLABE, `id_usuario`, any UUID, bank name,
  * account holder, a "transfer tracking id" beyond the documented
  * `referencia`, and any persisted `motivo`/`motivo_fallo` field — see the
  * module comment on `MarkFailedRequest` for why the last one matters.
  */
-export interface EventPaymentViewModel {
+export interface PagoViewModel {
   idPago: number
   idParticipacion: number
-  nombre: string
   monto: number
   clabeDestinoEnmascarada: string
   estado: PaymentStatus
   referencia: string | null
   fechaPago: string | null
+}
+
+/**
+ * `PagoViewModel` plus one presentation enrichment: `Pago` documents only
+ * `id_participacion` — no waiter name ever travels on a payment response.
+ * `nombre` is resolved by joining `idParticipacion` against the
+ * already-live Team Selection roster query
+ * (`features/events/team-selection/queries/useTeamSelectionParticipantsQuery`,
+ * `GET /eventos/{id}/participaciones`, which nests `usuario.nombre`) —
+ * done once, in `EventPaymentsPage`, never a second independent fetch of
+ * the same server resource. A payment whose participación isn't present
+ * in that roster response (should not happen given the DB-enforced FK,
+ * but not structurally impossible during a race) falls back to
+ * `` `Participación ${idParticipacion}` `` rather than inventing a name.
+ */
+export interface EventPaymentViewModel extends PagoViewModel {
+  nombre: string
 }
 
 /**

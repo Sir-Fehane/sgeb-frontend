@@ -69,6 +69,9 @@ const DETAIL_RECORD_3001: EventoApiRecord = {
  * diagnostic and an empty report list, respectively — this file's Closure
  * assertions only need the page to reach its populated state, same
  * reasoning as Team Selection above.
+ *
+ * `/eventos/{1001,3001}/pagos` (`feature/payments-live-integration`)
+ * resolves to an empty payments list — same reasoning again.
  */
 function configureDefaultRequestSgebMock() {
   vi.mocked(requestSgeb).mockImplementation(
@@ -122,6 +125,12 @@ function configureDefaultRequestSgebMock() {
         return Promise.resolve({
           result: { code: 'SGEB-0002', message: 'Sin resultados.' },
           data: { reportes: [], costo_total: 0, piezas_sin_costear: 0 },
+        })
+      }
+      if (config.url === '/eventos/1001/pagos' || config.url === '/eventos/3001/pagos') {
+        return Promise.resolve({
+          result: { code: 'SGEB-0002', message: 'Sin resultados.' },
+          data: [],
         })
       }
       if (config.url === '/checklists') {
@@ -688,7 +697,9 @@ describe('/eventos/:id/pagos renders the Event Payments UI inside AppShell', () 
       screen.getByRole('navigation', { name: 'Navegación principal' }),
     ).toBeInTheDocument()
     expect(screen.getByRole('banner')).toBeInTheDocument()
-    expect(screen.getByRole('heading', { level: 2, name: 'Pagos' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Pagos' }),
+    ).toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { level: 1, name: 'Página no encontrada' }),
     ).not.toBeInTheDocument()
@@ -709,7 +720,9 @@ describe('/eventos/:id/pagos renders the Event Payments UI inside AppShell', () 
   it('renders the unavailable state for a well-formed id with no matching event', async () => {
     await renderAt('/eventos/999999/pagos')
 
-    expect(screen.getByText('No encontramos el evento solicitado.')).toBeInTheDocument()
+    expect(
+      await screen.findByText('No encontramos el evento solicitado.'),
+    ).toBeInTheDocument()
   })
 
   it('/eventos/:id still works — is not shadowed by the pagos child route', async () => {

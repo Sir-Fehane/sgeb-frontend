@@ -1,141 +1,160 @@
-import { IconInfoCircle } from '@tabler/icons-react'
-import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 
-import { findEventClosureReadiness } from '@/features/events/closure/fixtures/closureFixtures'
-import { findEventDetailFixture } from '@/features/events/fixtures/eventDetailFixtures'
+import { useEventClosureReadinessQuery } from '@/features/events/closure/queries/useEventClosureReadinessQuery'
 import { EventPaymentsContent } from '@/features/events/payments/components/EventPaymentsContent'
-import {
-  calculatePaymentsResult,
-  findEventPayments,
-} from '@/features/events/payments/fixtures/paymentsFixtures'
+import { useCalculateEventPaymentsMutation } from '@/features/events/payments/queries/useCalculateEventPaymentsMutation'
+import { useEventPaymentsQuery } from '@/features/events/payments/queries/useEventPaymentsQuery'
+import { useMarkPaymentFailedMutation } from '@/features/events/payments/queries/useMarkPaymentFailedMutation'
+import { useMarkPaymentPaidMutation } from '@/features/events/payments/queries/useMarkPaymentPaidMutation'
+import { isPaymentFallidoRecorded } from '@/features/events/payments/services/paymentsApi'
 import type {
   EventPaymentViewModel,
   MarkFailedRequest,
   MarkPaidRequest,
+  PagoViewModel,
 } from '@/features/events/payments/types/payments'
+import { useEventDetailQuery } from '@/features/events/queries/useEventDetailQuery'
+import { isEventoNotFoundError } from '@/features/events/services/eventsApi'
+import { useTeamSelectionParticipantsQuery } from '@/features/events/team-selection/queries/useTeamSelectionParticipantsQuery'
 import { parseEventId } from '@/features/events/utils/parseEventId'
-import { Alert, Text } from '@/shared/components'
+import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
 
 /**
- * Routed at /eventos/:id/pagos ("Pagos"). Entirely presentation-only,
- * exactly like `EventClosurePage`: `findEventClosureReadiness` (reused
- * directly from the Closure feature — never a second, independently
- * maintained copy) and `findEventPayments` are development/demo data,
- * never real `GET /eventos/{id}/cierre` or `GET /eventos/{id}/pagos`
- * responses. No Axios, no TanStack Query, no network request of any
- * kind, no bank/gateway integration, no bulk `/pagos/aprobar`.
- *
- * `handleCalculate`/`handleMarkPaid`/`handleMarkFailed` model the three
- * documented captain actions this screen owns
- * (`POST /pagos/calcular`, `PATCH /pagos/{id}/pagado`,
- * `PATCH /pagos/{id}/fallido`) entirely in local component state, never
- * persisted, never computing a payment amount from a frontend formula.
+ * Never renders `technical_message` — same helper as `EventClosurePage`/
+ * `EventDetailPage`/`EventMontagePage` (duplicated locally per those
+ * files' own comments: CLAUDE.md prefers this over a premature
+ * cross-page abstraction).
  */
-
-/**
- * `calculatePaymentsResult` returns a STATIC per-event fixture (see that
- * function's own doc comment) — it has no way to know about a payment
- * this session locally marked `pagado` via `handleMarkPaid` after the
- * page mounted. Without this step, clicking "Recalcular pagos" after a
- * local mark-paid action would silently overwrite that row with the
- * fixture's un-paid version of the same `idPago`, regressing a
- * documented-terminal payment back to `pendiente`/`fallido` — which the
- * real, idempotent `/pagos/calcular` never does ("pagado es historia y
- * NO se recalcula").
- *
- * This is deliberately narrow: it carries forward ONLY rows the current
- * local state already has as `pagado` (the one state the contract
- * documents as terminal), and does nothing else — no `fallido ->
- * pendiente` inference, no `cancelado` preservation rule (not
- * contractually guaranteed), no state machine. Every other row is taken
- * exactly as `calculatePaymentsResult` authored it.
- */
-function preservePaidRows(
-  calculatedPayments: readonly EventPaymentViewModel[],
-  currentPayments: readonly EventPaymentViewModel[],
-): EventPaymentViewModel[] {
-  return calculatedPayments.map((payment) => {
-    const currentPayment = currentPayments.find((p) => p.idPago === payment.idPago)
-    return currentPayment?.estado === 'pagado' ? currentPayment : payment
-  })
+function toSafeErrorMessage(error: unknown): string {
+  if (isSgebApplicationError(error) || isSgebNetworkError(error)) {
+    return error.message
+  }
+  return 'Ocurrió un error inesperado al cargar los pagos del evento.'
 }
 
+/**
+ * Joins each payment with the waiter name from the already-live Team
+ * Selection roster (`Pago` never carries a name of its own). A payment
+ * whose participación isn't in the roster response falls back to a
+ * neutral label instead of inventing a name — see
+ * `types/payments.ts`'s `EventPaymentViewModel` comment.
+ */
+function joinPaymentsWithNombre(
+  payments: readonly PagoViewModel[],
+  nombreByParticipacion: ReadonlyMap<number, string>,
+): EventPaymentViewModel[] {
+  return payments.map((payment) => ({
+    ...payment,
+    nombre:
+      nombreByParticipacion.get(payment.idParticipacion) ??
+      `Participación ${String(payment.idParticipacion)}`,
+  }))
+}
+
+/**
+ * Routed at /eventos/:id/pagos ("Pagos"). LIVE wiring for the payments
+ * list (`GET /eventos/{id}/pagos`), closure readiness
+ * (`GET /eventos/{id}/cierre`, reused directly from the Closure
+ * feature), payment calculation (`POST /pagos/calcular`), and the two
+ * per-payment mutations (`PATCH /pagos/{id}/pagado`,
+ * `PATCH /pagos/{id}/fallido`) — the exact three captain actions this
+ * screen already scoped itself to. No bank/gateway integration, no bulk
+ * `/pagos/aprobar`, no participant-salida mutation, no event-finalization
+ * mutation, no Comanda, no Socket.IO.
+ */
 export function EventPaymentsPage() {
   const { id } = useParams<{ id: string }>()
   const idEvento = parseEventId(id)
-  const evento = idEvento === null ? null : findEventDetailFixture(idEvento)
-  const readiness = idEvento === null ? null : findEventClosureReadiness(idEvento)
 
-  const [payments, setPayments] = useState<EventPaymentViewModel[]>(() =>
-    idEvento === null ? [] : [...findEventPayments(idEvento)],
+  const eventDetailQuery = useEventDetailQuery(idEvento)
+  const readinessQuery = useEventClosureReadinessQuery(idEvento)
+  const participantsQuery = useTeamSelectionParticipantsQuery(idEvento)
+  const paymentsQuery = useEventPaymentsQuery(idEvento)
+  const calculateMutation = useCalculateEventPaymentsMutation(idEvento ?? -1)
+  const markPaidMutation = useMarkPaymentPaidMutation(idEvento ?? -1)
+  const markFailedMutation = useMarkPaymentFailedMutation(idEvento ?? -1)
+
+  const notFound = idEvento === null || isEventoNotFoundError(eventDetailQuery.error)
+  const evento = notFound ? null : (eventDetailQuery.data ?? null)
+  const readiness = notFound ? null : (readinessQuery.data ?? null)
+
+  const nombreByParticipacion = new Map(
+    (participantsQuery.data ?? []).map((participant) => [
+      participant.idParticipacion,
+      participant.nombre,
+    ]),
   )
-  const [isCalculating, setIsCalculating] = useState(false)
+  const payments = joinPaymentsWithNombre(paymentsQuery.data ?? [], nombreByParticipacion)
+
+  const isLoading =
+    idEvento !== null &&
+    !notFound &&
+    (eventDetailQuery.isPending ||
+      readinessQuery.isPending ||
+      participantsQuery.isPending ||
+      paymentsQuery.isPending)
+
+  const hasRealError =
+    idEvento !== null &&
+    !notFound &&
+    (eventDetailQuery.isError ||
+      readinessQuery.isError ||
+      participantsQuery.isError ||
+      paymentsQuery.isError)
+
+  const errorMessage = hasRealError
+    ? toSafeErrorMessage(
+        eventDetailQuery.error ??
+          readinessQuery.error ??
+          participantsQuery.error ??
+          paymentsQuery.error,
+      )
+    : undefined
+
+  function handleRetry() {
+    void eventDetailQuery.refetch()
+    void readinessQuery.refetch()
+    void participantsQuery.refetch()
+    void paymentsQuery.refetch()
+  }
 
   async function handleCalculate() {
-    if (idEvento === null) {
+    if (idEvento === null || calculateMutation.isPending) {
       return
     }
-    setIsCalculating(true)
-    await Promise.resolve()
-    // `calculatePaymentsResult` reads only `idEvento` — the (fixture)
-    // result comes back prebuilt, never derived from `payments` above.
-    // `preservePaidRows` then applies the one narrow, documented
-    // exception: a row this session already marked `pagado` locally
-    // must not regress just because the static fixture doesn't know
-    // about it.
-    const result = calculatePaymentsResult(idEvento)
-    setPayments((previous) => preservePaidRows(result.pagos, previous))
-    setIsCalculating(false)
+    await calculateMutation.mutateAsync()
   }
 
   async function handleMarkPaid({ idPago, referencia }: MarkPaidRequest) {
-    await Promise.resolve()
-    // `fechaPago` here is a LOCAL DEMO timestamp only — the real
-    // `PATCH /pagos/{id}/pagado` response would return the server's own
-    // `fecha_pago`, never a client-generated one. This is never claimed
-    // to be that field's eventual live value.
-    const fechaPagoDemo = new Date().toISOString()
-    setPayments((previous) =>
-      previous.map((payment) =>
-        payment.idPago === idPago
-          ? { ...payment, estado: 'pagado', referencia, fechaPago: fechaPagoDemo }
-          : payment,
-      ),
-    )
+    await markPaidMutation.mutateAsync({ idPago, referencia })
   }
 
-  async function handleMarkFailed({ idPago }: MarkFailedRequest) {
-    await Promise.resolve()
-    setPayments((previous) =>
-      previous.map((payment) =>
-        payment.idPago === idPago ? { ...payment, estado: 'fallido' } : payment,
-      ),
-    )
+  async function handleMarkFailed({ idPago, motivo }: MarkFailedRequest) {
+    try {
+      await markFailedMutation.mutateAsync({ idPago, motivo })
+    } catch (error) {
+      // `PATCH /pagos/{id}/fallido` always responds as an error even when
+      // it successfully recorded the failure — see
+      // `services/paymentsApi.ts`'s `isPaymentFallidoRecorded`. Any other
+      // error is a real failure and must still surface to the row's
+      // existing danger-alert handling.
+      if (!isPaymentFallidoRecorded(error)) {
+        throw error
+      }
+    }
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <Alert
-        tone="info"
-        icon={<IconInfoCircle aria-hidden="true" />}
-        title="Datos de desarrollo"
-      >
-        <Text size="sm">
-          Los pagos mostrados usan datos de desarrollo (
-          <code>features/events/payments/fixtures</code>), no información real. Calcular
-          pagos o registrar una transferencia aquí no envía ninguna solicitud, no conecta
-          con ningún banco y no se conserva al recargar la página.
-        </Text>
-      </Alert>
-
       <EventPaymentsContent
         evento={evento}
-        isLoading={false}
+        isLoading={isLoading}
+        {...(errorMessage ? { errorMessage } : {})}
+        onRetry={handleRetry}
         readiness={readiness}
         payments={payments}
         onCalculate={handleCalculate}
-        isCalculating={isCalculating}
+        isCalculating={calculateMutation.isPending}
         onMarkPaid={handleMarkPaid}
         onMarkFailed={handleMarkFailed}
       />
