@@ -34,11 +34,11 @@ import type { EventDetailViewModel } from '@/features/events/types/event'
  * this needed a real fix, not just a comment. Existing 1001/2001 records
  * and every route/test that depends on them are unchanged.
  *
- * Covers the three required demo variants:
- * - 1001: social, publicado, WITH a comanda URL.
- * - 2001: empresarial, en_curso, WITHOUT a comanda URL.
- * - 3001: social, finalizado, WITHOUT a comanda URL — backs Event
- *   Closure's "ready" fixture only.
+ * Covers the three required demo variants: 1001 (social, publicado), 2001
+ * (empresarial, en_curso), 3001 (social, finalizado — backs Event
+ * Closure's "ready" fixture only). None carries a `comandaUrl` field —
+ * `EventDetailViewModel` has none; Comanda is its own live-fetched
+ * resource, not part of this fixture set (see `types/comanda.ts`).
  */
 export const EVENT_DETAIL_FIXTURES: readonly EventDetailViewModel[] = [
   {
@@ -54,7 +54,6 @@ export const EVENT_DETAIL_FIXTURES: readonly EventDetailViewModel[] = [
     numMesas: 20,
     tarifaPorMesero: 450,
     radioGeocercaM: 150,
-    comandaUrl: 'https://files.mediocres.mx/comandas/evento-1001.pdf',
   },
   {
     idEvento: 2001,

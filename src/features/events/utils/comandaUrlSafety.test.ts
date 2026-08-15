@@ -3,17 +3,24 @@ import { describe, expect, it } from 'vitest'
 import { isSafeComandaUrl } from '@/features/events/utils/comandaUrlSafety'
 
 describe('isSafeComandaUrl', () => {
-  it('accepts a valid https URL', () => {
-    expect(isSafeComandaUrl('https://files.mediocres.mx/comandas/evento-1001.pdf')).toBe(
-      true,
-    )
+  it('accepts a fresh https signed URL (production/S3 shape)', () => {
+    expect(
+      isSafeComandaUrl(
+        'https://storage.sgeb.mx/comandas/1001/3f2a9c14.pdf?X-Amz-Signature=abc',
+      ),
+    ).toBe(true)
   })
 
   it('accepts a valid http URL', () => {
-    expect(isSafeComandaUrl('http://files.mediocres.mx/comanda.pdf')).toBe(true)
+    expect(isSafeComandaUrl('http://storage.sgeb.mx/comanda.pdf')).toBe(true)
   })
 
-  it('rejects undefined (no comanda)', () => {
+  it('rejects the local/dev non-navigable placeholder', () => {
+    expect(isSafeComandaUrl('local://comandas/1001/3f2a9c14.pdf')).toBe(false)
+  })
+
+  it('rejects null and undefined (no comanda / no url on the response)', () => {
+    expect(isSafeComandaUrl(null)).toBe(false)
     expect(isSafeComandaUrl(undefined)).toBe(false)
   })
 
@@ -23,11 +30,11 @@ describe('isSafeComandaUrl', () => {
 
   it('rejects a relative or schemeless value', () => {
     expect(isSafeComandaUrl('/comanda.pdf')).toBe(false)
-    expect(isSafeComandaUrl('files.mediocres.mx/comanda.pdf')).toBe(false)
+    expect(isSafeComandaUrl('storage.sgeb.mx/comanda.pdf')).toBe(false)
   })
 
   it('rejects a value containing whitespace', () => {
-    expect(isSafeComandaUrl('https://files.mediocres.mx/comanda con espacio.pdf')).toBe(
+    expect(isSafeComandaUrl('https://storage.sgeb.mx/comanda con espacio.pdf')).toBe(
       false,
     )
   })

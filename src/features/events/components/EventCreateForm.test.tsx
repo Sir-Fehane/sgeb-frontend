@@ -180,14 +180,22 @@ describe('EventCreateForm', () => {
     ).toBeInTheDocument()
   })
 
-  it('does not render a comanda URL field or a file input', () => {
+  it('does not render a comanda URL field or a file input, and explains comanda is a post-creation step honestly', () => {
     renderForm()
 
     expect(document.querySelector('input[type="file"]')).toBeNull()
     expect(document.querySelector('[name="comanda_url"]')).toBeNull()
     expect(screen.queryByLabelText(/comanda/i)).not.toBeInTheDocument()
+    // The real contract never declares comanda on EventoCrear at all
+    // (docs/decisions.md ADR-007) — this must never claim the upload
+    // endpoint is undefined; it is, just not part of this form.
     expect(
-      screen.getByText('Carga de comanda pendiente de definición del endpoint.'),
+      screen.queryByText(/pendiente de definición del endpoint/i),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'La comanda se sube después de crear el evento, desde su detalle — no forma parte de este alta.',
+      ),
     ).toBeInTheDocument()
   })
 })

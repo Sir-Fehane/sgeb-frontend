@@ -1,9 +1,16 @@
 import { useParams } from 'react-router-dom'
 
 import { EventDetailContent } from '@/features/events/components/EventDetailContent'
+import type { EventDetailComandaSectionProps } from '@/features/events/components/EventDetailComandaSection'
+import { useComandaQuery } from '@/features/events/queries/useComandaQuery'
 import { useEventDetailQuery } from '@/features/events/queries/useEventDetailQuery'
+import { useOpenComandaMutation } from '@/features/events/queries/useOpenComandaMutation'
+import { useRetireComandaMutation } from '@/features/events/queries/useRetireComandaMutation'
+import { useUploadComandaMutation } from '@/features/events/queries/useUploadComandaMutation'
+import { isComandaNotFoundError } from '@/features/events/services/comandaApi'
 import { isEventoNotFoundError } from '@/features/events/services/eventsApi'
 import { parseEventId } from '@/features/events/utils/parseEventId'
+import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
 
 /**
@@ -37,10 +44,14 @@ function toSafeErrorMessage(error: unknown): string {
  * genuinely-missing-event case are presented identically, exactly as the
  * fixture-backed foundation already did.
  *
- * Comanda, Team Selection, Attendance, Montage, Closure, and Payments stay
- * exactly as this foundation already built them
- * (`EventDetailComandaSection`/`EventDetailRoadmapSection`) — this branch
- * only replaces the source of `evento` itself.
+ * Team Selection, Attendance, Montage, Closure, and Payments stay exactly
+ * as this foundation already built them (`EventDetailRoadmapSection`) —
+ * this branch replaces the source of `evento` and rebuilds Comanda
+ * (`EventDetailComandaSection`) against the real 5-endpoint contract
+ * (`docs/decisions.md` ADR-007): live metadata (`GET /comanda`, its own
+ * query — kept separate from `evento`, see `SGEB_CODE`/`comandaQueryKeys`
+ * comments), safe open/view, upload, and replace/retire. History/restore
+ * are deliberately out of scope this branch.
  */
 export function EventDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -52,6 +63,53 @@ export function EventDetailPage() {
   const isLoading = idEvento !== null && detailQuery.isPending
   const hasRealError = idEvento !== null && detailQuery.isError && !notFound
 
+  const comandaQuery = useComandaQuery(idEvento)
+  const comandaNotFound = idEvento === null || isComandaNotFoundError(comandaQuery.error)
+  const comandaData = comandaNotFound ? null : (comandaQuery.data ?? null)
+  const comandaIsLoading = idEvento !== null && comandaQuery.isPending
+  const comandaHasRealError =
+    idEvento !== null && comandaQuery.isError && !comandaNotFound
+
+  const uploadComandaMutation = useUploadComandaMutation(idEvento ?? -1)
+  const retireComandaMutation = useRetireComandaMutation(idEvento ?? -1)
+  const openComandaMutation = useOpenComandaMutation(idEvento ?? -1)
+
+  /**
+   * UX-only role gate — sourced from the real, already-authenticated OIDC
+   * session (`rol` claim, per `types/userInfo.ts`), never a fabricated or
+   * assumed value. See `EventDetailComandaSection`'s own `canManage`
+   * comment for why this cannot and does not compensate for the pinned
+   * backend's confirmed write-path ownership gap.
+   */
+  const session = useOidcSessionStore((state) => state.session)
+  const canManageComanda =
+    session.status === 'authenticated' &&
+    (session.user.rol === 'capitan' || session.user.rol === 'admin')
+
+  async function handleOpenComanda(signal: AbortSignal, tab: Window | null) {
+    await openComandaMutation.mutateAsync({ signal, tab })
+  }
+
+  async function handleUploadComanda(file: File) {
+    await uploadComandaMutation.mutateAsync(file)
+  }
+
+  async function handleRetireComanda() {
+    await retireComandaMutation.mutateAsync()
+  }
+
+  const comandaSectionProps: EventDetailComandaSectionProps = {
+    comanda: comandaData,
+    isLoading: comandaIsLoading,
+    canManage: canManageComanda,
+    onOpen: handleOpenComanda,
+    onUpload: handleUploadComanda,
+    onRetire: handleRetireComanda,
+    ...(comandaHasRealError
+      ? { errorMessage: toSafeErrorMessage(comandaQuery.error) }
+      : {}),
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <EventDetailContent
@@ -59,6 +117,7 @@ export function EventDetailPage() {
         isLoading={isLoading}
         {...(hasRealError ? { errorMessage: toSafeErrorMessage(detailQuery.error) } : {})}
         onRetry={() => void detailQuery.refetch()}
+        comanda={comandaSectionProps}
       />
     </div>
   )

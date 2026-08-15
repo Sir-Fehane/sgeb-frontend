@@ -8,7 +8,6 @@ import {
 } from '@/features/events/schemas/eventCreateSchema'
 import type { EventSalonOption } from '@/features/events/types/event'
 import {
-  Alert,
   Button,
   FormField,
   Input,
@@ -34,8 +33,13 @@ export interface EventCreateFormProps {
  * validation rules. This is not a layout the user should expect to ship
  * as-is; see `EventCreateFieldPrototypePage` for the prototype framing.
  *
- * `uuid_capitan` and `comanda_url` are intentionally absent — both are
- * integration-owned fields; see `eventCreateSchema.ts`'s comment for why.
+ * `uuid_capitan` is intentionally absent — an integration-owned field; see
+ * `eventCreateSchema.ts`'s comment for why. Comanda is absent for a
+ * different, now-settled reason: the real contract never declares it at
+ * creation at all (`docs/decisions.md` ADR-007; `openapi-sgeb.yaml`'s own
+ * `EventoCrear` description) — it is uploaded afterward, from Event
+ * Detail (`EventDetailComandaSection`), via a dedicated
+ * `POST /eventos/{id}/comanda`.
  */
 export function EventCreateForm({
   onSubmit,
@@ -207,9 +211,10 @@ export function EventCreateForm({
 
       <section className="flex flex-col gap-4">
         <SectionHeading>Comanda</SectionHeading>
-        <Alert tone="warning">
-          Carga de comanda pendiente de definición del endpoint.
-        </Alert>
+        <Text size="sm" className="text-muted-foreground">
+          La comanda se sube después de crear el evento, desde su detalle — no forma parte
+          de este alta.
+        </Text>
       </section>
 
       <Button type="submit" loading={isSubmitting} className="w-full sm:w-auto">

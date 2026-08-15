@@ -119,7 +119,7 @@ export interface EventListItemViewModel {
  *
  * Field-by-field sourcing, mirroring `EventListItemViewModel`:
  * - idEvento/titulo/tipo/fecha/horaPresentacion/inicio/cupoMeseros/
- *   numMesas/tarifaPorMesero/radioGeocercaM/comandaUrl: `EventoCrear`.
+ *   numMesas/tarifaPorMesero/radioGeocercaM: `EventoCrear`.
  * - estado: data dictionary EVENTO table (server-generated).
  * - salonNombre: NOT part of any documented `/eventos/{id}` response —
  *   a presentation-only convenience, exactly like
@@ -136,6 +136,20 @@ export interface EventListItemViewModel {
  * cierre/alertas — that's the separate, explicitly out-of-scope
  * operational dashboard), and any undocumented field (description,
  * guest count, notes, staffing counts, attendance, ...).
+ *
+ * `comandaUrl` is likewise deliberately absent, and for a different
+ * reason than the fields above: `Evento.comanda_url` is a real, always-
+ * present wire field, but it documents an **internal object-storage
+ * key**, never a public URL (`docs/decisions.md` ADR-007;
+ * `openapi-sgeb.yaml`'s own description: "NO es una URL pública").
+ * Comanda is its own server resource with its own dedicated endpoints
+ * (`GET/POST/DELETE /eventos/{id}/comanda`, `.../archivo`,
+ * `.../historial`) — see `types/comanda.ts` and
+ * `services/comandaApi.ts` — and is fetched/cached independently
+ * (`queries/comandaQueryKeys.ts`), never folded into this Event Detail
+ * view model. `services/eventsApi.ts`'s `mapEventoToDetail` still reads
+ * `record.comanda_url` off the wire response only to confirm it must
+ * never be mapped here — see that function's own comment.
  */
 export interface EventDetailViewModel {
   idEvento: number
@@ -150,8 +164,6 @@ export interface EventDetailViewModel {
   numMesas: number
   tarifaPorMesero: number
   radioGeocercaM: number
-  /** `EventoCrear.comanda_url` — validated `http(s)://` only, per its documented pattern. Absent/`undefined` when not set. */
-  comandaUrl?: string
 }
 
 /**

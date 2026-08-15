@@ -38,6 +38,20 @@ export interface EventoApiRecord {
   radio_geocerca_m: number
   estado: EventStatus
   creado_en: string
+  /**
+   * Real, always-present wire field on the pinned backend — but an
+   * internal object-storage key, never a public URL (`Evento.comanda_url`'s
+   * own OpenAPI description: "NO es una URL pública"; `docs/decisions.md`
+   * ADR-007). Declared here because the backend genuinely sends it (unlike
+   * `uuid_capitan`, see this interface's own doc), but deliberately read
+   * by nothing in this file — see `mapEventoToDetail`'s comment. Comanda
+   * is its own server resource with its own dedicated endpoints; see
+   * `services/comandaApi.ts`. Optional here (not required) purely so the
+   * many pre-existing `EventoApiRecord` test fixtures across other
+   * features/pages that predate this field don't all need updating for a
+   * value none of them exercise; every real response includes it.
+   */
+  comanda_url?: string | null
 }
 
 /**
@@ -136,29 +150,28 @@ export function isEventoNotFoundError(error: unknown): boolean {
  *
  * Deliberately narrower than `mapEventoToListItem`:
  * `EventDetailViewModel` has no `idSalon`/`fin`/`creadoEn` fields (the
- * existing foundation never displays them), and two fields are
+ * existing foundation never displays them), and `salonNombre` is
  * INTENTIONALLY never populated from the live response even though the
- * backend sends them:
+ * backend sends it — `EventoService.obtener` does `.preload('salon')`,
+ * and Lucid serializes that as an undocumented `salon: {...}` object (the
+ * `@belongsTo` relation has no `serializeAs: null`). This is the same
+ * undocumented-implementation-detail question already decided against
+ * in `mapEventoToListItem` (see that comment) — not part of the
+ * documented `Evento` schema, so not depended on here either. Stays
+ * `undefined`; `EventDetailScheduleSection` already renders the
+ * "pendiente de integración" fallback for it.
  *
- * - `salonNombre` — `EventoService.obtener` does `.preload('salon')`, and
- *   Lucid serializes that as an undocumented `salon: {...}` object (the
- *   `@belongsTo` relation has no `serializeAs: null`). This is the same
- *   undocumented-implementation-detail question already decided against
- *   in `mapEventoToListItem` (see that comment) — not part of the
- *   documented `Evento` schema, so not depended on here either. Stays
- *   `undefined`; `EventDetailScheduleSection` already renders the
- *   "pendiente de integración" fallback for it.
- * - `comandaUrl` — `record.comanda_url` is real and always present in the
- *   wire response, but documents an **internal object-storage key**, never
- *   a public URL (`Evento.comanda_url`'s own OpenAPI description: "NO es
- *   una URL pública" — see the branch report's contract-mismatch writeup).
- *   Comanda is out of scope for this branch (docs/decisions.md ADR-007);
- *   mapping this field live would risk `EventDetailComandaSection`
- *   rendering an internal storage key as a clickable link if it ever
- *   happened to match `isSafeComandaUrl`'s `http(s)://` pattern. Left
- *   `undefined` so the section always renders its existing "no comanda"
- *   fallback for live events, foundation-only until a dedicated Comanda
- *   integration branch replaces this whole section.
+ * `record.comanda_url` is likewise real and always present in the wire
+ * response, but is deliberately read by NOTHING here — `EventDetailViewModel`
+ * has no `comandaUrl` field at all (see that type's own comment). It
+ * documents an **internal object-storage key**, never a public URL
+ * (`Evento.comanda_url`'s own OpenAPI description: "NO es una URL
+ * pública"; `docs/decisions.md` ADR-007). Comanda is its own server
+ * resource, fetched independently through `services/comandaApi.ts`
+ * (`GET /eventos/{id}/comanda`, which returns a fresh, short-lived signed
+ * URL — never this field) — folding `comanda_url` into this mapper would
+ * risk it reaching `EventDetailComandaSection` as if it were a safe,
+ * navigable value.
  */
 export function mapEventoToDetail(record: EventoApiRecord): EventDetailViewModel {
   return {

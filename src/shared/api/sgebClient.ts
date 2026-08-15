@@ -148,15 +148,27 @@ export function attachSgebAuthInterceptors(
  * Axios instance for the authenticated SGEB business API (docs/api/).
  * Foundation for every future private SGEB endpoint — see
  * `attachSgebAuthInterceptors` above for what it does on top of plain
- * Axios. Feature modules should prefer `requestSgeb` (below) over calling
- * this instance directly, so they never depend on `AxiosError` or
- * `response.data` shape.
+ * Axios. Feature modules should prefer `requestSgeb`/`requestSgebBinary`
+ * (below) over calling this instance directly, so they never depend on
+ * `AxiosError` or `response.data` shape.
+ *
+ * Deliberately no instance-level `Content-Type` default. Axios's own
+ * `transformRequest` already sets `application/json` for a plain object
+ * body when no Content-Type is present — the previous hardcoded default
+ * was redundant for that case and actively harmful for a `FormData` body
+ * (e.g. `POST /eventos/{id}/comanda`'s multipart upload): with a
+ * `Content-Type: application/json` header already present,
+ * axios@1.19.0's `transformRequest` runs `FormData` through
+ * `hasJSONContentType ? JSON.stringify(formDataToJSON(data)) : data` —
+ * the forced JSON content type flips it to the `JSON.stringify` branch,
+ * silently discarding the binary and never letting the browser generate
+ * the `multipart/form-data; boundary=...` header. Removing the default
+ * lets a `FormData` body pass through untouched. See
+ * `sgebClient.test.ts`'s "FormData request bodies" suite for the
+ * regression coverage proving both halves of this still work.
  */
 export const sgebClient = axios.create({
   baseURL: env.VITE_SGEB_API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
 })
 
 attachSgebAuthInterceptors(sgebClient)
@@ -165,6 +177,13 @@ export interface SgebRequestConfig {
   url: string
   method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
   params?: Record<string, unknown>
+  /**
+   * A plain object is JSON-serialized as before. A `FormData` instance
+   * (e.g. a multipart upload) is sent through unchanged — never
+   * JSON.stringify it or set its `Content-Type` manually; the
+   * browser/XHR adapter must generate the `multipart/form-data;
+   * boundary=...` header itself, which only it can compute.
+   */
   data?: unknown
   signal?: AbortSignal
 }
@@ -185,5 +204,44 @@ export async function requestSgeb<TData>(
   config: SgebRequestConfig,
 ): Promise<ApiEnvelope<TData>> {
   const response = await sgebClient.request<ApiEnvelope<TData>>(config)
+  return response.data
+}
+
+export interface SgebBinaryRequestConfig {
+  url: string
+  method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
+  params?: Record<string, unknown>
+  signal?: AbortSignal
+}
+
+/**
+ * The binary counterpart to `requestSgeb`, for an endpoint that responds
+ * with a file body instead of the `{ result, data }` envelope (e.g. `GET
+ * /eventos/{id}/comanda/archivo`). Reuses the exact same `sgebClient`
+ * instance — same Bearer attachment, same SGEB-1002 refresh-and-retry,
+ * same cancellation propagation — only the response handling differs:
+ * `responseType: 'blob'` so the binary body is never run through
+ * `JSON.parse` (axios's default text-mode reading of a `responseType`-less
+ * request would otherwise corrupt binary bytes before any parsing even
+ * happens), and the return value is the raw `Blob`, never wrapped in
+ * `ApiEnvelope<TData>` — there is no envelope on a binary response to
+ * unwrap.
+ *
+ * Known limitation, deliberately not solved here: if the server responds
+ * with a SGEB error envelope (e.g. `SGEB-1004`) for a request made with
+ * `responseType: 'blob'`, `error.response.data` arrives as a `Blob`, not
+ * parsed JSON — `isApiEnvelope` (`apiEnvelope.ts`) returns `false` for a
+ * `Blob`, so `attachSgebAuthInterceptors`'s response interceptor falls
+ * back to a generic `SgebNetworkError` instead of the precise
+ * `SgebApplicationError`/code. The error still surfaces as a safe,
+ * normalized frontend error (never a raw `AxiosError`, never
+ * `technical_message`) — it is just less specific than an ordinary JSON
+ * request's error. Parsing a Blob error body back into the envelope would
+ * require an async re-read inside the interceptor for every request, not
+ * only binary ones; out of scope unless a real caller needs to distinguish
+ * e.g. `SGEB-1004` from a network failure on this specific path.
+ */
+export async function requestSgebBinary(config: SgebBinaryRequestConfig): Promise<Blob> {
+  const response = await sgebClient.request<Blob>({ ...config, responseType: 'blob' })
   return response.data
 }

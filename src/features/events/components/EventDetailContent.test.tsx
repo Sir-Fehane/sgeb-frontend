@@ -7,6 +7,7 @@ import {
   EventDetailContent,
   type EventDetailContentProps,
 } from '@/features/events/components/EventDetailContent'
+import type { EventDetailComandaSectionProps } from '@/features/events/components/EventDetailComandaSection'
 import type { EventDetailViewModel } from '@/features/events/types/event'
 
 const EVENTO_CON_COMANDA: EventDetailViewModel = {
@@ -22,7 +23,6 @@ const EVENTO_CON_COMANDA: EventDetailViewModel = {
   numMesas: 20,
   tarifaPorMesero: 450,
   radioGeocercaM: 150,
-  comandaUrl: 'https://files.mediocres.mx/comandas/evento-1001.pdf',
 }
 
 const EVENTO_SIN_COMANDA: EventDetailViewModel = {
@@ -40,10 +40,33 @@ const EVENTO_SIN_COMANDA: EventDetailViewModel = {
   radioGeocercaM: 130,
 }
 
-function renderContent(props: EventDetailContentProps) {
+/**
+ * A minimal, inert `comanda` prop — this file only tests
+ * `EventDetailContent`'s own composition (which section renders where,
+ * loading/error/unavailable selection). `EventDetailComandaSection`'s own
+ * behavior (metadata display, open/upload/retire) is covered by its
+ * dedicated `EventDetailComandaSection.test.tsx`.
+ */
+function defaultComandaProps(): EventDetailComandaSectionProps {
+  return {
+    comanda: null,
+    isLoading: false,
+    canManage: false,
+    onOpen: vi.fn(),
+    onUpload: vi.fn(),
+    onRetire: vi.fn(),
+  }
+}
+
+function renderContent(
+  props: Omit<EventDetailContentProps, 'comanda'> & {
+    comanda?: EventDetailComandaSectionProps
+  },
+) {
+  const { comanda, ...rest } = props
   return render(
     <MemoryRouter>
-      <EventDetailContent {...props} />
+      <EventDetailContent {...rest} comanda={comanda ?? defaultComandaProps()} />
     </MemoryRouter>,
   )
 }
@@ -100,32 +123,33 @@ describe('EventDetailContent — populated state', () => {
   })
 })
 
-describe('EventDetailContent — comanda', () => {
-  it('renders a safe, valid comanda link when comandaUrl is present', () => {
-    renderContent({ evento: EVENTO_CON_COMANDA })
+describe('EventDetailContent — comanda section wiring', () => {
+  it('renders the Comanda section, forwarding the comanda prop object unchanged', () => {
+    renderContent({
+      evento: EVENTO_CON_COMANDA,
+      comanda: {
+        ...defaultComandaProps(),
+        comanda: {
+          idComanda: 1,
+          nombreOriginal: 'XV de María.pdf',
+          tipoMime: 'application/pdf',
+          tamanoBytes: 512_000,
+          activo: true,
+          creadoEn: '2026-09-01T10:00:00Z',
+        },
+      },
+    })
 
-    const link = screen.getByRole('link', { name: /Abrir comanda/ })
-    expect(link).toHaveAttribute('href', EVENTO_CON_COMANDA.comandaUrl)
-    expect(link).toHaveAttribute('target', '_blank')
-    expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'))
-    expect(link).toHaveAttribute('rel', expect.stringContaining('noreferrer'))
+    expect(screen.getByRole('heading', { name: 'Comanda' })).toBeInTheDocument()
+    expect(screen.getByText('XV de María.pdf')).toBeInTheDocument()
   })
 
-  it('renders no clickable comanda link when comandaUrl is absent', () => {
+  it('renders the Comanda section empty state when comanda is null', () => {
     renderContent({ evento: EVENTO_SIN_COMANDA })
 
-    expect(screen.queryByRole('link', { name: /Abrir comanda/ })).not.toBeInTheDocument()
     expect(
       screen.getByText('No hay una comanda disponible para este evento.'),
     ).toBeInTheDocument()
-  })
-
-  it('rejects an unsafe comanda URL and renders no clickable link', () => {
-    renderContent({
-      evento: { ...EVENTO_CON_COMANDA, comandaUrl: 'javascript:alert(1)' },
-    })
-
-    expect(screen.queryByRole('link', { name: /Abrir comanda/ })).not.toBeInTheDocument()
   })
 })
 

@@ -32,6 +32,7 @@ const RECORD: EventoApiRecord = {
   radio_geocerca_m: 150,
   estado: 'publicado',
   creado_en: '2026-07-01T09:00:00',
+  comanda_url: 'comandas/1001/3f2a9c14-fake.pdf',
 }
 
 describe('mapEventoToListItem', () => {
@@ -110,10 +111,15 @@ describe('mapEventoToDetail', () => {
     })
   })
 
-  it('never populates salonNombre (undocumented preload) or comandaUrl (internal storage key)', () => {
+  it('never populates salonNombre (undocumented preload); comandaUrl has no field to populate at all', () => {
     const mapped = mapEventoToDetail(RECORD)
     expect(mapped.salonNombre).toBeUndefined()
-    expect(mapped.comandaUrl).toBeUndefined()
+    expect(mapped).not.toHaveProperty('comandaUrl')
+  })
+
+  it('never reads record.comanda_url even when present, and never leaks it into the mapped view model', () => {
+    const mapped = mapEventoToDetail(RECORD)
+    expect(JSON.stringify(mapped)).not.toContain(RECORD.comanda_url)
   })
 })
 

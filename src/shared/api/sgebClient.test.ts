@@ -11,7 +11,10 @@ import { isApiEnvelope } from '@/shared/api/apiEnvelope'
 import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
 import {
   attachSgebAuthInterceptors,
+  requestSgebBinary,
+  sgebClient,
   type SgebAuthDependencies,
+  type SgebBinaryRequestConfig,
   type SgebRequestConfig,
 } from '@/shared/api/sgebClient'
 import type { ApiEnvelope, ApiResult } from '@/shared/types/api'
@@ -84,7 +87,13 @@ function createTestClient(depsOverrides: Partial<SgebAuthDependencies> = {}) {
     return response.data
   }
 
-  return { instance, deps, adapter, request }
+  /** Mirrors `requestSgebBinary` against this throwaway instance instead of the module-level singleton. */
+  async function requestBinary(config: SgebBinaryRequestConfig): Promise<Blob> {
+    const response = await instance.request<Blob>({ ...config, responseType: 'blob' })
+    return response.data
+  }
+
+  return { instance, deps, adapter, request, requestBinary }
 }
 
 describe('sgebClient — authorization', () => {
@@ -758,5 +767,212 @@ describe('sgebClient — requestSgeb (singleton public API)', () => {
       'Bearer singleton-token',
     )
     expect(result).toEqual({ result: successResult('SGEB-0000'), data: { ok: true } })
+  })
+})
+
+describe('sgebClient — FormData request bodies', () => {
+  it('passes a FormData body through unchanged, never JSON-stringified', async () => {
+    const { adapter, request } = createTestClient()
+    adapter.mockImplementation((config) =>
+      Promise.resolve(fakeResponse(config, 201, envelope(successResult('SGEB-0001')))),
+    )
+
+    const formData = new FormData()
+    formData.append(
+      'comanda',
+      new File(['%PDF-1.4'], 'comanda.pdf', { type: 'application/pdf' }),
+    )
+
+    await request({ url: '/eventos/1/comanda', method: 'POST', data: formData })
+
+    const sentConfig = adapter.mock.calls[0]![0]
+    // Same reference, untouched — proves it was never routed through
+    // `JSON.stringify(formDataToJSON(data))` (the corruption this branch's
+    // reconciliation identified), which would have replaced it with a
+    // JSON string instead.
+    expect(sentConfig.data).toBe(formData)
+  })
+
+  it('never manually sets application/json or a hand-written multipart boundary for a FormData body', async () => {
+    const { adapter, request } = createTestClient()
+    adapter.mockImplementation((config) =>
+      Promise.resolve(fakeResponse(config, 201, envelope(successResult('SGEB-0001')))),
+    )
+
+    const formData = new FormData()
+    formData.append(
+      'comanda',
+      new File(['%PDF-1.4'], 'comanda.pdf', { type: 'application/pdf' }),
+    )
+
+    await request({ url: '/eventos/1/comanda', method: 'POST', data: formData })
+
+    const sentConfig = adapter.mock.calls[0]![0]
+    const contentType = sentConfig.headers.getContentType() ?? ''
+    // Neither this transport nor `transformRequest` ever sets
+    // `application/json` (the old, corrupting default) or a hand-written
+    // `multipart/form-data; boundary=...` (impossible to get right without
+    // the real boundary, which only the sending environment computes).
+    // Axios's own `dispatchRequest.js` does set a harmless
+    // `application/x-www-form-urlencoded` placeholder here for any
+    // POST/PUT/PATCH with no Content-Type already present — this is a
+    // known axios internal artifact, not something this transport
+    // controls, and it is irrelevant in a real browser: `XMLHttpRequest`/
+    // `fetch` ignore whatever `Content-Type` header is set and always
+    // compute their own `multipart/form-data; boundary=...` from the
+    // `FormData` body itself (the config's `data`, confirmed unchanged by
+    // the previous test, is what a real browser actually inspects).
+    expect(contentType).not.toContain('application/json')
+    expect(contentType).not.toContain('multipart/form-data')
+  })
+
+  it('still JSON-serializes a plain object body and sets application/json — the pre-existing behavior is unchanged', async () => {
+    const { adapter, request } = createTestClient()
+    adapter.mockImplementation((config) =>
+      Promise.resolve(fakeResponse(config, 200, envelope(successResult('SGEB-0000')))),
+    )
+
+    await request({
+      url: '/eventos',
+      method: 'POST',
+      data: { titulo: 'Boda García' },
+    })
+
+    const sentConfig = adapter.mock.calls[0]![0]
+    expect(sentConfig.headers.getContentType()).toContain('application/json')
+    expect(JSON.parse(sentConfig.data as string)).toEqual({ titulo: 'Boda García' })
+  })
+
+  it('a GET request with no body is unaffected by the removed default Content-Type', async () => {
+    const { adapter, request } = createTestClient()
+    adapter.mockImplementation((config) =>
+      Promise.resolve(
+        fakeResponse(config, 200, envelope(successResult('SGEB-0000'), [])),
+      ),
+    )
+
+    const result = await request({ url: '/eventos' })
+
+    expect(result.result.code).toBe('SGEB-0000')
+    expect(adapter).toHaveBeenCalledOnce()
+  })
+})
+
+describe('sgebClient — requestSgebBinary', () => {
+  it('requests with responseType: "blob" and returns the raw Blob, not an envelope', async () => {
+    const { adapter, requestBinary } = createTestClient({
+      getAccessToken: () => 'abc-token',
+    })
+    const fileBlob = new Blob(['%PDF-1.4'], { type: 'application/pdf' })
+    adapter.mockImplementation((config) =>
+      Promise.resolve(fakeResponse(config, 200, fileBlob)),
+    )
+
+    const result = await requestBinary({ url: '/eventos/1/comanda/archivo' })
+
+    expect(adapter.mock.calls[0]![0].responseType).toBe('blob')
+    expect(result).toBe(fileBlob)
+  })
+
+  it('still attaches the Bearer token via the same interceptor', async () => {
+    const { adapter, requestBinary } = createTestClient({
+      getAccessToken: () => 'abc-token',
+    })
+    adapter.mockImplementation((config) =>
+      Promise.resolve(fakeResponse(config, 200, new Blob(['x']))),
+    )
+
+    await requestBinary({ url: '/eventos/1/comanda/archivo' })
+
+    expect(adapter.mock.calls[0]![0].headers.get('Authorization')).toBe(
+      'Bearer abc-token',
+    )
+  })
+
+  it('retries exactly once through the same SGEB-1002 recovery flow on a JSON error response', async () => {
+    const refresh = vi.fn<() => Promise<TokenResult>>().mockResolvedValue({
+      outcome: 'success',
+      token: SUCCESS_TOKEN,
+    })
+    let currentToken = 'expired-token'
+    const applyRefreshedAccessToken = vi.fn((payload: { accessToken: string }) => {
+      currentToken = payload.accessToken
+      return true
+    })
+    const { adapter, requestBinary } = createTestClient({
+      getAccessToken: () => currentToken,
+      refresh,
+      applyRefreshedAccessToken,
+    })
+
+    let callCount = 0
+    adapter.mockImplementation((config) => {
+      callCount += 1
+      if (callCount === 1) {
+        return Promise.reject(
+          fakeAxiosError(config, 401, envelope(errorResult('SGEB-1002', 'Expirado.'))),
+        )
+      }
+      return Promise.resolve(fakeResponse(config, 200, new Blob(['%PDF-1.4'])))
+    })
+
+    const result = await requestBinary({ url: '/eventos/1/comanda/archivo' })
+
+    expect(refresh).toHaveBeenCalledOnce()
+    expect(adapter).toHaveBeenCalledTimes(2)
+    expect(adapter.mock.calls[1]![0].headers.get('Authorization')).toBe(
+      'Bearer refreshed-token',
+    )
+    expect(result).toBeInstanceOf(Blob)
+  })
+
+  it('normalizes a JSON SGEB error response into a safe error, never throwing a raw AxiosError', async () => {
+    const { adapter, requestBinary } = createTestClient()
+    adapter.mockImplementation((config) =>
+      Promise.reject(
+        fakeAxiosError(
+          config,
+          403,
+          envelope(errorResult('SGEB-1004', 'No tienes permisos.')),
+        ),
+      ),
+    )
+
+    const error = await requestBinary({ url: '/eventos/1/comanda/archivo' }).catch(
+      (e: unknown) => e,
+    )
+
+    expect(isSgebApplicationError(error) || isSgebNetworkError(error)).toBe(true)
+    if (isSgebApplicationError(error) || isSgebNetworkError(error)) {
+      expect(error.message).not.toMatch(/technical_message|stack|AxiosError/i)
+    }
+  })
+
+  it('propagates cancellation unchanged, distinguishable from a SGEB or network error', async () => {
+    const { adapter, requestBinary } = createTestClient()
+    adapter.mockImplementation((config) =>
+      Promise.reject(new CanceledError('canceled', config)),
+    )
+
+    const controller = new AbortController()
+    const error = await requestBinary({
+      url: '/eventos/1/comanda/archivo',
+      signal: controller.signal,
+    }).catch((e: unknown) => e)
+
+    expect(axios.isCancel(error)).toBe(true)
+    expect(isSgebApplicationError(error)).toBe(false)
+    expect(isSgebNetworkError(error)).toBe(false)
+  })
+})
+
+describe('sgebClient — requestSgebBinary (singleton public API)', () => {
+  afterEach(() => {
+    vi.resetModules()
+  })
+
+  it('is exported from the shared transport module and reuses the same sgebClient instance', () => {
+    expect(typeof requestSgebBinary).toBe('function')
+    expect(sgebClient).toBeDefined()
   })
 })

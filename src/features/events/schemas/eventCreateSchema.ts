@@ -23,11 +23,11 @@ function todayIsoDate(): string {
 /**
  * Mirrors a subset of `EventoCrear` (docs/api/openapi-sgeb.yaml v1.6.0)
  * as a **field-validation prototype**, not the approved creation
- * workflow — see `EventCreateFieldPrototypePage`. Two fields from
- * `EventoCrear` are deliberately absent here, not merely unvalidated —
- * both are **integration-owned**, meaning a future request-composition
- * layer must combine this prototype's validated values with these two
- * fields before the result is a real `POST /eventos` payload:
+ * workflow — see `EventCreateFieldPrototypePage`. `uuid_capitan` is
+ * deliberately absent here, not merely unvalidated — it is
+ * **integration-owned**, meaning a future request-composition layer must
+ * combine this prototype's validated values with it before the result is
+ * a real `POST /eventos` payload:
  *
  * - `uuid_capitan`: required by the confirmed contract, but this
  *   prototype has no authentication, role resolution, or approved
@@ -35,11 +35,12 @@ function todayIsoDate(): string {
  *   an admin picker is still an open product question). No selector
  *   exists anywhere in this feature for it — adding one, or a fake
  *   captain list, would be guessing at an unapproved flow.
- * - `comanda_url`: the upload/authoring workflow that would produce
- *   this value is unresolved (no upload endpoint is documented,
- *   docs/FrontendArchitecture.md §7.5) — asking a user to hand-type a
- *   technical URL is not a real workflow either, so the field is
- *   omitted rather than faked.
+ *
+ * `comanda_url` is NOT in this list — the current, settled contract
+ * (`docs/decisions.md` ADR-007) never declares a comanda field on
+ * `EventoCrear` at all; it is uploaded afterward via a dedicated
+ * `POST /eventos/{id}/comanda` from Event Detail
+ * (`EventDetailComandaSection`), never as part of creation.
  *
  * `titulo`'s length rule is now confirmed by `openapi-sgeb.yaml` v1.6.0
  * (`minLength: 3, maxLength: 120`) — the previous 40-vs-120 conflict
@@ -167,16 +168,17 @@ export function createEventFormSchema(salones: readonly EventSalonOption[]) {
  * NOT the `EventoCrear` request DTO, and NOT an `EventoCrearRequest`/
  * `EventoCrearDto` — this is the value shape of the field-validation
  * prototype only, and it is incomplete relative to `EventoCrear`. It
- * deliberately omits two integration-owned fields (`uuid_capitan`,
- * `comanda_url` — see `createEventFormSchema`'s comment for why), and
+ * deliberately omits the one remaining integration-owned field
+ * (`uuid_capitan` — see `createEventFormSchema`'s comment for why), and
  * has never been confirmed against the real five-step wireframe. Do
  * not use this type to construct a `POST /eventos` payload directly; a
  * future request-composition layer must combine these validated values
  * with `uuid_capitan` (from the authenticated captain or an approved
- * admin-selection flow) and `comanda_url`/an upload result (once its
- * contract is defined) before the result is a real `EventoCrear`
+ * admin-selection flow) before the result is a real `EventoCrear`
  * request. No such mapper exists yet — that is a later branch's job,
- * once the wizard's actual steps and these two fields are resolved.
+ * once the wizard's actual steps and that field are resolved. Comanda
+ * is not part of this payload at all — see `createEventFormSchema`'s
+ * comment.
  */
 export type EventCreateFieldPrototypeValues = z.infer<
   ReturnType<typeof createEventFormSchema>
