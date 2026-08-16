@@ -70,6 +70,8 @@ function renderContent(props: Partial<EventClosureContentProps> = {}) {
         readiness={READINESS_BLOCKED}
         mermaReports={[]}
         onSubmitWasteReport={vi.fn().mockResolvedValue(undefined)}
+        canFinalizeEvento={false}
+        onFinalizeEvento={vi.fn()}
         {...props}
       />
     </MemoryRouter>,
@@ -356,6 +358,51 @@ describe('EventClosureContent — payments boundary', () => {
     renderContent()
 
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
+  })
+})
+
+describe('EventClosureContent — event finalization wiring', () => {
+  it('does not offer "Finalizar evento" when the role cannot finalize', () => {
+    renderContent({ evento: { ...EVENTO, estado: 'en_curso' }, canFinalizeEvento: false })
+
+    expect(
+      screen.queryByRole('button', { name: 'Finalizar evento' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('offers "Finalizar evento" when en_curso and the role can finalize', () => {
+    renderContent({ evento: { ...EVENTO, estado: 'en_curso' }, canFinalizeEvento: true })
+
+    expect(screen.getByRole('button', { name: 'Finalizar evento' })).toBeInTheDocument()
+  })
+
+  it('never offers "Finalizar evento" for a non-en_curso estado, even when the role can finalize', () => {
+    renderContent({ evento: { ...EVENTO, estado: 'publicado' }, canFinalizeEvento: true })
+
+    expect(
+      screen.queryByRole('button', { name: 'Finalizar evento' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows the read-only completed state once finalizado', () => {
+    renderContent({
+      evento: { ...EVENTO, estado: 'finalizado' },
+      canFinalizeEvento: true,
+    })
+
+    expect(screen.getByText('Este evento ya fue finalizado.')).toBeInTheDocument()
+  })
+
+  it('passes finalizeEventoErrorMessage through to the finalize section, never technical_message', () => {
+    renderContent({
+      evento: { ...EVENTO, estado: 'en_curso' },
+      canFinalizeEvento: true,
+      finalizeEventoErrorMessage: 'Esta acción no está permitida en el estado actual.',
+    })
+
+    expect(
+      screen.getByText('Esta acción no está permitida en el estado actual.'),
+    ).toBeInTheDocument()
   })
 })
 

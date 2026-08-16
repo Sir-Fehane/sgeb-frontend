@@ -4,10 +4,12 @@ import {
   createMermaReport,
   fetchClosureReadiness,
   fetchMermaReports,
+  finalizeEvento,
   type ClosureReadinessApiRecord,
   type ReporteMermaApiRecord,
   type ReportesMermaListApiRecord,
 } from '@/features/events/closure/services/closureApi'
+import type { EventoApiRecord } from '@/features/events/services/eventsApi'
 import { SgebNetworkError } from '@/shared/api/sgebApiError'
 import { requestSgeb } from '@/shared/api/sgebClient'
 
@@ -190,5 +192,72 @@ describe('createMermaReport', () => {
     await expect(
       createMermaReport(1001, { detalles: [{ tipo: 'otro', cantidad: 1 }] }),
     ).rejects.toBe(error)
+  })
+})
+
+const FINALIZED_EVENTO_RECORD: EventoApiRecord = {
+  id_evento: 1001,
+  id_salon: 1,
+  titulo: 'Boda García',
+  tipo: 'social',
+  fecha: '2026-09-12',
+  hora_presentacion: '16:00',
+  inicio: '2026-09-12T18:00:00',
+  fin: '2026-09-13T02:00:00',
+  cupo_meseros: 12,
+  num_mesas: 20,
+  tarifa_por_mesero: 450,
+  radio_geocerca_m: 150,
+  estado: 'finalizado',
+  creado_en: '2026-07-01T09:00:00',
+}
+
+describe('finalizeEvento', () => {
+  it('PATCHes /eventos/{id}/estado with exactly { estado: "finalizado" } — no client fin, no extra fields', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0000', message: 'ok' },
+      data: FINALIZED_EVENTO_RECORD,
+    })
+
+    await finalizeEvento(1001)
+
+    expect(requestSgeb).toHaveBeenCalledTimes(1)
+    expect(requestSgeb).toHaveBeenCalledWith({
+      url: '/eventos/1001/estado',
+      method: 'PATCH',
+      data: { estado: 'finalizado' },
+    })
+  })
+
+  it('resolves without throwing on a successful response', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0000', message: 'ok' },
+      data: FINALIZED_EVENTO_RECORD,
+    })
+
+    await expect(finalizeEvento(1001)).resolves.toBeUndefined()
+  })
+
+  it('throws SgebNetworkError when the envelope carries null data on success (defensive guard)', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0000', message: 'ok' },
+      data: null,
+    })
+
+    await expect(finalizeEvento(1001)).rejects.toBeInstanceOf(SgebNetworkError)
+  })
+
+  it('lets a SgebApplicationError (e.g. SGEB-4011 invalid transition) propagate unchanged', async () => {
+    const error = new Error('SGEB-4011 invalid transition')
+    vi.mocked(requestSgeb).mockRejectedValue(error)
+
+    await expect(finalizeEvento(1001)).rejects.toBe(error)
+  })
+
+  it('lets a SgebApplicationError (e.g. SGEB-1004 unauthorized) propagate unchanged', async () => {
+    const error = new Error('SGEB-1004 unauthorized')
+    vi.mocked(requestSgeb).mockRejectedValue(error)
+
+    await expect(finalizeEvento(1001)).rejects.toBe(error)
   })
 })

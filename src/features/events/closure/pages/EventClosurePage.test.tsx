@@ -10,6 +10,7 @@ import type {
   ReporteMermaApiRecord,
 } from '@/features/events/closure/services/closureApi'
 import type { EventoApiRecord } from '@/features/events/services/eventsApi'
+import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { SgebApplicationError, SgebNetworkError } from '@/shared/api/sgebApiError'
 import type { SgebRequestConfig } from '@/shared/api/sgebClient'
 import { requestSgeb } from '@/shared/api/sgebClient'
@@ -21,7 +22,16 @@ vi.mock('@/shared/api/sgebClient', () => ({
 
 beforeEach(() => {
   vi.mocked(requestSgeb).mockReset()
+  useOidcSessionStore.getState().reset()
 })
+
+function authenticate(rol: 'capitan' | 'admin' | 'mesero') {
+  useOidcSessionStore.getState().setAuthenticated({
+    accessToken: 'test-access-token',
+    accessTokenExpiresAt: Date.now() + 900_000,
+    user: { sub: 'uuid-test-user', rol },
+  })
+}
 
 function successEnvelope<T>(data: T): ApiEnvelope<T> {
   return { result: { code: 'SGEB-0000', message: 'ok' }, data }
@@ -91,22 +101,30 @@ function fakeTransport(
     readiness?: ClosureReadinessApiRecord | SgebApplicationError | SgebNetworkError
     reportes?: ReporteMermaApiRecord[]
     createError?: SgebApplicationError
+    finalizeError?: SgebApplicationError | SgebNetworkError
   } = {},
 ) {
   let reportes = options.reportes ? [...options.reportes] : []
   let nextId = 1000
+  let evento: EventoApiRecord =
+    options.evento instanceof Error ? EVENTO_RECORD : (options.evento ?? EVENTO_RECORD)
+  let readiness: ClosureReadinessApiRecord =
+    options.readiness instanceof Error
+      ? READINESS_BLOCKED
+      : (options.readiness ?? READINESS_BLOCKED)
   const eventoUrl = `/eventos/${String(idEvento)}`
   const readinessUrl = `/eventos/${String(idEvento)}/cierre`
   const reportesUrl = `/eventos/${String(idEvento)}/reportes-merma`
+  const estadoUrl = `/eventos/${String(idEvento)}/estado`
 
   vi.mocked(requestSgeb).mockImplementation((config: SgebRequestConfig) => {
     if (config.url === eventoUrl && !config.method) {
       if (options.evento instanceof Error) return Promise.reject(options.evento)
-      return Promise.resolve(successEnvelope(options.evento ?? EVENTO_RECORD))
+      return Promise.resolve(successEnvelope(evento))
     }
     if (config.url === readinessUrl && !config.method) {
       if (options.readiness instanceof Error) return Promise.reject(options.readiness)
-      return Promise.resolve(successEnvelope(options.readiness ?? READINESS_BLOCKED))
+      return Promise.resolve(successEnvelope(readiness))
     }
     if (config.url === reportesUrl && !config.method) {
       return Promise.resolve(
@@ -143,6 +161,16 @@ function fakeTransport(
       nextId += 1
       reportes = [created, ...reportes]
       return Promise.resolve(successEnvelope(created))
+    }
+    if (config.method === 'PATCH' && config.url === estadoUrl) {
+      if (options.finalizeError) {
+        return Promise.reject(options.finalizeError)
+      }
+      // Mirrors the pinned backend: the server seals `fin` and flips
+      // `estado`/`evento_finalizado` itself — never client-supplied.
+      evento = { ...evento, estado: 'finalizado', fin: '2026-09-13T02:00:00' }
+      readiness = { ...readiness, evento_finalizado: true }
+      return Promise.resolve(successEnvelope(evento))
     }
     throw new Error(`Unexpected requestSgeb call in test: ${JSON.stringify(config)}`)
   })
@@ -371,6 +399,266 @@ describe('EventClosurePage', () => {
     renderAt('/eventos/1001/cierre')
 
     await screen.findByText('Listo para calcular pagos')
+    expect(
+      screen.queryByRole('button', { name: /Calcular pagos/i }),
+    ).not.toBeInTheDocument()
+  })
+})
+
+describe('EventClosurePage — event finalization, availability by role and estado', () => {
+  it('does not offer "Finalizar evento" without an authenticated session', async () => {
+    fakeTransport(1001)
+
+    renderAt('/eventos/1001/cierre')
+
+    await screen.findByText('Estado del cierre')
+    expect(
+      screen.queryByRole('button', { name: 'Finalizar evento' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('does not offer "Finalizar evento" for a mesero', async () => {
+    authenticate('mesero')
+    fakeTransport(1001)
+
+    renderAt('/eventos/1001/cierre')
+
+    await screen.findByText('Estado del cierre')
+    expect(
+      screen.queryByRole('button', { name: 'Finalizar evento' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('offers "Finalizar evento" for a capitan when the event is en_curso', async () => {
+    authenticate('capitan')
+    fakeTransport(1001)
+
+    renderAt('/eventos/1001/cierre')
+
+    expect(
+      await screen.findByRole('button', { name: 'Finalizar evento' }),
+    ).toBeInTheDocument()
+  })
+
+  it('offers "Finalizar evento" for an admin when the event is en_curso', async () => {
+    authenticate('admin')
+    fakeTransport(1001)
+
+    renderAt('/eventos/1001/cierre')
+
+    expect(
+      await screen.findByRole('button', { name: 'Finalizar evento' }),
+    ).toBeInTheDocument()
+  })
+
+  it('does not offer "Finalizar evento" for a capitan when the event is not en_curso', async () => {
+    authenticate('capitan')
+    fakeTransport(1001, { evento: { ...EVENTO_RECORD, estado: 'publicado' } })
+
+    renderAt('/eventos/1001/cierre')
+
+    await screen.findByText('Estado del cierre')
+    expect(
+      screen.queryByRole('button', { name: 'Finalizar evento' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows a read-only completed state for a capitan when the event is already finalizado', async () => {
+    authenticate('capitan')
+    fakeTransport(1001, {
+      evento: { ...EVENTO_RECORD, estado: 'finalizado', fin: '2026-09-13T02:00:00' },
+      readiness: READINESS_READY,
+    })
+
+    renderAt('/eventos/1001/cierre')
+
+    expect(await screen.findByText('Este evento ya fue finalizado.')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Finalizar evento' }),
+    ).not.toBeInTheDocument()
+  })
+})
+
+describe('EventClosurePage — event finalization, confirmation and submit flow', () => {
+  it('clicking "Finalizar evento" does not call the transport — only confirming does', async () => {
+    authenticate('capitan')
+    fakeTransport(1001)
+    const user = userEvent.setup()
+
+    renderAt('/eventos/1001/cierre')
+    await user.click(await screen.findByRole('button', { name: 'Finalizar evento' }))
+
+    expect(
+      vi.mocked(requestSgeb).mock.calls.filter((call) => call[0].method === 'PATCH'),
+    ).toHaveLength(0)
+    expect(screen.getByText(/no se puede deshacer/i)).toBeInTheDocument()
+  })
+
+  it('cancel closes the confirmation without ever calling the transport', async () => {
+    authenticate('capitan')
+    fakeTransport(1001)
+    const user = userEvent.setup()
+
+    renderAt('/eventos/1001/cierre')
+    await user.click(await screen.findByRole('button', { name: 'Finalizar evento' }))
+    await user.click(screen.getByRole('button', { name: 'Cancelar' }))
+
+    expect(
+      vi.mocked(requestSgeb).mock.calls.filter((call) => call[0].method === 'PATCH'),
+    ).toHaveLength(0)
+    expect(screen.getByRole('button', { name: 'Finalizar evento' })).toBeInTheDocument()
+  })
+
+  it('confirming sends exactly one PATCH /eventos/{id}/estado with { estado: "finalizado" } — no client fin', async () => {
+    authenticate('capitan')
+    fakeTransport(1001)
+    const user = userEvent.setup()
+
+    renderAt('/eventos/1001/cierre')
+    await user.click(await screen.findByRole('button', { name: 'Finalizar evento' }))
+    await user.click(screen.getByRole('button', { name: 'Confirmar finalización' }))
+
+    await waitFor(() => {
+      expect(requestSgeb).toHaveBeenCalledWith({
+        url: '/eventos/1001/estado',
+        method: 'PATCH',
+        data: { estado: 'finalizado' },
+      })
+    })
+    expect(
+      vi.mocked(requestSgeb).mock.calls.filter((call) => call[0].method === 'PATCH'),
+    ).toHaveLength(1)
+  })
+
+  it('a repeated click on confirm while pending only sends one PATCH', async () => {
+    authenticate('capitan')
+    fakeTransport(1001)
+
+    renderAt('/eventos/1001/cierre')
+    await screen.findByRole('button', { name: 'Finalizar evento' })
+    fireEvent.click(screen.getByRole('button', { name: 'Finalizar evento' }))
+    const confirmButton = await screen.findByRole('button', {
+      name: 'Confirmar finalización',
+    })
+    fireEvent.click(confirmButton)
+    fireEvent.click(confirmButton)
+
+    await waitFor(() => {
+      expect(
+        vi.mocked(requestSgeb).mock.calls.filter((call) => call[0].method === 'PATCH'),
+      ).toHaveLength(1)
+    })
+  })
+
+  it('on success, refetches readiness/event state authoritatively — no optimistic write, real server state drives the UI', async () => {
+    authenticate('capitan')
+    fakeTransport(1001, { readiness: READINESS_BLOCKED })
+    const user = userEvent.setup()
+
+    renderAt('/eventos/1001/cierre')
+    expect(await screen.findByText('Evento pendiente de finalizar')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Finalizar evento' }))
+    await user.click(screen.getByRole('button', { name: 'Confirmar finalización' }))
+
+    expect(await screen.findByText('Este evento ya fue finalizado.')).toBeInTheDocument()
+    expect(await screen.findByText('Completado')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Finalizar evento' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows the safe backend message for a repeated/invalid transition (SGEB-4011), never technical_message, and does not mark the event finalized', async () => {
+    authenticate('capitan')
+    fakeTransport(1001, {
+      finalizeError: new SgebApplicationError(409, {
+        code: 'SGEB-4011',
+        message:
+          'Esta acción no está permitida en el estado actual. Actualiza la pantalla.',
+        technical_message: 'Transición inválida en_curso → finalizado (detalle interno)',
+      }),
+    })
+    const user = userEvent.setup()
+
+    renderAt('/eventos/1001/cierre')
+    await user.click(await screen.findByRole('button', { name: 'Finalizar evento' }))
+    await user.click(screen.getByRole('button', { name: 'Confirmar finalización' }))
+
+    expect(
+      await screen.findByText(
+        'Esta acción no está permitida en el estado actual. Actualiza la pantalla.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/detalle interno/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Este evento ya fue finalizado.')).not.toBeInTheDocument()
+  })
+
+  it('shows a safe message for an authorization failure (SGEB-1004), never technical_message', async () => {
+    authenticate('capitan')
+    fakeTransport(1001, {
+      finalizeError: new SgebApplicationError(403, {
+        code: 'SGEB-1004',
+        message: 'No tienes permisos para realizar esta acción.',
+        technical_message: 'capitán ajeno al evento',
+      }),
+    })
+    const user = userEvent.setup()
+
+    renderAt('/eventos/1001/cierre')
+    await user.click(await screen.findByRole('button', { name: 'Finalizar evento' }))
+    await user.click(screen.getByRole('button', { name: 'Confirmar finalización' }))
+
+    expect(
+      await screen.findByText('No tienes permisos para realizar esta acción.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/capitán ajeno/)).not.toBeInTheDocument()
+  })
+
+  it('shows a safe message for a network error, never technical_message', async () => {
+    authenticate('capitan')
+    fakeTransport(1001, {
+      finalizeError: new SgebNetworkError('No pudimos comunicarnos con el servidor.'),
+    })
+    const user = userEvent.setup()
+
+    renderAt('/eventos/1001/cierre')
+    await user.click(await screen.findByRole('button', { name: 'Finalizar evento' }))
+    await user.click(screen.getByRole('button', { name: 'Confirmar finalización' }))
+
+    expect(
+      await screen.findByText('No pudimos comunicarnos con el servidor.'),
+    ).toBeInTheDocument()
+  })
+})
+
+describe('EventClosurePage — event finalization, domain boundaries', () => {
+  it('never calls a participaciones/salida, pagos, comanda, or montaje endpoint from this screen', async () => {
+    authenticate('capitan')
+    fakeTransport(1001)
+    const user = userEvent.setup()
+
+    renderAt('/eventos/1001/cierre')
+    await user.click(await screen.findByRole('button', { name: 'Finalizar evento' }))
+    await user.click(screen.getByRole('button', { name: 'Confirmar finalización' }))
+
+    await screen.findByText('Este evento ya fue finalizado.')
+
+    const calledUrls = vi.mocked(requestSgeb).mock.calls.map((call) => call[0].url)
+    for (const forbidden of ['salida', 'pagos', 'comanda', 'montaje']) {
+      expect(calledUrls.some((url) => url.includes(forbidden))).toBe(false)
+    }
+  })
+
+  it('never exposes a participant-salida or payment action on this page', async () => {
+    authenticate('capitan')
+    fakeTransport(1001)
+
+    renderAt('/eventos/1001/cierre')
+    await screen.findByRole('button', { name: 'Finalizar evento' })
+
+    expect(
+      screen.queryByRole('button', { name: /Marcar salida/i }),
+    ).not.toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: /Calcular pagos/i }),
     ).not.toBeInTheDocument()

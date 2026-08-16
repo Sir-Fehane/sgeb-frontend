@@ -4,11 +4,13 @@ import { useParams } from 'react-router-dom'
 import { EventClosureContent } from '@/features/events/closure/components/EventClosureContent'
 import { useCreateMermaReportMutation } from '@/features/events/closure/queries/useCreateMermaReportMutation'
 import { useEventClosureReadinessQuery } from '@/features/events/closure/queries/useEventClosureReadinessQuery'
+import { useFinalizeEventoMutation } from '@/features/events/closure/queries/useFinalizeEventoMutation'
 import { useMermaReportsQuery } from '@/features/events/closure/queries/useMermaReportsQuery'
 import type { CreateWasteReportFormValues } from '@/features/events/closure/schemas/wasteReportSchema'
 import { useEventDetailQuery } from '@/features/events/queries/useEventDetailQuery'
 import { isEventoNotFoundError } from '@/features/events/services/eventsApi'
 import { parseEventId } from '@/features/events/utils/parseEventId'
+import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
 
 /**
@@ -26,11 +28,13 @@ function toSafeErrorMessage(error: unknown): string {
 /**
  * Routed at /eventos/:id/cierre ("Cierre del evento"). LIVE wiring for
  * closure-readiness diagnostics (`GET /eventos/{id}/cierre`), existing
- * merma reports (`GET /eventos/{id}/reportes-merma`), and merma
- * registration (`POST /eventos/{id}/reportes-merma`) — the exact three
- * operations the pre-existing foundation already scoped this screen to.
- * No payment calculation, no event-finalization mutation, no Comanda, no
- * Socket.IO: all still out of scope, same as before this branch.
+ * merma reports (`GET /eventos/{id}/reportes-merma`), merma registration
+ * (`POST /eventos/{id}/reportes-merma`), and event finalization
+ * (`PATCH /eventos/{id}/estado` → `finalizado`) — product ownership for
+ * finalization was confirmed to belong here (see this branch's report),
+ * so that stale exclusion no longer applies. No payment calculation, no
+ * Comanda, no Socket.IO, no participant-salida mutation: all still out of
+ * scope, same as before this branch.
  */
 export function EventClosurePage() {
   const { id } = useParams<{ id: string }>()
@@ -40,6 +44,7 @@ export function EventClosurePage() {
   const readinessQuery = useEventClosureReadinessQuery(idEvento)
   const mermaReportsQuery = useMermaReportsQuery(idEvento)
   const createMermaReportMutation = useCreateMermaReportMutation(idEvento ?? -1)
+  const finalizeEventoMutation = useFinalizeEventoMutation(idEvento ?? -1)
   // A plain ref, not `createMermaReportMutation.isPending`: TanStack
   // Query's mutation state updates through its own external store and is
   // not guaranteed to have flushed between two synchronous clicks, unlike
@@ -47,6 +52,22 @@ export function EventClosurePage() {
   // the isolated repro that motivated this over the more obvious
   // `isPending` check.
   const isSubmittingRef = useRef(false)
+  // Same reasoning and same fix as `isSubmittingRef` above, applied to the
+  // one other real mutation this page owns.
+  const isFinalizingRef = useRef(false)
+
+  /**
+   * UX-only role gate — sourced from the real, already-authenticated OIDC
+   * session (`rol` claim), never a fabricated or assumed value. Mirrors
+   * `EventDetailPage`'s `canManageComanda`: this cannot and does not
+   * compensate for the pinned backend's confirmed per-event ownership gap
+   * on `PATCH /eventos/{id}/estado` — the backend route role guard remains
+   * the actual authorization boundary.
+   */
+  const session = useOidcSessionStore((state) => state.session)
+  const canFinalizeEvento =
+    session.status === 'authenticated' &&
+    (session.user.rol === 'capitan' || session.user.rol === 'admin')
 
   const notFound = idEvento === null || isEventoNotFoundError(eventDetailQuery.error)
   const evento = notFound ? null : (eventDetailQuery.data ?? null)
@@ -88,6 +109,18 @@ export function EventClosurePage() {
     }
   }
 
+  function handleFinalizeEvento() {
+    if (idEvento === null || isFinalizingRef.current) {
+      return
+    }
+    isFinalizingRef.current = true
+    finalizeEventoMutation.mutate(undefined, {
+      onSettled: () => {
+        isFinalizingRef.current = false
+      },
+    })
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <EventClosureContent
@@ -103,6 +136,16 @@ export function EventClosurePage() {
           ? {
               wasteReportErrorMessage: toSafeErrorMessage(
                 createMermaReportMutation.error,
+              ),
+            }
+          : {})}
+        canFinalizeEvento={canFinalizeEvento}
+        onFinalizeEvento={handleFinalizeEvento}
+        isFinalizingEvento={finalizeEventoMutation.isPending}
+        {...(finalizeEventoMutation.isError
+          ? {
+              finalizeEventoErrorMessage: toSafeErrorMessage(
+                finalizeEventoMutation.error,
               ),
             }
           : {})}

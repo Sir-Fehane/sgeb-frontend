@@ -192,14 +192,17 @@ export const router = createBrowserRouter([
         /*
          * Event Closure — "Cierre del evento"
          * (feature/event-closure-ui-foundation). Closure-readiness
-         * diagnostics (`GET /eventos/{id}/cierre`) and merma reporting
-         * (`GET/POST /eventos/{id}/reportes-merma`) only — no payment
-         * calculation/mutation (a separate future
-         * `feature/event-payments-ui-foundation`), no event-finalization
-         * mutation, no W-08 (Bebidas y Cubaitor, still deferred). Same
-         * positive integer SGEB event id as the other `eventos/:id/*`
-         * routes, parsed/validated inside `EventClosurePage`, not here.
-         * `/cubaitor`, `/bebidas`, `/pagos` remain unregistered.
+         * diagnostics (`GET /eventos/{id}/cierre`), merma reporting
+         * (`GET/POST /eventos/{id}/reportes-merma`), and event
+         * finalization (`PATCH /eventos/{id}/estado` → `finalizado`,
+         * feature/closure-event-finalization — product ownership
+         * confirmed to belong here, see that branch's report). Still no
+         * payment calculation/mutation (a separate future
+         * `feature/event-payments-ui-foundation`), no W-08 (Bebidas y
+         * Cubaitor, still deferred). Same positive integer SGEB event id
+         * as the other `eventos/:id/*` routes, parsed/validated inside
+         * `EventClosurePage`, not here. `/cubaitor`, `/bebidas`, `/pagos`
+         * remain unregistered.
          */
         path: 'eventos/:id/cierre',
         lazy: async () => {

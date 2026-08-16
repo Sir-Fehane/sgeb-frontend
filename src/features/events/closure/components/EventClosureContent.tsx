@@ -4,6 +4,7 @@ import { EventDetailSection } from '@/features/events/components/EventDetailSect
 import { EventDetailUnavailableState } from '@/features/events/components/EventDetailUnavailableState'
 import { EventClosureCleanupSection } from '@/features/events/closure/components/EventClosureCleanupSection'
 import { EventClosureErrorState } from '@/features/events/closure/components/EventClosureErrorState'
+import { EventClosureFinalizeSection } from '@/features/events/closure/components/EventClosureFinalizeSection'
 import { EventClosureHeader } from '@/features/events/closure/components/EventClosureHeader'
 import { EventClosureLoadingState } from '@/features/events/closure/components/EventClosureLoadingState'
 import { EventClosureReadinessSection } from '@/features/events/closure/components/EventClosureReadinessSection'
@@ -30,14 +31,23 @@ export interface EventClosureContentProps {
   isSubmittingWasteReport?: boolean
   /** A safe, user-facing message for the most recent failed `POST /reportes-merma` attempt — never `technical_message`. Scoped to the form only, distinct from `errorMessage` (a whole-page read failure). */
   wasteReportErrorMessage?: string
+  /** UX-only `capitan`/`admin` role gate for the "Finalizar evento" action — see `EventClosureFinalizeSection`'s own comment. */
+  canFinalizeEvento: boolean
+  onFinalizeEvento: () => void
+  isFinalizingEvento?: boolean
+  /** A safe, user-facing message for the most recent failed `PATCH /estado` attempt — never `technical_message`. */
+  finalizeEventoErrorMessage?: string
 }
 
 /**
  * The reusable presentational composition — header + readiness diagnostic
- * + cleanup contract-gap notice + merma reports + merma form, or exactly
- * one of loading / error / unavailable, selected purely from props. No
- * payment calculation, no payment mutation, no W-08, no event-finalization
- * mutation anywhere in this composition — see this feature's README.
+ * + finalize action + cleanup contract-gap notice + merma reports + merma
+ * form, or exactly one of loading / error / unavailable, selected purely
+ * from props. Still no payment calculation, no payment mutation, no W-08
+ * anywhere in this composition — see this feature's README. Event
+ * finalization (`en_curso → finalizado`) is the one state-machine mutation
+ * this composition now owns, via `EventClosureFinalizeSection` — see that
+ * component's own comment for the exact scope and backend contract.
  *
  * The one small addition for `feature/event-payments-ui-foundation`: a
  * restrained "Ir a pagos" link to `/eventos/{id}/pagos`, rendered ONLY
@@ -58,6 +68,10 @@ export function EventClosureContent({
   onSubmitWasteReport,
   isSubmittingWasteReport = false,
   wasteReportErrorMessage,
+  canFinalizeEvento,
+  onFinalizeEvento,
+  isFinalizingEvento = false,
+  finalizeEventoErrorMessage,
 }: EventClosureContentProps) {
   if (isLoading) {
     return <EventClosureLoadingState />
@@ -76,6 +90,16 @@ export function EventClosureContent({
       <EventClosureHeader idEvento={evento.idEvento} tituloEvento={evento.titulo} />
 
       <EventClosureReadinessSection readiness={readiness} />
+
+      <EventClosureFinalizeSection
+        estado={evento.estado}
+        canFinalize={canFinalizeEvento}
+        onFinalize={onFinalizeEvento}
+        isFinalizing={isFinalizingEvento}
+        {...(finalizeEventoErrorMessage
+          ? { errorMessage: finalizeEventoErrorMessage }
+          : {})}
+      />
 
       {readiness.listo ? (
         <Button asChild variant="outline" size="sm" className="w-fit">
