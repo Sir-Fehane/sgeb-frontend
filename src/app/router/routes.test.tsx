@@ -619,6 +619,76 @@ describe('/eventos/:id/montaje renders the Event Montage UI inside AppShell', ()
   })
 })
 
+describe('/eventos/:id/operacion-en-vivo renders the Live Operations UI inside AppShell', () => {
+  it('renders the AppShell chrome and the live operations content for a known fixture id', async () => {
+    await renderAt('/eventos/1001/operacion-en-vivo')
+
+    expect(
+      screen.getByRole('navigation', { name: 'Navegación principal' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('banner')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Operación en vivo' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('keeps the Topbar h1 as "Eventos" for the nested live-operations route', async () => {
+    await renderAt('/eventos/1001/operacion-en-vivo')
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Eventos' })).toBeInTheDocument()
+  })
+
+  it('renders the unavailable state for a malformed event id', async () => {
+    await renderAt('/eventos/not-a-number/operacion-en-vivo')
+
+    expect(screen.getByText('No encontramos el evento solicitado.')).toBeInTheDocument()
+  })
+
+  it('renders the unavailable state for a well-formed id with no matching event', async () => {
+    await renderAt('/eventos/999999/operacion-en-vivo')
+
+    expect(
+      await screen.findByText('No encontramos el evento solicitado.'),
+    ).toBeInTheDocument()
+  })
+
+  it('/eventos/:id still works — is not shadowed by the operacion-en-vivo child route', async () => {
+    await renderAt('/eventos/1001')
+
+    expect(
+      await screen.findByRole('heading', {
+        level: 2,
+        name: 'Evento de demostración — boda',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 2, name: 'Operación en vivo' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('/eventos/:id/montaje still works — is not shadowed by the operacion-en-vivo sibling route', async () => {
+    await renderAt('/eventos/1001/montaje')
+
+    expect(
+      await screen.findByRole('heading', {
+        level: 2,
+        name: 'Montaje y asignación de mesas',
+      }),
+    ).toBeInTheDocument()
+  })
+
+  it('does not register a duplicate /eventos/:id/vivo alias route', async () => {
+    await renderAt('/eventos/1001/vivo')
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
+  })
+})
+
 describe('/eventos/:id/cierre renders the Event Closure UI inside AppShell', () => {
   it('renders the AppShell chrome and the closure content for a known fixture id', async () => {
     await renderAt('/eventos/1001/cierre')

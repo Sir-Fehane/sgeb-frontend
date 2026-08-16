@@ -244,6 +244,7 @@ describe('EventDetailContent — operation roadmap', () => {
       'Selección de equipo',
       'Pase de lista',
       'Montaje / asignación de mesas',
+      'Operación en vivo',
       'Bebidas y Cubaitor',
       'Cierre',
       'Pagos',

@@ -30,6 +30,7 @@ const ROADMAP_ITEMS: readonly RoadmapItem[] = [
   { label: 'Selección de equipo', slug: 'equipo' },
   { label: 'Pase de lista', slug: 'pase-de-lista' },
   { label: 'Montaje / asignación de mesas', slug: 'montaje' },
+  { label: 'Operación en vivo', slug: 'operacion-en-vivo' },
   { label: 'Bebidas y Cubaitor', slug: null },
   { label: 'Cierre', slug: 'cierre' },
   { label: 'Pagos', slug: 'pagos' },

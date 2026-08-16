@@ -74,13 +74,23 @@ export type NavItemConfig = AvailableNavItemConfig | PendingNavItemConfig
  * `status: 'available'`. The other three are `status: 'route-pending'`
  * with `href: null` — their eventual information architecture is a real
  * open question, not a naming detail this frontend gets to decide:
- *   - "Operación en vivo" may need an active-event context (i.e. never a
- *     standalone top-level route at all).
+ *   - "Operación en vivo" needed an active-event context, confirmed by
+ *     `feature/live-operations-participant-exit`: it is now a real,
+ *     registered route — but only the event-scoped
+ *     `/eventos/:id/operacion-en-vivo` (reached from Event Detail's
+ *     roadmap section, `EventDetailRoadmapSection`), never a standalone
+ *     top-level one. This sidebar entry deliberately stays
+ *     `route-pending`/`href: null`: there is no event context here to
+ *     build a static `href` from — exactly the same situation "Pagos"
+ *     (below) already resolved the same way once `/eventos/:id/pagos`
+ *     shipped.
  *   - "Bebidas y Cubaitor" may end up as two destinations (`/menu` +
  *     `/cubaitor`, both already documented separately) or one parent nav
  *     group over both.
- *   - "Pagos" is only documented nested as `/eventos/:id/pagos` — a
- *     global cross-event view may or may not be built.
+ *   - "Pagos" is only documented nested as `/eventos/:id/pagos` (already
+ *     registered) — a global cross-event view may or may not be built;
+ *     until it is, this entry correctly stays `route-pending` even though
+ *     a real nested route exists.
  * Do not invent a temporary slug for any of these — see `NavItem` for
  * how a pending item renders (visible, labeled "Ruta pendiente",
  * non-interactive).

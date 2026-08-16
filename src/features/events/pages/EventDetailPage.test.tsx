@@ -279,6 +279,10 @@ describe('EventDetailPage', () => {
       'href',
       '/eventos/1001/equipo',
     )
+    expect(screen.getByRole('link', { name: 'Operación en vivo' })).toHaveAttribute(
+      'href',
+      '/eventos/1001/operacion-en-vivo',
+    )
   })
 
   it('never calls the transport with a mutation method for a plain page load', async () => {

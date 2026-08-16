@@ -43,19 +43,22 @@ export const router = createBrowserRouter([
     /**
      * Authenticated shell, guarded at `AppShellLayout` — every route below
      * requires a resolved, authenticated OIDC session before its content
-     * mounts (`feature/private-route-guard`). Only the 4 nav
-     * items with an approved top-level route in
-     * docs/FrontendArchitecture.md §17 get a child route here ("Operación
-     * en vivo", "Bebidas y Cubaitor", and "Pagos" do not — see the
-     * comment on `NAV_ITEMS` in shared/components/layout/nav-items.ts).
-     * `panel`, `eventos`, `eventos/:id`, `eventos/:id/equipo`,
-     * `eventos/:id/pase-de-lista`, `eventos/:id/montaje`,
+     * mounts (`feature/private-route-guard`). Only the 4 nav items with an
+     * approved top-level, global-sidebar route in
+     * docs/FrontendArchitecture.md §17 are `status: 'available'` in
+     * `NAV_ITEMS` ("Operación en vivo" and "Pagos" both now have a real
+     * *event-scoped* child route here, but neither has a standalone
+     * top-level destination — see the comment on `NAV_ITEMS` in
+     * shared/components/layout/nav-items.ts for why that's a deliberate,
+     * unrelated decision, not an oversight). `panel`, `eventos`,
+     * `eventos/:id`, `eventos/:id/equipo`, `eventos/:id/pase-de-lista`,
+     * `eventos/:id/montaje`, `eventos/:id/operacion-en-vivo`,
      * `eventos/:id/cierre`, `eventos/:id/pagos`, `meseros` and `reportes`
      * render the real, presentation-only dashboard/events/event-detail/
-     * team-selection/attendance/montage/closure/payments/waiters/reports
-     * features (features/dashboard, features/events, features/waiters,
-     * features/reports) — every child now renders a real page, not the
-     * shared development placeholder.
+     * team-selection/attendance/montage/live-operations/closure/payments/
+     * waiters/reports features (features/dashboard, features/events,
+     * features/waiters, features/reports) — every child now renders a real
+     * page, not the shared development placeholder.
      */
     errorElement: <RouteErrorBoundary />,
     hydrateFallbackElement: <RouteHydrateFallback />,
@@ -152,6 +155,37 @@ export const router = createBrowserRouter([
           const { EventMontagePage } =
             await import('@/features/events/montage/pages/EventMontagePage')
           return { Component: EventMontagePage }
+        },
+      },
+      {
+        /*
+         * Operación en vivo — event-scoped live participant roster +
+         * captain/admin participant-exit action
+         * (feature/live-operations-participant-exit). Product ownership:
+         * this screen owns `Participacion.estado = 'salida'` (RF-32,
+         * `PATCH /participaciones/{id}/estado`), restricted to the one
+         * legal transition the pinned backend's state machine allows —
+         * `vinculo → salida`. No canonical slug was documented anywhere
+         * (`docs/FrontendArchitecture.md` §17 never listed one, and the
+         * `NAV_ITEMS` "Operación en vivo" entry was `route-pending` with no
+         * `href` — see that file's own comment); `operacion-en-vivo`
+         * follows this router's own kebab-case, Spanish-label-derived
+         * convention exactly (same as `pase-de-lista`, `montaje`,
+         * `cierre`). Reached from Event Detail's roadmap section
+         * (`EventDetailRoadmapSection`), not from the global sidebar — the
+         * global "Operación en vivo" `NAV_ITEMS` entry deliberately stays
+         * `route-pending`, same as "Pagos" — see that file's comment. No
+         * Socket.IO, no event-finalization action, no payment/montage/
+         * comanda mutation lives here — REST + targeted query invalidation
+         * only. Same positive integer SGEB event id as the other
+         * `eventos/:id/*` routes, parsed/validated inside
+         * `EventLiveOperationsPage`, not here.
+         */
+        path: 'eventos/:id/operacion-en-vivo',
+        lazy: async () => {
+          const { EventLiveOperationsPage } =
+            await import('@/features/events/live-operations/pages/EventLiveOperationsPage')
+          return { Component: EventLiveOperationsPage }
         },
       },
       {
