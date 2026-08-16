@@ -86,6 +86,34 @@ describe('useSelectParticipantMutation', () => {
     })
   })
 
+  it('succeeds and invalidates the roster even when the PATCH response omits usuario (the pinned backend does not preload it on this endpoint)', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0000', message: 'ok' },
+      data: {
+        id_participacion: 5001,
+        puesto: 'mesero',
+        estado: 'seleccionado',
+        checklist_ok: false,
+      },
+    })
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    const { result } = renderHook(() => useSelectParticipantMutation(1001), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    result.current.mutate(5001)
+
+    await waitFor(() => {
+      expect(result.current.isSuccess).toBe(true)
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: teamSelectionQueryKeys.list(1001),
+    })
+  })
+
   it('surfaces a SgebApplicationError (e.g. invalid transition) without invalidating the cache', async () => {
     const error = new SgebApplicationError(409, {
       code: 'SGEB-4011',

@@ -111,7 +111,12 @@ function fakeTransport(
           : participant,
       )
       const updated = roster.find((participant) => participant.id_participacion === id)
-      return Promise.resolve(successEnvelope(updated ?? null))
+      if (!updated) return Promise.resolve(successEnvelope(null))
+      // The pinned backend's `cambiarEstado` does not preload `usuario`
+      // (unlike `listarPorEvento`, which the GET branch above still
+      // serves unchanged) — the PATCH response omits it entirely.
+      const { usuario: _usuario, ...withoutUsuario } = updated
+      return Promise.resolve(successEnvelope(withoutUsuario))
     }
     throw new Error(`Unexpected requestSgeb call in test: ${JSON.stringify(config)}`)
   })

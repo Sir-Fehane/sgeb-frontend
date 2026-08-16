@@ -123,15 +123,18 @@ describe('selectParticipant', () => {
     })
   })
 
-  it('maps the updated participation in the response', async () => {
+  it('resolves to void even when the response omits usuario (the pinned backend does not preload it on this endpoint)', async () => {
     vi.mocked(requestSgeb).mockResolvedValue({
       result: { code: 'SGEB-0000', message: 'ok' },
-      data: { ...CANDIDATO_RECORD, estado: 'seleccionado' },
+      data: {
+        id_participacion: 5001,
+        puesto: 'mesero',
+        estado: 'seleccionado',
+        checklist_ok: false,
+      },
     })
 
-    const result = await selectParticipant(5001)
-
-    expect(result.estado).toBe('seleccionado')
+    await expect(selectParticipant(5001)).resolves.toBeUndefined()
   })
 
   it('throws a SgebNetworkError if the envelope carries null data on success (defensive guard)', async () => {

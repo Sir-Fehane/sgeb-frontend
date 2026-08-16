@@ -87,10 +87,20 @@ export async function fetchParticipaciones(
  * enum accepts five target values; `SelectParticipantRequest` only ever
  * supplies `'seleccionado'`, so the body is built here rather than passed
  * through from the caller — never forwards a view-model object.
+ *
+ * Resolves to `void`, not a mapped view model: the pinned backend's
+ * `ParticipacionService.cambiarEstado` loads the row without preloading
+ * `usuario` (unlike `listarPorEvento`/`obtener`, which do), so this
+ * response's `usuario` is absent. Running it through
+ * `mapParticipacionToViewModel` — which dereferences `record.usuario` —
+ * would throw and turn a successful backend transition into a rejected
+ * frontend mutation. The caller doesn't need the returned row anyway:
+ * success just triggers a roster invalidation/refetch
+ * (`useSelectParticipantMutation`), and that GET response is the one that
+ * actually preloads `usuario`. Same fix already applied to Live
+ * Operations' `markParticipantSalida`, which hits this identical endpoint.
  */
-export async function selectParticipant(
-  idParticipacion: number,
-): Promise<TeamSelectionParticipantViewModel> {
+export async function selectParticipant(idParticipacion: number): Promise<void> {
   const envelope = await requestSgeb<ParticipacionApiRecord>({
     url: `/participaciones/${String(idParticipacion)}/estado`,
     method: 'PATCH',
@@ -102,5 +112,4 @@ export async function selectParticipant(
     // assumed, same as `fetchEventoDetalle`.
     throw new SgebNetworkError('No pudimos interpretar la respuesta del servidor.')
   }
-  return mapParticipacionToViewModel(envelope.data)
 }
