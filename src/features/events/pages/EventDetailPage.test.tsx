@@ -8,6 +8,7 @@ import { EVENT_DETAIL_FIXTURES } from '@/features/events/fixtures/eventDetailFix
 import { EventDetailPage } from '@/features/events/pages/EventDetailPage'
 import type { ComandaApiRecord } from '@/features/events/services/comandaApi'
 import type { EventoApiRecord } from '@/features/events/services/eventsApi'
+import type { MesaApiRecord } from '@/features/events/services/mesasApi'
 import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { SgebApplicationError, SgebNetworkError } from '@/shared/api/sgebApiError'
 import { requestSgeb, type SgebRequestConfig } from '@/shared/api/sgebClient'
@@ -58,23 +59,34 @@ const COMANDA_NOT_FOUND = new SgebApplicationError(404, {
 })
 
 /**
- * Routes `/eventos/{id}` and `/eventos/{id}/comanda` to independent
- * scripted outcomes — `EventDetailPage` now fires both queries. Defaults
- * to a found event and "no active comanda" (the real backend's actual
- * `SGEB-3001` shape for that state, not a null-data guess).
+ * Routes `/eventos/{id}`, `/eventos/{id}/comanda`, and
+ * `/eventos/{id}/mesas` to independent scripted outcomes —
+ * `EventDetailPage` now fires all three queries. Defaults to a found
+ * event, "no active comanda" (the real backend's actual `SGEB-3001` shape
+ * for that state, not a null-data guess), and an empty mesas list.
  */
 function mockTransport(
   options: {
     eventoResult?: EventoApiRecord | Error
     comandaResult?: ComandaApiRecord | Error
+    mesasResult?: MesaApiRecord[] | Error
   } = {},
 ) {
-  const { eventoResult = RECORD, comandaResult = COMANDA_NOT_FOUND } = options
+  const {
+    eventoResult = RECORD,
+    comandaResult = COMANDA_NOT_FOUND,
+    mesasResult = [],
+  } = options
   vi.mocked(requestSgeb).mockImplementation((config: SgebRequestConfig) => {
     if (config.url.includes('/comanda')) {
       return comandaResult instanceof Error
         ? Promise.reject(comandaResult)
         : Promise.resolve(successEnvelope(comandaResult))
+    }
+    if (config.url.includes('/mesas')) {
+      return mesasResult instanceof Error
+        ? Promise.reject(mesasResult)
+        : Promise.resolve(successEnvelope(mesasResult))
     }
     return eventoResult instanceof Error
       ? Promise.reject(eventoResult)
@@ -418,5 +430,384 @@ describe('EventDetailPage — Comanda live wiring', () => {
     expect(
       screen.queryByRole('button', { name: 'Retirar comanda' }),
     ).not.toBeInTheDocument()
+  })
+})
+
+describe('EventDetailPage — edit (PUT /eventos/{id})', () => {
+  it('offers "Editar evento" to a capitán session for a non-terminal event', async () => {
+    authenticate('capitan')
+    mockTransport()
+
+    renderAt('/eventos/1001')
+
+    expect(
+      await screen.findByRole('button', { name: 'Editar evento' }),
+    ).toBeInTheDocument()
+  })
+
+  it('hides "Editar evento" for a mesero session (UX-only role gate)', async () => {
+    authenticate('mesero')
+    mockTransport()
+
+    renderAt('/eventos/1001')
+
+    await screen.findByRole('heading', { level: 2, name: 'Boda García' })
+    expect(
+      screen.queryByRole('button', { name: 'Editar evento' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('hides "Editar evento" once the event is finalizado — PUT would be rejected server-side', async () => {
+    authenticate('capitan')
+    mockTransport({ eventoResult: { ...RECORD, estado: 'finalizado' } })
+
+    renderAt('/eventos/1001')
+
+    await screen.findByRole('heading', { level: 2, name: 'Boda García' })
+    expect(
+      screen.queryByRole('button', { name: 'Editar evento' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('submits PUT /eventos/{id} with the edited fields, then closes the form and reflects the saved value', async () => {
+    authenticate('capitan')
+    const user = userEvent.setup()
+    // Stateful: the invalidated detail query refetches after the PUT
+    // succeeds, so the mock must remember the update rather than always
+    // replaying the original RECORD.
+    let currentRecord = RECORD
+    vi.mocked(requestSgeb).mockImplementation((config: SgebRequestConfig) => {
+      if (config.url === '/eventos/1001' && config.method === 'PUT') {
+        currentRecord = { ...RECORD, titulo: 'Título actualizado' }
+        return Promise.resolve(successEnvelope(currentRecord))
+      }
+      if (config.url.includes('/comanda')) return Promise.reject(COMANDA_NOT_FOUND)
+      if (config.url.includes('/mesas')) return Promise.resolve(successEnvelope([]))
+      return Promise.resolve(successEnvelope(currentRecord))
+    })
+
+    renderAt('/eventos/1001')
+
+    await user.click(await screen.findByRole('button', { name: 'Editar evento' }))
+    await user.clear(screen.getByLabelText(/^Título/))
+    await user.type(screen.getByLabelText(/^Título/), 'Título actualizado')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    await waitFor(() => {
+      expect(
+        vi
+          .mocked(requestSgeb)
+          .mock.calls.some(
+            (call) => call[0].url === '/eventos/1001' && call[0].method === 'PUT',
+          ),
+      ).toBe(true)
+    })
+    const putCall = vi
+      .mocked(requestSgeb)
+      .mock.calls.find(
+        (call) => call[0].url === '/eventos/1001' && call[0].method === 'PUT',
+      )
+    expect(putCall?.[0].data).toMatchObject({ titulo: 'Título actualizado' })
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Título actualizado' }),
+    ).toBeInTheDocument()
+  })
+
+  it('a title-only edit by an admin session never sends uuidCapitan or comandaUrl — no silent captain reassignment', async () => {
+    // The dangerous scenario this guards against: the event belongs to some
+    // other captain, an admin opens it and edits only the title. Since no
+    // approved captain-selector UI exists, the PUT body must never carry
+    // `uuidCapitan` (which would silently reassign the event to the
+    // admin's own session) or `comandaUrl` (a resource with its own
+    // dedicated endpoints, never part of this form).
+    authenticate('admin')
+    const user = userEvent.setup()
+    vi.mocked(requestSgeb).mockImplementation((config: SgebRequestConfig) => {
+      if (config.url === '/eventos/1001' && config.method === 'PUT') {
+        return Promise.resolve(successEnvelope(RECORD))
+      }
+      if (config.url.includes('/comanda')) return Promise.reject(COMANDA_NOT_FOUND)
+      if (config.url.includes('/mesas')) return Promise.resolve(successEnvelope([]))
+      return Promise.resolve(successEnvelope(RECORD))
+    })
+
+    renderAt('/eventos/1001')
+
+    await user.click(await screen.findByRole('button', { name: 'Editar evento' }))
+    await user.clear(screen.getByLabelText(/^Título/))
+    await user.type(screen.getByLabelText(/^Título/), 'Título actualizado')
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    await waitFor(() => {
+      expect(
+        vi
+          .mocked(requestSgeb)
+          .mock.calls.some(
+            (call) => call[0].url === '/eventos/1001' && call[0].method === 'PUT',
+          ),
+      ).toBe(true)
+    })
+    const putCall = vi
+      .mocked(requestSgeb)
+      .mock.calls.find(
+        (call) => call[0].url === '/eventos/1001' && call[0].method === 'PUT',
+      )
+    const body = putCall?.[0].data as Record<string, unknown>
+    expect(body).not.toHaveProperty('uuidCapitan')
+    expect(body).not.toHaveProperty('comandaUrl')
+    // Exhaustive: the PUT body only ever carries fields this form owns.
+    expect(Object.keys(body)).toEqual(
+      expect.arrayContaining([
+        'titulo',
+        'tipo',
+        'cupoMeseros',
+        'numMesas',
+        'tarifaPorMesero',
+      ]),
+    )
+    expect(Object.keys(body).length).toBeLessThanOrEqual(6)
+  })
+
+  it('omits radioGeocercaM from the PUT body once the event is no longer borrador', async () => {
+    authenticate('capitan')
+    const user = userEvent.setup()
+    vi.mocked(requestSgeb).mockImplementation((config: SgebRequestConfig) => {
+      if (config.url === '/eventos/1001' && config.method === 'PUT') {
+        return Promise.resolve(successEnvelope(RECORD))
+      }
+      if (config.url.includes('/comanda')) return Promise.reject(COMANDA_NOT_FOUND)
+      if (config.url.includes('/mesas')) return Promise.resolve(successEnvelope([]))
+      // RECORD.estado is 'publicado' — not borrador.
+      return Promise.resolve(successEnvelope(RECORD))
+    })
+
+    renderAt('/eventos/1001')
+
+    await user.click(await screen.findByRole('button', { name: 'Editar evento' }))
+    expect(screen.getByLabelText(/^Radio de geocerca/)).toBeDisabled()
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
+
+    await waitFor(() => {
+      expect(requestSgeb).toHaveBeenCalledWith(
+        expect.objectContaining({ url: '/eventos/1001', method: 'PUT' }),
+      )
+    })
+    const putCall = vi
+      .mocked(requestSgeb)
+      .mock.calls.find((call) => call[0].method === 'PUT')
+    expect(putCall?.[0].data).not.toHaveProperty('radioGeocercaM')
+  })
+})
+
+describe('EventDetailPage — lifecycle (PATCH /eventos/{id}/estado)', () => {
+  it('publishing a borrador event PATCHes exactly { estado: "publicado" }', async () => {
+    authenticate('capitan')
+    const user = userEvent.setup()
+    vi.mocked(requestSgeb).mockImplementation((config: SgebRequestConfig) => {
+      if (config.url === '/eventos/1001/estado' && config.method === 'PATCH') {
+        return Promise.resolve(successEnvelope({ ...RECORD, estado: 'publicado' }))
+      }
+      if (config.url.includes('/comanda')) return Promise.reject(COMANDA_NOT_FOUND)
+      if (config.url.includes('/mesas')) return Promise.resolve(successEnvelope([]))
+      return Promise.resolve(successEnvelope({ ...RECORD, estado: 'borrador' }))
+    })
+
+    renderAt('/eventos/1001')
+
+    await user.click(await screen.findByRole('button', { name: 'Publicar evento' }))
+
+    await waitFor(() => {
+      expect(requestSgeb).toHaveBeenCalledWith({
+        url: '/eventos/1001/estado',
+        method: 'PATCH',
+        data: { estado: 'publicado' },
+      })
+    })
+  })
+
+  it('a rapid double-click only PATCHes once (duplicate-submit guard)', async () => {
+    authenticate('capitan')
+    const user = userEvent.setup()
+    let resolvePatch: (() => void) | undefined
+    vi.mocked(requestSgeb).mockImplementation((config: SgebRequestConfig) => {
+      if (config.url === '/eventos/1001/estado' && config.method === 'PATCH') {
+        return new Promise((resolve) => {
+          resolvePatch = () =>
+            resolve(successEnvelope({ ...RECORD, estado: 'publicado' }))
+        })
+      }
+      if (config.url.includes('/comanda')) return Promise.reject(COMANDA_NOT_FOUND)
+      if (config.url.includes('/mesas')) return Promise.resolve(successEnvelope([]))
+      return Promise.resolve(successEnvelope({ ...RECORD, estado: 'borrador' }))
+    })
+
+    renderAt('/eventos/1001')
+    const button = await screen.findByRole('button', { name: 'Publicar evento' })
+    await user.click(button)
+    await user.click(button)
+
+    resolvePatch?.()
+    await waitFor(() => {
+      const patchCalls = vi
+        .mocked(requestSgeb)
+        .mock.calls.filter((call) => call[0].url === '/eventos/1001/estado')
+      expect(patchCalls).toHaveLength(1)
+    })
+  })
+
+  it('cancelling requires confirmation before PATCHing { estado: "cancelado" }', async () => {
+    authenticate('capitan')
+    const user = userEvent.setup()
+    vi.mocked(requestSgeb).mockImplementation((config: SgebRequestConfig) => {
+      if (config.url === '/eventos/1001/estado' && config.method === 'PATCH') {
+        return Promise.resolve(successEnvelope({ ...RECORD, estado: 'cancelado' }))
+      }
+      if (config.url.includes('/comanda')) return Promise.reject(COMANDA_NOT_FOUND)
+      if (config.url.includes('/mesas')) return Promise.resolve(successEnvelope([]))
+      return Promise.resolve(successEnvelope(RECORD))
+    })
+
+    renderAt('/eventos/1001')
+
+    await user.click(await screen.findByRole('button', { name: 'Cancelar evento' }))
+    expect(
+      vi.mocked(requestSgeb).mock.calls.some((call) => call[0].url.includes('/estado')),
+    ).toBe(false)
+
+    await user.click(screen.getByRole('button', { name: 'Confirmar cancelación' }))
+    await waitFor(() => {
+      expect(requestSgeb).toHaveBeenCalledWith({
+        url: '/eventos/1001/estado',
+        method: 'PATCH',
+        data: { estado: 'cancelado' },
+      })
+    })
+  })
+
+  it('never renders a "Finalizar evento" action on Event Detail — finalization stays owned by Closure', async () => {
+    authenticate('capitan')
+    mockTransport({ eventoResult: { ...RECORD, estado: 'en_curso' } })
+
+    renderAt('/eventos/1001')
+
+    await screen.findByRole('heading', { level: 2, name: 'Boda García' })
+    expect(screen.queryByText(/Finalizar evento/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Finalizar/ })).not.toBeInTheDocument()
+  })
+
+  it('shows the real backend error and does not silently retry on failure', async () => {
+    authenticate('capitan')
+    const user = userEvent.setup()
+    const error = new SgebApplicationError(409, {
+      code: 'SGEB-4013',
+      message: 'Este evento no tiene mesas registradas.',
+    })
+    vi.mocked(requestSgeb).mockImplementation((config: SgebRequestConfig) => {
+      if (config.url === '/eventos/1001/estado' && config.method === 'PATCH') {
+        return Promise.reject(error)
+      }
+      if (config.url.includes('/comanda')) return Promise.reject(COMANDA_NOT_FOUND)
+      if (config.url.includes('/mesas')) return Promise.resolve(successEnvelope([]))
+      return Promise.resolve(successEnvelope({ ...RECORD, estado: 'borrador' }))
+    })
+
+    renderAt('/eventos/1001')
+
+    await user.click(await screen.findByRole('button', { name: 'Publicar evento' }))
+
+    expect(
+      await screen.findByText('Este evento no tiene mesas registradas.'),
+    ).toBeInTheDocument()
+    const patchCalls = vi
+      .mocked(requestSgeb)
+      .mock.calls.filter((call) => call[0].url === '/eventos/1001/estado')
+    expect(patchCalls).toHaveLength(1)
+  })
+})
+
+describe('EventDetailPage — minimal Mesa management', () => {
+  it('renders the real mesas list from GET /eventos/{id}/mesas', async () => {
+    authenticate('capitan')
+    mockTransport({
+      mesasResult: [
+        {
+          id_mesa: 501,
+          id_evento: 1001,
+          etiqueta: 'Mesa 1',
+          codigo_qr: '3f2a9c14-1234-4abc-89ab-000000000000',
+          nfc_uid: null,
+          estado: 'libre',
+        },
+      ],
+    })
+
+    renderAt('/eventos/1001')
+
+    expect(await screen.findByText('Mesa 1')).toBeInTheDocument()
+  })
+
+  it('hides the "Agregar mesa" form for a mesero session', async () => {
+    authenticate('mesero')
+    mockTransport()
+
+    renderAt('/eventos/1001')
+
+    await screen.findByRole('heading', { level: 2, name: 'Boda García' })
+    expect(screen.queryByRole('button', { name: 'Agregar mesa' })).not.toBeInTheDocument()
+  })
+
+  it('adding a mesa POSTs /eventos/{id}/mesas with exactly { etiqueta }, no client codigo_qr', async () => {
+    authenticate('capitan')
+    const user = userEvent.setup()
+    let mesaCreated = false
+    vi.mocked(requestSgeb).mockImplementation((config: SgebRequestConfig) => {
+      if (config.url === '/eventos/1001/mesas' && config.method === 'POST') {
+        mesaCreated = true
+        return Promise.resolve(
+          successEnvelope({
+            id_mesa: 501,
+            id_evento: 1001,
+            etiqueta: 'Mesa 1',
+            codigo_qr: '3f2a9c14-1234-4abc-89ab-000000000000',
+            nfc_uid: null,
+            estado: 'libre',
+          }),
+        )
+      }
+      if (config.url === '/eventos/1001/mesas') {
+        return Promise.resolve(
+          successEnvelope(mesaCreated ? [{ etiqueta: 'Mesa 1' }] : []),
+        )
+      }
+      if (config.url.includes('/comanda')) return Promise.reject(COMANDA_NOT_FOUND)
+      return Promise.resolve(successEnvelope(RECORD))
+    })
+
+    renderAt('/eventos/1001')
+
+    await user.type(await screen.findByLabelText(/^Etiqueta/), 'Mesa 1')
+    await user.click(screen.getByRole('button', { name: 'Agregar mesa' }))
+
+    await waitFor(() => {
+      expect(requestSgeb).toHaveBeenCalledWith({
+        url: '/eventos/1001/mesas',
+        method: 'POST',
+        data: { etiqueta: 'Mesa 1' },
+      })
+    })
+  })
+})
+
+describe('EventDetailPage — domain boundaries (zero scope creep)', () => {
+  it('never calls a Participant Exit, Team Selection, Attendance, Montage, Comanda-mutation, Payments, or Socket.IO endpoint on load', async () => {
+    authenticate('capitan')
+    mockTransport()
+
+    renderAt('/eventos/1001')
+
+    await screen.findByRole('heading', { level: 2, name: 'Boda García' })
+    for (const call of vi.mocked(requestSgeb).mock.calls) {
+      expect(call[0].url).not.toMatch(/participaciones|asignaciones|pagos|checklist/)
+    }
   })
 })

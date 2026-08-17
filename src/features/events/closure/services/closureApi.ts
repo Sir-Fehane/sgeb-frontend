@@ -3,7 +3,7 @@ import type {
   MermaReportViewModel,
   WasteType,
 } from '@/features/events/closure/types/closure'
-import type { EventoApiRecord } from '@/features/events/services/eventsApi'
+import { changeEventoEstado } from '@/features/events/services/eventsApi'
 import { SgebNetworkError } from '@/shared/api/sgebApiError'
 import { requestSgeb } from '@/shared/api/sgebClient'
 
@@ -168,39 +168,23 @@ export async function createMermaReport(
 }
 
 /**
- * `PATCH /eventos/{id_evento}/estado` — the real event-state-machine
- * endpoint (`app/modules/eventos/controllers/eventos_controller.ts`,
- * `EventoService.cambiarEstado`), called here for exactly the one
- * transition Closure owns: `en_curso → finalizado`. There is no existing
- * reusable helper for this endpoint (`services/eventsApi.ts` has none) —
- * this is not a general Event-state API, only the finalize action this
- * feature needs, per this branch's scope.
- *
- * The request body carries only `estado` — the server seals `fin` itself,
- * inside the same transaction as the state update
- * (`EventoService.cambiarEstado`, confirmed against the pinned backend).
- * The client never computes or sends a timestamp. `TRANSICIONES` makes
- * `finalizado` terminal (no valid transitions out) and rejects any
- * transition not already `en_curso` with `SGEB-4011` — so a repeated
- * submit against an already-finalized event surfaces as a normal
- * `SgebApplicationError`, not a silently-swallowed success.
+ * `PATCH /eventos/{id_evento}/estado` with `{ estado: 'finalizado' }` — the
+ * one transition Closure owns: `en_curso → finalizado`. Delegates to
+ * `eventsApi.ts`'s `changeEventoEstado`, the one shared implementation of
+ * this endpoint (added alongside the new lifecycle feature's
+ * publish/start/return-to-draft/cancel actions, which need the exact same
+ * request shape for the other transitions) — extracting it avoids two
+ * independent implementations of one endpoint without touching this
+ * function's own behavior, mutation, or tests: same URL, same method, same
+ * body, same null-data guard, same error propagation.
  *
  * The response echoes the updated `Evento`, but the caller does not read
- * it directly — Closure readiness / Event Detail / the events list only
- * ever learn the new state through their own authoritative refetch after
- * cache invalidation (`useFinalizeEventoMutation`), never from this
- * response body.
+ * it — Closure readiness / Event Detail / the events list only ever learn
+ * the new state through their own authoritative refetch after cache
+ * invalidation (`useFinalizeEventoMutation`), never from this response
+ * body — so this function keeps its existing `Promise<void>` signature
+ * rather than exposing `changeEventoEstado`'s return value.
  */
 export async function finalizeEvento(idEvento: number): Promise<void> {
-  const envelope = await requestSgeb<EventoApiRecord>({
-    url: `/eventos/${String(idEvento)}/estado`,
-    method: 'PATCH',
-    data: { estado: 'finalizado' },
-  })
-  if (envelope.data === null) {
-    // Never observed against the pinned backend — a successful state
-    // change always returns the updated Evento — guarded defensively
-    // rather than assumed, same as `createMermaReport`.
-    throw new SgebNetworkError('No pudimos interpretar la respuesta del servidor.')
-  }
+  await changeEventoEstado(idEvento, 'finalizado')
 }

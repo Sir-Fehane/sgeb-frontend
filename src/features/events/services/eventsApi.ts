@@ -212,3 +212,157 @@ export async function fetchEventoDetalle(
   }
   return mapEventoToDetail(envelope.data)
 }
+
+/**
+ * `POST /eventos` request body — exact field set confirmed against the
+ * pinned backend's `crearEventoValidator`
+ * (`app/modules/eventos/validators/evento_validator.ts`). Deliberately
+ * camelCase: this branch's reconciliation confirmed the real wire request
+ * is camelCase (`idSalon`, `uuidCapitan`, `horaPresentacion`, ...), not the
+ * snake_case `openapi-sgeb.yaml` documents — see this branch's report for
+ * the full CONFIRMED MISMATCH writeup (same kind of documented-vs-real gap
+ * already flagged for `costoEstimado` in
+ * `features/events/closure/services/closureApi.ts`).
+ *
+ * `uuidCapitan` is always present here (unlike the earlier field-validation
+ * prototype, where it was deliberately absent as "integration-owned") — it
+ * is now resolved from the authenticated session's own `sub` claim by the
+ * caller (`useCreateEventoMutation`), never a fabricated value or an
+ * unapproved captain-picker: the pinned backend has no endpoint to list
+ * other captains, and `EventoService.crear` accepts a `capitan`/`admin`
+ * self-assignment exactly like this.
+ *
+ * `comandaUrl` is intentionally omitted — comanda stays a strictly
+ * post-creation resource, uploaded from Event Detail
+ * (`EventDetailComandaSection`), never part of this request.
+ */
+export interface CreateEventoRequest {
+  idSalon: number
+  uuidCapitan: string
+  titulo: string
+  tipo: EventType
+  fecha: string
+  horaPresentacion: string
+  inicio: string
+  cupoMeseros: number
+  numMesas: number
+  tarifaPorMesero: number
+  radioGeocercaM: number
+}
+
+/**
+ * Creates a real event through the shared authenticated SGEB transport.
+ * The server always sets `estado: 'borrador'`
+ * (`EventoService.crear`) — this function never sends and the request type
+ * never accepts an `estado` field. No optimistic write: the caller only
+ * learns the created event's real id/state from this response, and the
+ * events list only learns of it through cache invalidation
+ * (`useCreateEventoMutation`), never a locally fabricated entry.
+ */
+export async function createEvento(
+  request: CreateEventoRequest,
+): Promise<EventDetailViewModel> {
+  const envelope = await requestSgeb<EventoApiRecord>({
+    url: '/eventos',
+    method: 'POST',
+    data: request,
+  })
+  if (envelope.data === null) {
+    // Never observed against the pinned backend — a successful creation
+    // always returns the created Evento — guarded defensively rather than
+    // assumed, same as `fetchEventoDetalle`.
+    throw new SgebNetworkError('No pudimos interpretar la respuesta del servidor.')
+  }
+  return mapEventoToDetail(envelope.data)
+}
+
+/**
+ * `PUT /eventos/{id_evento}` request body — a genuine *partial* update
+ * despite the HTTP verb (every field is optional in the pinned backend's
+ * `actualizarEventoValidator`). Deliberately narrower than `CreateEventoRequest`:
+ * `idSalon`/`fecha`/`horaPresentacion`/`inicio`/`estado` are not accepted by
+ * this endpoint at all (confirmed against the validator — sending them
+ * would just be silently stripped by VineJS, so this type never offers
+ * them to a caller). `uuidCapitan` is technically editable server-side but
+ * this feature never re-assigns captaincy from Event Detail — no UI exists
+ * for it, so it is omitted here too (see this branch's report for why: no
+ * approved captain-reassignment flow, same reasoning `EventCreateForm`
+ * already applied to the create side).
+ *
+ * `radioGeocercaM` carries its own state restriction the caller must
+ * respect: the pinned backend rejects the request with `SGEB-4013` if this
+ * key is present at all while `estado !== 'borrador'` — even if the value
+ * is unchanged. `EventEditForm`/`useUpdateEventoMutation` must omit this
+ * key entirely outside `borrador`, never merely disable the input while
+ * still submitting the current value.
+ */
+export interface UpdateEventoRequest {
+  titulo?: string
+  tipo?: EventType
+  cupoMeseros?: number
+  numMesas?: number
+  tarifaPorMesero?: number
+  radioGeocercaM?: number
+}
+
+/**
+ * Updates a real event through the shared authenticated SGEB transport.
+ * The pinned backend rejects this entirely once `estado` is `finalizado`
+ * or `cancelado` (`SGEB-4013`) — that restriction is enforced server-side;
+ * this function does not duplicate it client-side, it only surfaces
+ * whatever safe error the server returns.
+ */
+export async function updateEvento(
+  idEvento: number,
+  request: UpdateEventoRequest,
+): Promise<EventDetailViewModel> {
+  const envelope = await requestSgeb<EventoApiRecord>({
+    url: `/eventos/${String(idEvento)}`,
+    method: 'PUT',
+    data: request,
+  })
+  if (envelope.data === null) {
+    // Never observed against the pinned backend — guarded defensively
+    // rather than assumed, same as `createEvento`.
+    throw new SgebNetworkError('No pudimos interpretar la respuesta del servidor.')
+  }
+  return mapEventoToDetail(envelope.data)
+}
+
+/**
+ * `PATCH /eventos/{id_evento}/estado` — the real event-state-machine
+ * endpoint (`EventoService.cambiarEstado`), generalized to any of the five
+ * documented `estado` values. This is the one shared implementation for
+ * that endpoint: `features/events/closure/services/closureApi.ts`'s
+ * `finalizeEvento` (the pre-existing `en_curso → finalizado` transition
+ * Closure owns) delegates to this function rather than duplicating its own
+ * `requestSgeb` call — see that file's own comment for why this extraction
+ * was judged safe (identical request shape, no behavior change, Closure's
+ * own mutation/invalidation/tests are untouched).
+ *
+ * The request body carries only `estado` — never a client-computed `fin`;
+ * the server seals that itself for the `finalizado` transition. Confirmed
+ * transition table (`EventoService`'s own `TRANSICIONES`):
+ * `borrador → publicado|cancelado`, `publicado → en_curso|borrador|cancelado`,
+ * `en_curso → finalizado|cancelado`, `finalizado`/`cancelado` terminal. Any
+ * other transition rejects with `SGEB-4011` — this function does not
+ * pre-validate that table client-side; callers (each lifecycle action
+ * component) only ever offer the transitions valid for the event's current
+ * `estado`, and the server remains the authoritative enforcer regardless.
+ */
+export async function changeEventoEstado(
+  idEvento: number,
+  estado: EventStatus,
+): Promise<EventDetailViewModel> {
+  const envelope = await requestSgeb<EventoApiRecord>({
+    url: `/eventos/${String(idEvento)}/estado`,
+    method: 'PATCH',
+    data: { estado },
+  })
+  if (envelope.data === null) {
+    // Never observed against the pinned backend — guarded defensively
+    // rather than assumed, same as `createEvento`.
+    throw new SgebNetworkError('No pudimos interpretar la respuesta del servidor.')
+  }
+  return mapEventoToDetail(envelope.data)
+}

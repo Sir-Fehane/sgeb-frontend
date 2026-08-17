@@ -1,10 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 
 import {
   createEventFormSchema,
-  type EventCreateFieldPrototypeValues,
+  type EventCreateFormValues,
 } from '@/features/events/schemas/eventCreateSchema'
 import type { EventSalonOption } from '@/features/events/types/event'
 import {
@@ -17,42 +17,54 @@ import {
 } from '@/shared/components'
 
 export interface EventCreateFormProps {
-  onSubmit: (values: EventCreateFieldPrototypeValues) => void
+  /**
+   * May reject (e.g. a business-rule error from the real `POST /eventos`)
+   * — this form's own `submit` wrapper catches that and leaves the fields
+   * as the user left them, rather than resetting, so the caller's own
+   * error UI (`EventCreatePage`'s mutation error state) stays the single
+   * source of truth for what went wrong. Mirrors
+   * `EventClosureWasteForm`'s established `onSubmit` contract.
+   */
+  onSubmit: (values: EventCreateFormValues) => Promise<void>
   isSubmitting?: boolean
-  /** Dev fixtures on this branch — see features/events/fixtures. */
+  /** Live `GET /salones?activo=true` options — see `EventCreatePage`. */
   salones: readonly EventSalonOption[]
+  /**
+   * Auto-selects this salón id once it becomes available — used only by
+   * `EventCreatePage` to select the salón just created through
+   * `EventCreateSalonForm`'s inline fallback, without the caller reaching
+   * into this form's internal RHF state.
+   */
+  selectedSalonId?: number | undefined
 }
 
 /**
- * A field-validation prototype for a subset of `EventoCrear`, NOT the
- * approved event-creation workflow. The wireframe names the real flow
- * "Crear evento (5-step wizard)", but its exact step boundaries could
- * not be verified this session (no image rendering available for
- * docs/design/Diseño Web.pdf) — rather than invent step names/order,
- * every validated field is presented in one page purely to exercise the
- * validation rules. This is not a layout the user should expect to ship
- * as-is; see `EventCreateFieldPrototypePage` for the prototype framing.
+ * The real `POST /eventos` field set (see `eventCreateSchema.ts`), wired
+ * by `EventCreatePage` to the live salón list and the create mutation.
  *
- * `uuid_capitan` is intentionally absent — an integration-owned field; see
- * `eventCreateSchema.ts`'s comment for why. Comanda is absent for a
- * different, now-settled reason: the real contract never declares it at
- * creation at all (`docs/decisions.md` ADR-007; `openapi-sgeb.yaml`'s own
- * `EventoCrear` description) — it is uploaded afterward, from Event
- * Detail (`EventDetailComandaSection`), via a dedicated
+ * `uuid_capitan` is intentionally absent as a form field — it is resolved
+ * from the authenticated session, not typed in; see
+ * `eventCreateSchema.ts`'s comment. Comanda is absent for a settled
+ * reason: the real contract never declares it at creation at all
+ * (`docs/decisions.md` ADR-007; `openapi-sgeb.yaml`'s own `EventoCrear`
+ * description) — it is uploaded afterward, from Event Detail
+ * (`EventDetailComandaSection`), via a dedicated
  * `POST /eventos/{id}/comanda`.
  */
 export function EventCreateForm({
   onSubmit,
   isSubmitting = false,
   salones,
+  selectedSalonId,
 }: EventCreateFormProps) {
   const schema = useMemo(() => createEventFormSchema(salones), [salones])
 
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
-  } = useForm<EventCreateFieldPrototypeValues>({
+  } = useForm<EventCreateFormValues>({
     resolver: zodResolver(schema),
     defaultValues: {
       titulo: '',
@@ -62,10 +74,27 @@ export function EventCreateForm({
     },
   })
 
+  useEffect(() => {
+    if (selectedSalonId !== undefined) {
+      setValue('id_salon', selectedSalonId, { shouldValidate: true })
+    }
+  }, [selectedSalonId, setValue])
+
+  async function submit(values: EventCreateFormValues) {
+    try {
+      await onSubmit(values)
+    } catch {
+      // The caller's own error UI (`EventCreatePage`'s mutation error
+      // state) already surfaces what went wrong — this form just leaves
+      // the fields exactly as the user left them, so they can fix and
+      // resubmit rather than losing their input to a false reset.
+    }
+  }
+
   return (
     <form
       noValidate
-      onSubmit={(event) => void handleSubmit(onSubmit)(event)}
+      onSubmit={(event) => void handleSubmit(submit)(event)}
       className="flex flex-col gap-6"
     >
       <section className="flex flex-col gap-4">
@@ -205,7 +234,7 @@ export function EventCreateForm({
       <section className="flex flex-col gap-4">
         <SectionHeading>Capitán responsable</SectionHeading>
         <Text size="sm" className="text-muted-foreground">
-          La asignación de capitán se definirá al integrar autenticación y permisos.
+          Este evento quedará a tu nombre, a partir de tu sesión iniciada.
         </Text>
       </section>
 
@@ -218,7 +247,7 @@ export function EventCreateForm({
       </section>
 
       <Button type="submit" loading={isSubmitting} className="w-full sm:w-auto">
-        Validar borrador
+        Crear evento
       </Button>
     </form>
   )

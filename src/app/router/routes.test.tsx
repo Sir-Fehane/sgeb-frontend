@@ -72,6 +72,12 @@ const DETAIL_RECORD_3001: EventoApiRecord = {
  *
  * `/eventos/{1001,3001}/pagos` (`feature/payments-live-integration`)
  * resolves to an empty payments list — same reasoning again.
+ *
+ * `/eventos/{1001,3001}/mesas` (`feature/event-lifecycle-management`)
+ * resolves to an empty mesas list — same reasoning again. `/salones`
+ * resolves to one active salón, so `/eventos/nuevo`
+ * (`EventCreatePage`) reaches its real, populated form rather than its
+ * own error state.
  */
 function configureDefaultRequestSgebMock() {
   vi.mocked(requestSgeb).mockImplementation(
@@ -133,10 +139,37 @@ function configureDefaultRequestSgebMock() {
           data: [],
         })
       }
+      if (config.url === '/eventos/1001/mesas' || config.url === '/eventos/3001/mesas') {
+        return Promise.resolve({
+          result: { code: 'SGEB-0002', message: 'Sin resultados.' },
+          data: [],
+        })
+      }
       if (config.url === '/checklists') {
         return Promise.resolve({
           result: { code: 'SGEB-0002', message: 'Sin resultados.' },
           data: [],
+        })
+      }
+      if (config.url === '/salones') {
+        return Promise.resolve({
+          result: { code: 'SGEB-0000', message: 'ok' },
+          data: [
+            {
+              id_salon: 1,
+              nombre: 'Salón Roble',
+              calle: 'Calle 1',
+              cp: '00000',
+              colonia: 'Centro',
+              ciudad: 'CDMX',
+              estado: 'CDMX',
+              latitud: 19.4,
+              longitud: -99.1,
+              capacidad_max_mesas: 40,
+              capacidad_personas: 200,
+              activo: true,
+            },
+          ],
         })
       }
       return Promise.reject(
@@ -361,16 +394,16 @@ describe('/eventos renders the real events UI inside AppShell', () => {
     ).toBeInTheDocument()
   })
 
-  it('does not register /eventos/nuevo — the slug is only "Proposed", not confirmed', async () => {
+  it('registers /eventos/nuevo as the real event-creation page (feature/event-lifecycle-management), not /eventos/:id', async () => {
     await renderAt('/eventos/nuevo')
 
-    // Now matched by /eventos/:id (feature/event-detail-ui-foundation) —
-    // "nuevo" fails parseEventId's positive-integer check, so this
-    // renders the Event Detail feature's own unavailable state, not the
-    // global catch-all NotFoundPage. Either way, it is never a real
-    // creation page.
-    expect(screen.getByText('No encontramos el evento solicitado.')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Crear evento' })).not.toBeInTheDocument()
+    // No longer matched by /eventos/:id's `parseEventId` unavailable
+    // state — "nuevo" is now a real, static sibling route.
+    expect(
+      screen.queryByText('No encontramos el evento solicitado.'),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Crear evento' })).toBeInTheDocument()
+    expect(await screen.findByLabelText(/^Título/)).toBeInTheDocument()
   })
 })
 

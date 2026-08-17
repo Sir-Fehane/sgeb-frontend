@@ -84,6 +84,7 @@ export const createWasteReportSchema = z.object({
  * names are already the exact documented wire shape (see the schema's own
  * comment), so no further mapping layer is needed before this could be
  * sent as a real `POST /eventos/{id_evento}/reportes-merma` body, unlike
- * `EventCreateFieldPrototypeValues` which is deliberately incomplete.
+ * `EventCreateFormValues` which is deliberately incomplete (it omits the
+ * session-derived `uuid_capitan` — see that schema's own comment).
  */
 export type CreateWasteReportFormValues = z.infer<typeof createWasteReportSchema>

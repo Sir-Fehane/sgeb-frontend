@@ -1,14 +1,30 @@
+import { useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 
 import { EventDetailContent } from '@/features/events/components/EventDetailContent'
 import type { EventDetailComandaSectionProps } from '@/features/events/components/EventDetailComandaSection'
+import type {
+  EventDetailEditBundleProps,
+  EventDetailLifecycleBundleProps,
+} from '@/features/events/components/EventDetailContent'
+import type { EventDetailMesasSectionProps } from '@/features/events/components/EventDetailMesasSection'
+import { useChangeEventoEstadoMutation } from '@/features/events/queries/useChangeEventoEstadoMutation'
 import { useComandaQuery } from '@/features/events/queries/useComandaQuery'
+import { useCreateMesaMutation } from '@/features/events/queries/useCreateMesaMutation'
 import { useEventDetailQuery } from '@/features/events/queries/useEventDetailQuery'
+import { useMesasQuery } from '@/features/events/queries/useMesasQuery'
 import { useOpenComandaMutation } from '@/features/events/queries/useOpenComandaMutation'
 import { useRetireComandaMutation } from '@/features/events/queries/useRetireComandaMutation'
+import { useUpdateEventoMutation } from '@/features/events/queries/useUpdateEventoMutation'
 import { useUploadComandaMutation } from '@/features/events/queries/useUploadComandaMutation'
+import type { EventEditFormValues } from '@/features/events/schemas/eventEditSchema'
+import type { CreateMesaFormValues } from '@/features/events/schemas/mesaCreateSchema'
 import { isComandaNotFoundError } from '@/features/events/services/comandaApi'
-import { isEventoNotFoundError } from '@/features/events/services/eventsApi'
+import {
+  isEventoNotFoundError,
+  type UpdateEventoRequest,
+} from '@/features/events/services/eventsApi'
+import type { EventStatus } from '@/features/events/types/event'
 import { parseEventId } from '@/features/events/utils/parseEventId'
 import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
@@ -45,13 +61,12 @@ function toSafeErrorMessage(error: unknown): string {
  * fixture-backed foundation already did.
  *
  * Team Selection, Attendance, Montage, Closure, and Payments stay exactly
- * as this foundation already built them (`EventDetailRoadmapSection`) —
- * this branch replaces the source of `evento` and rebuilds Comanda
- * (`EventDetailComandaSection`) against the real 5-endpoint contract
- * (`docs/decisions.md` ADR-007): live metadata (`GET /comanda`, its own
- * query — kept separate from `evento`, see `SGEB_CODE`/`comandaQueryKeys`
- * comments), safe open/view, upload, and replace/retire. History/restore
- * are deliberately out of scope this branch.
+ * as this foundation already built them (`EventDetailRoadmapSection`).
+ * This branch (feature/event-lifecycle-management) adds real editing
+ * (`PUT /eventos/{id}`), minimal Mesa management (`GET`/`POST
+ * /eventos/{id}/mesas`), and lifecycle actions
+ * (`PATCH /eventos/{id}/estado` → publish/start/return-to-draft/cancel —
+ * finalization stays owned by Closure, never duplicated here).
  */
 export function EventDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -74,17 +89,52 @@ export function EventDetailPage() {
   const retireComandaMutation = useRetireComandaMutation(idEvento ?? -1)
   const openComandaMutation = useOpenComandaMutation(idEvento ?? -1)
 
+  const mesasQuery = useMesasQuery(idEvento)
+  const mesasData = mesasQuery.data ?? []
+  const mesasIsLoading = idEvento !== null && mesasQuery.isPending
+  const mesasHasRealError = idEvento !== null && mesasQuery.isError
+  const createMesaMutation = useCreateMesaMutation(idEvento ?? -1)
+
+  const updateEventoMutation = useUpdateEventoMutation(idEvento ?? -1)
+  const changeEstadoMutation = useChangeEventoEstadoMutation(idEvento ?? -1)
+
+  const [isEditing, setIsEditing] = useState(false)
+
+  // Plain refs, not `mutation.isPending` — mirrors `EventClosurePage`'s own
+  // `isSubmittingRef`/`isFinalizingRef`: TanStack Query's mutation state
+  // updates through its own external store and is not guaranteed to have
+  // flushed between two synchronous clicks, unlike a ref (immediate).
+  const isUpdatingRef = useRef(false)
+  const isTransitioningRef = useRef(false)
+  const isCreatingMesaRef = useRef(false)
+
   /**
    * UX-only role gate — sourced from the real, already-authenticated OIDC
    * session (`rol` claim, per `types/userInfo.ts`), never a fabricated or
-   * assumed value. See `EventDetailComandaSection`'s own `canManage`
-   * comment for why this cannot and does not compensate for the pinned
-   * backend's confirmed write-path ownership gap.
+   * assumed value. Shared across Comanda/Edit/Mesas/Lifecycle — all four
+   * apply the identical `capitan`/`admin` condition; this does not and
+   * cannot compensate for the pinned backend's confirmed write-path
+   * ownership gaps on `PUT /eventos/{id}`, `PATCH /eventos/{id}/estado`,
+   * and the mesa routes (see this branch's report).
    */
   const session = useOidcSessionStore((state) => state.session)
-  const canManageComanda =
+  const canManageEvent =
     session.status === 'authenticated' &&
     (session.user.rol === 'capitan' || session.user.rol === 'admin')
+
+  /**
+   * Edit and "add mesa" both additionally require the event to still be in
+   * a mutable state — the pinned backend rejects `PUT /eventos/{id}`
+   * entirely once `finalizado`/`cancelado` (`SGEB-4013`), and mesa
+   * creation the same. Hiding these controls in that state is a genuine
+   * UX improvement (there is nothing valid to submit), not a compensating
+   * security control.
+   */
+  const canManageActiveEvent =
+    canManageEvent &&
+    evento !== null &&
+    evento.estado !== 'finalizado' &&
+    evento.estado !== 'cancelado'
 
   async function handleOpenComanda(signal: AbortSignal, tab: Window | null) {
     await openComandaMutation.mutateAsync({ signal, tab })
@@ -98,15 +148,102 @@ export function EventDetailPage() {
     await retireComandaMutation.mutateAsync()
   }
 
+  async function handleUpdateEvento(values: EventEditFormValues) {
+    if (idEvento === null || isUpdatingRef.current) {
+      return
+    }
+    isUpdatingRef.current = true
+    try {
+      const request: UpdateEventoRequest = {
+        titulo: values.titulo,
+        tipo: values.tipo,
+        cupoMeseros: values.cupo_meseros,
+        numMesas: values.num_mesas,
+        tarifaPorMesero: values.tarifa_por_mesero,
+        // Omitted entirely outside `borrador` — see `UpdateEventoRequest`'s
+        // own comment for why merely disabling the input is not enough.
+        ...(evento?.estado === 'borrador'
+          ? { radioGeocercaM: values.radio_geocerca_m }
+          : {}),
+      }
+      await updateEventoMutation.mutateAsync(request)
+      setIsEditing(false)
+    } finally {
+      isUpdatingRef.current = false
+    }
+  }
+
+  function handleTransition(estado: EventStatus) {
+    if (idEvento === null || isTransitioningRef.current) {
+      return
+    }
+    isTransitioningRef.current = true
+    changeEstadoMutation.mutate(estado, {
+      onSettled: () => {
+        isTransitioningRef.current = false
+      },
+    })
+  }
+
+  async function handleCreateMesa(values: CreateMesaFormValues) {
+    if (idEvento === null || isCreatingMesaRef.current) {
+      return
+    }
+    isCreatingMesaRef.current = true
+    try {
+      await createMesaMutation.mutateAsync({
+        etiqueta: values.etiqueta,
+        ...(values.nfc_uid ? { nfcUid: values.nfc_uid } : {}),
+      })
+    } finally {
+      isCreatingMesaRef.current = false
+    }
+  }
+
   const comandaSectionProps: EventDetailComandaSectionProps = {
     comanda: comandaData,
     isLoading: comandaIsLoading,
-    canManage: canManageComanda,
+    canManage: canManageEvent,
     onOpen: handleOpenComanda,
     onUpload: handleUploadComanda,
     onRetire: handleRetireComanda,
     ...(comandaHasRealError
       ? { errorMessage: toSafeErrorMessage(comandaQuery.error) }
+      : {}),
+  }
+
+  const editBundleProps: EventDetailEditBundleProps = {
+    canEdit: canManageActiveEvent,
+    isEditing,
+    onToggleEdit: () => {
+      setIsEditing((previous) => !previous)
+    },
+    onSubmit: handleUpdateEvento,
+    isSubmitting: updateEventoMutation.isPending,
+    ...(updateEventoMutation.isError
+      ? { errorMessage: toSafeErrorMessage(updateEventoMutation.error) }
+      : {}),
+  }
+
+  const lifecycleBundleProps: EventDetailLifecycleBundleProps = {
+    canManage: canManageEvent,
+    ...(!mesasIsLoading && !mesasHasRealError ? { mesasCount: mesasData.length } : {}),
+    onTransition: handleTransition,
+    isTransitioning: changeEstadoMutation.isPending,
+    ...(changeEstadoMutation.isError
+      ? { errorMessage: toSafeErrorMessage(changeEstadoMutation.error) }
+      : {}),
+  }
+
+  const mesasSectionProps: EventDetailMesasSectionProps = {
+    mesas: mesasData,
+    isLoading: mesasIsLoading,
+    canManage: canManageActiveEvent,
+    onCreateMesa: handleCreateMesa,
+    isCreating: createMesaMutation.isPending,
+    ...(mesasHasRealError ? { errorMessage: toSafeErrorMessage(mesasQuery.error) } : {}),
+    ...(createMesaMutation.isError
+      ? { createErrorMessage: toSafeErrorMessage(createMesaMutation.error) }
       : {}),
   }
 
@@ -118,6 +255,9 @@ export function EventDetailPage() {
         {...(hasRealError ? { errorMessage: toSafeErrorMessage(detailQuery.error) } : {})}
         onRetry={() => void detailQuery.refetch()}
         comanda={comandaSectionProps}
+        edit={editBundleProps}
+        lifecycle={lifecycleBundleProps}
+        mesas={mesasSectionProps}
       />
     </div>
   )

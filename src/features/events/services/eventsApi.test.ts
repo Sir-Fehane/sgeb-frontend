@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  changeEventoEstado,
+  createEvento,
   isEventoNotFoundError,
   mapEventoToDetail,
   mapEventoToListItem,
+  updateEvento,
+  type CreateEventoRequest,
   type EventoApiRecord,
+  type UpdateEventoRequest,
 } from '@/features/events/services/eventsApi'
 import { SgebApplicationError, SgebNetworkError } from '@/shared/api/sgebApiError'
 import { requestSgeb } from '@/shared/api/sgebClient'
@@ -185,5 +190,176 @@ describe('fetchEventoDetalle', () => {
 
     const error = await fetchEventoDetalle(1001).catch((e: unknown) => e)
     expect(error).toBeInstanceOf(SgebNetworkError)
+  })
+})
+
+const CREATE_REQUEST: CreateEventoRequest = {
+  idSalon: 1,
+  uuidCapitan: 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+  titulo: 'Evento nuevo',
+  tipo: 'social',
+  fecha: '2099-01-10',
+  horaPresentacion: '16:00',
+  inicio: '2099-01-10T18:00:00',
+  cupoMeseros: 5,
+  numMesas: 10,
+  tarifaPorMesero: 400,
+  radioGeocercaM: 150,
+}
+
+describe('createEvento', () => {
+  it('POSTs /eventos with exactly the given camelCase body, no extra fields', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0001', message: 'Creado.' },
+      data: { ...RECORD, estado: 'borrador' },
+    })
+
+    await createEvento(CREATE_REQUEST)
+
+    expect(requestSgeb).toHaveBeenCalledTimes(1)
+    expect(requestSgeb).toHaveBeenCalledWith({
+      url: '/eventos',
+      method: 'POST',
+      data: CREATE_REQUEST,
+    })
+  })
+
+  it('never sends an estado field — the server always sets borrador', () => {
+    expect(CREATE_REQUEST).not.toHaveProperty('estado')
+  })
+
+  it('maps the created Evento to the detail view model', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0001', message: 'Creado.' },
+      data: { ...RECORD, estado: 'borrador' },
+    })
+
+    const result = await createEvento(CREATE_REQUEST)
+
+    expect(result.estado).toBe('borrador')
+    expect(result.idEvento).toBe(RECORD.id_evento)
+  })
+
+  it('throws a SgebNetworkError if the envelope carries null data on success (defensive guard)', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0001', message: 'Creado.' },
+      data: null,
+    })
+
+    await expect(createEvento(CREATE_REQUEST)).rejects.toBeInstanceOf(SgebNetworkError)
+  })
+
+  it('lets a SgebApplicationError (e.g. SGEB-4001 salón ocupado) propagate unchanged', async () => {
+    const error = new SgebApplicationError(409, {
+      code: 'SGEB-4001',
+      message: 'El salón ya tiene un evento en esa fecha.',
+    })
+    vi.mocked(requestSgeb).mockRejectedValue(error)
+
+    await expect(createEvento(CREATE_REQUEST)).rejects.toBe(error)
+  })
+})
+
+describe('updateEvento', () => {
+  it('PUTs /eventos/{id} with exactly the given body, no id_salon/fecha/inicio/estado', async () => {
+    const request: UpdateEventoRequest = { titulo: 'Título actualizado', numMesas: 12 }
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0000', message: 'ok' },
+      data: RECORD,
+    })
+
+    await updateEvento(1001, request)
+
+    expect(requestSgeb).toHaveBeenCalledTimes(1)
+    expect(requestSgeb).toHaveBeenCalledWith({
+      url: '/eventos/1001',
+      method: 'PUT',
+      data: request,
+    })
+  })
+
+  it('throws a SgebNetworkError if the envelope carries null data on success (defensive guard)', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0000', message: 'ok' },
+      data: null,
+    })
+
+    await expect(updateEvento(1001, {})).rejects.toBeInstanceOf(SgebNetworkError)
+  })
+
+  it('lets a SgebApplicationError (e.g. SGEB-4013 finalizado/cancelado) propagate unchanged', async () => {
+    const error = new SgebApplicationError(409, {
+      code: 'SGEB-4013',
+      message: 'El evento no admite esta operación en su estado actual.',
+    })
+    vi.mocked(requestSgeb).mockRejectedValue(error)
+
+    await expect(updateEvento(1001, { titulo: 'x' })).rejects.toBe(error)
+  })
+})
+
+describe('changeEventoEstado', () => {
+  it('PATCHes /eventos/{id}/estado with exactly { estado }, no extra fields, no client fin', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0000', message: 'ok' },
+      data: { ...RECORD, estado: 'publicado' },
+    })
+
+    await changeEventoEstado(1001, 'publicado')
+
+    expect(requestSgeb).toHaveBeenCalledTimes(1)
+    expect(requestSgeb).toHaveBeenCalledWith({
+      url: '/eventos/1001/estado',
+      method: 'PATCH',
+      data: { estado: 'publicado' },
+    })
+  })
+
+  it('works for every documented transition target', async () => {
+    for (const estado of ['borrador', 'publicado', 'en_curso', 'cancelado'] as const) {
+      vi.mocked(requestSgeb).mockResolvedValue({
+        result: { code: 'SGEB-0000', message: 'ok' },
+        data: { ...RECORD, estado },
+      })
+
+      await changeEventoEstado(1001, estado)
+
+      expect(requestSgeb).toHaveBeenLastCalledWith({
+        url: '/eventos/1001/estado',
+        method: 'PATCH',
+        data: { estado },
+      })
+    }
+  })
+
+  it('throws a SgebNetworkError if the envelope carries null data on success (defensive guard)', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0000', message: 'ok' },
+      data: null,
+    })
+
+    await expect(changeEventoEstado(1001, 'publicado')).rejects.toBeInstanceOf(
+      SgebNetworkError,
+    )
+  })
+
+  it('lets a SgebApplicationError (e.g. SGEB-4013 sin mesas) propagate unchanged', async () => {
+    const error = new SgebApplicationError(409, {
+      code: 'SGEB-4013',
+      message: 'Este evento no tiene mesas registradas.',
+    })
+    vi.mocked(requestSgeb).mockRejectedValue(error)
+
+    await expect(changeEventoEstado(1001, 'publicado')).rejects.toBe(error)
+  })
+
+  it('lets SGEB-4011 (invalid transition) propagate unchanged', async () => {
+    const error = new SgebApplicationError(409, {
+      code: 'SGEB-4011',
+      message: 'Esta transición de estado no es válida.',
+    })
+    vi.mocked(requestSgeb).mockRejectedValue(error)
+
+    await expect(changeEventoEstado(1001, 'finalizado')).rejects.toBe(error)
   })
 })

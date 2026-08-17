@@ -6,8 +6,11 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   EventDetailContent,
   type EventDetailContentProps,
+  type EventDetailEditBundleProps,
+  type EventDetailLifecycleBundleProps,
 } from '@/features/events/components/EventDetailContent'
 import type { EventDetailComandaSectionProps } from '@/features/events/components/EventDetailComandaSection'
+import type { EventDetailMesasSectionProps } from '@/features/events/components/EventDetailMesasSection'
 import type { EventDetailViewModel } from '@/features/events/types/event'
 
 const EVENTO_CON_COMANDA: EventDetailViewModel = {
@@ -58,15 +61,52 @@ function defaultComandaProps(): EventDetailComandaSectionProps {
   }
 }
 
+function defaultEditProps(): EventDetailEditBundleProps {
+  return {
+    canEdit: false,
+    isEditing: false,
+    onToggleEdit: vi.fn(),
+    onSubmit: vi.fn(),
+    isSubmitting: false,
+  }
+}
+
+function defaultLifecycleProps(): EventDetailLifecycleBundleProps {
+  return {
+    canManage: false,
+    onTransition: vi.fn(),
+    isTransitioning: false,
+  }
+}
+
+function defaultMesasProps(): EventDetailMesasSectionProps {
+  return {
+    mesas: [],
+    isLoading: false,
+    canManage: false,
+    onCreateMesa: vi.fn(),
+    isCreating: false,
+  }
+}
+
 function renderContent(
-  props: Omit<EventDetailContentProps, 'comanda'> & {
+  props: Omit<EventDetailContentProps, 'comanda' | 'edit' | 'lifecycle' | 'mesas'> & {
     comanda?: EventDetailComandaSectionProps
+    edit?: EventDetailEditBundleProps
+    lifecycle?: EventDetailLifecycleBundleProps
+    mesas?: EventDetailMesasSectionProps
   },
 ) {
-  const { comanda, ...rest } = props
+  const { comanda, edit, lifecycle, mesas, ...rest } = props
   return render(
     <MemoryRouter>
-      <EventDetailContent {...rest} comanda={comanda ?? defaultComandaProps()} />
+      <EventDetailContent
+        {...rest}
+        comanda={comanda ?? defaultComandaProps()}
+        edit={edit ?? defaultEditProps()}
+        lifecycle={lifecycle ?? defaultLifecycleProps()}
+        mesas={mesas ?? defaultMesasProps()}
+      />
     </MemoryRouter>,
   )
 }

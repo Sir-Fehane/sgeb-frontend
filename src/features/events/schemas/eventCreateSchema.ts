@@ -21,33 +21,26 @@ function todayIsoDate(): string {
 }
 
 /**
- * Mirrors a subset of `EventoCrear` (docs/api/openapi-sgeb.yaml v1.6.0)
- * as a **field-validation prototype**, not the approved creation
- * workflow — see `EventCreateFieldPrototypePage`. `uuid_capitan` is
- * deliberately absent here, not merely unvalidated — it is
- * **integration-owned**, meaning a future request-composition layer must
- * combine this prototype's validated values with it before the result is
- * a real `POST /eventos` payload:
+ * Client-side validation for the real `POST /eventos` creation flow
+ * (`EventCreateForm`/`EventCreatePage`). Covers every field this form
+ * captures directly; `uuid_capitan` is deliberately NOT one of them — it
+ * is resolved by `useCreateEventoMutation`'s caller from the authenticated
+ * session's own `sub` claim (self-service captain creation, the only
+ * captain-assignment flow this branch implements — see this branch's
+ * report for why no captain-picker exists: the pinned backend has no
+ * endpoint to list other captains).
  *
- * - `uuid_capitan`: required by the confirmed contract, but this
- *   prototype has no authentication, role resolution, or approved
- *   captain-selection wireframe to source it from (session-derived vs.
- *   an admin picker is still an open product question). No selector
- *   exists anywhere in this feature for it — adding one, or a fake
- *   captain list, would be guessing at an unapproved flow.
- *
- * `comanda_url` is NOT in this list — the current, settled contract
+ * `comanda_url` is NOT in this list either — the settled contract
  * (`docs/decisions.md` ADR-007) never declares a comanda field on
  * `EventoCrear` at all; it is uploaded afterward via a dedicated
  * `POST /eventos/{id}/comanda` from Event Detail
  * (`EventDetailComandaSection`), never as part of creation.
  *
- * `titulo`'s length rule is now confirmed by `openapi-sgeb.yaml` v1.6.0
- * (`minLength: 3, maxLength: 120`) — the previous 40-vs-120 conflict
- * against the data dictionary's raw column-type text is resolved in
- * favor of the OpenAPI schema, the definitive source of truth.
+ * `titulo`'s length rule is confirmed by `openapi-sgeb.yaml` v1.6.0
+ * (`minLength: 3, maxLength: 120`), and independently re-confirmed against
+ * the pinned backend's `crearEventoValidator`.
  *
- * Also includes two documented cross-field business rules, enforced
+ * Also includes three documented cross-field business rules, enforced
  * client-side as a first-pass check (the server remains authoritative):
  *
  * - SGEB-2007 — `fecha` must not be before today.
@@ -58,11 +51,14 @@ function todayIsoDate(): string {
  *   the schema is built by a factory rather than exported as a static
  *   constant.
  *
- * Field-name note: the schema's own keys use the exact documented
- * snake_case wire names (`id_salon`, `hora_presentacion`, etc.) since
- * this is the shape a future integration layer would send verbatim to
- * `POST /eventos` — see `EventCreateForm` for the camelCase UI-facing
- * field names RHF actually binds to.
+ * Field-name note: the schema's own keys stay snake_case
+ * (`id_salon`, `hora_presentacion`, etc.) for RHF binding — a CONFIRMED
+ * MISMATCH from the real, camelCase `POST /eventos` wire body
+ * (`idSalon`, `horaPresentacion`, ...; see `eventsApi.ts`'s
+ * `CreateEventoRequest` for the full writeup). `useCreateEventoMutation`'s
+ * caller is responsible for translating between the two, the same
+ * established pattern `closureApi.ts`'s `createMermaReport` already uses
+ * for its own camelCase `costoEstimado` translation.
  */
 export function createEventFormSchema(salones: readonly EventSalonOption[]) {
   return z
@@ -165,21 +161,11 @@ export function createEventFormSchema(salones: readonly EventSalonOption[]) {
 }
 
 /**
- * NOT the `EventoCrear` request DTO, and NOT an `EventoCrearRequest`/
- * `EventoCrearDto` — this is the value shape of the field-validation
- * prototype only, and it is incomplete relative to `EventoCrear`. It
- * deliberately omits the one remaining integration-owned field
- * (`uuid_capitan` — see `createEventFormSchema`'s comment for why), and
- * has never been confirmed against the real five-step wireframe. Do
- * not use this type to construct a `POST /eventos` payload directly; a
- * future request-composition layer must combine these validated values
- * with `uuid_capitan` (from the authenticated captain or an approved
- * admin-selection flow) before the result is a real `EventoCrear`
- * request. No such mapper exists yet — that is a later branch's job,
- * once the wizard's actual steps and that field are resolved. Comanda
- * is not part of this payload at all — see `createEventFormSchema`'s
- * comment.
+ * The form's own validated value shape — NOT the `POST /eventos` request
+ * body verbatim (see `createEventFormSchema`'s field-name note: keys stay
+ * snake_case here, the real wire body is camelCase). `useCreateEventoMutation`'s
+ * caller combines these values with the session-derived `uuidCapitan` to
+ * build the real `CreateEventoRequest` (`eventsApi.ts`). Comanda is not
+ * part of this payload at all — see `createEventFormSchema`'s comment.
  */
-export type EventCreateFieldPrototypeValues = z.infer<
-  ReturnType<typeof createEventFormSchema>
->
+export type EventCreateFormValues = z.infer<ReturnType<typeof createEventFormSchema>>

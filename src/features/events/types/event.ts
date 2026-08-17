@@ -8,7 +8,7 @@
  * refactor/events-contract-v1-6's report for the exact corrections this
  * made — most notably, this list model no longer carries any captain
  * identifier at all; see `EventListItemViewModel`'s own comment for why,
- * and `EventCreateFieldPrototypeValues`/`createEventFormSchema` for
+ * and `EventCreateFormValues`/`createEventFormSchema` for
  * where the confirmed `uuid_capitan` requirement actually lives).
  *
  * Documentation gap (flagged, not resolved): neither source defines a
@@ -79,13 +79,13 @@ export interface EventSalonOption {
  * display-only convenience, not a mirror of any wire field) is what the
  * list renders. The confirmed `uuid_capitan` requirement is documented
  * where it genuinely belongs instead — see
- * `EventCreateFieldPrototypeValues` and `createEventFormSchema` in
+ * `EventCreateFormValues` and `createEventFormSchema` in
  * `features/events/schemas/eventCreateSchema.ts`.
  *
- * `comandaUrl` is deliberately absent for the same reason: the
- * upload/authoring workflow for that field is unresolved (see
- * `EventCreateFieldPrototypePage`), so this presentation model does not
- * carry it either.
+ * `comandaUrl` is deliberately absent for the same reason: the real
+ * contract never declares it at creation at all (`docs/decisions.md`
+ * ADR-007) — it is uploaded afterward, from Event Detail, so this
+ * presentation model does not carry it either.
  */
 export interface EventListItemViewModel {
   idEvento: number

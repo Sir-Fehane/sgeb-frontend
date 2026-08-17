@@ -41,7 +41,7 @@ describe('EventCreateForm', () => {
     const user = userEvent.setup()
     const { onSubmit } = renderForm()
 
-    await user.click(screen.getByRole('button', { name: 'Validar borrador' }))
+    await user.click(screen.getByRole('button', { name: 'Crear evento' }))
 
     expect(await screen.findAllByRole('alert')).not.toHaveLength(0)
     expect(onSubmit).not.toHaveBeenCalled()
@@ -52,7 +52,7 @@ describe('EventCreateForm', () => {
     const { onSubmit } = renderForm()
 
     await fillValidForm(user, { titulo: 'ab' })
-    await user.click(screen.getByRole('button', { name: 'Validar borrador' }))
+    await user.click(screen.getByRole('button', { name: 'Crear evento' }))
 
     expect(await screen.findByText(/al menos 3 caracteres/)).toBeInTheDocument()
     expect(onSubmit).not.toHaveBeenCalled()
@@ -63,7 +63,7 @@ describe('EventCreateForm', () => {
     const { onSubmit } = renderForm()
 
     await fillValidForm(user, { titulo: 'abc' })
-    await user.click(screen.getByRole('button', { name: 'Validar borrador' }))
+    await user.click(screen.getByRole('button', { name: 'Crear evento' }))
 
     expect(onSubmit).toHaveBeenCalledOnce()
   })
@@ -74,7 +74,7 @@ describe('EventCreateForm', () => {
 
     const exactly120 = 'T'.repeat(120)
     await fillValidForm(user, { titulo: exactly120 })
-    await user.click(screen.getByRole('button', { name: 'Validar borrador' }))
+    await user.click(screen.getByRole('button', { name: 'Crear evento' }))
 
     expect(onSubmit).toHaveBeenCalledOnce()
     const [payload] = onSubmit.mock.calls[0] as [Record<string, unknown>]
@@ -97,7 +97,7 @@ describe('EventCreateForm', () => {
     fireEvent.change(screen.getByLabelText(/^Título/), {
       target: { value: 'T'.repeat(121) },
     })
-    await user.click(screen.getByRole('button', { name: 'Validar borrador' }))
+    await user.click(screen.getByRole('button', { name: 'Crear evento' }))
 
     expect(await screen.findByText(/no puede superar 120 caracteres/)).toBeInTheDocument()
     expect(onSubmit).not.toHaveBeenCalled()
@@ -110,7 +110,7 @@ describe('EventCreateForm', () => {
     // Salón fixture id=1 ("Salón Roble") has capacidadMaxMesas: 40 — 50
     // stays within num_mesas' own 1-255 range but exceeds that capacity.
     await fillValidForm(user, { numMesas: '50' })
-    await user.click(screen.getByRole('button', { name: 'Validar borrador' }))
+    await user.click(screen.getByRole('button', { name: 'Crear evento' }))
 
     expect(
       await screen.findByText(/no puede superar la capacidad del salón/),
@@ -123,7 +123,7 @@ describe('EventCreateForm', () => {
     const { onSubmit } = renderForm()
 
     await fillValidForm(user, { fecha: '2099-01-10', inicio: '2099-01-11T18:00' })
-    await user.click(screen.getByRole('button', { name: 'Validar borrador' }))
+    await user.click(screen.getByRole('button', { name: 'Crear evento' }))
 
     expect(
       await screen.findByText(/fecha de inicio debe coincidir con la fecha del evento/),
@@ -131,12 +131,12 @@ describe('EventCreateForm', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
-  it('invokes the supplied callback with only the fields this prototype actually captures, never fabricating uuid_capitan or comanda_url', async () => {
+  it('invokes the supplied callback with only the fields this form actually captures, never fabricating uuid_capitan or comanda_url', async () => {
     const user = userEvent.setup()
     const { onSubmit } = renderForm()
 
     await fillValidForm(user)
-    await user.click(screen.getByRole('button', { name: 'Validar borrador' }))
+    await user.click(screen.getByRole('button', { name: 'Crear evento' }))
 
     expect(onSubmit).toHaveBeenCalledOnce()
     const [payload] = onSubmit.mock.calls[0] as [Record<string, unknown>]
@@ -167,7 +167,7 @@ describe('EventCreateForm', () => {
     expect(document.querySelector('[name="token"]')).toBeNull()
   })
 
-  it('does not render a captain selector — uuid_capitan is integration-owned, not sourced from an unapproved picker', () => {
+  it('does not render a captain selector — uuid_capitan is resolved from the session, never a picker', () => {
     renderForm()
 
     expect(screen.queryByLabelText(/^Capitán/)).not.toBeInTheDocument()
@@ -175,7 +175,7 @@ describe('EventCreateForm', () => {
     expect(document.querySelector('[name="id_capitan"]')).toBeNull()
     expect(
       screen.getByText(
-        'La asignación de capitán se definirá al integrar autenticación y permisos.',
+        'Este evento quedará a tu nombre, a partir de tu sesión iniciada.',
       ),
     ).toBeInTheDocument()
   })

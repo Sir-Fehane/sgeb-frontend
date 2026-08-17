@@ -84,6 +84,23 @@ export const router = createBrowserRouter([
       },
       {
         /*
+         * Event Create (feature/event-lifecycle-management) —
+         * `POST /eventos` wired for real, replacing the retired
+         * `EventCreateFieldPrototypePage`. Registered as a static sibling
+         * of `eventos/:id` (React Router resolves static segments before
+         * dynamic params regardless of array order, but this stays ahead
+         * of it for readability) so the literal path `nuevo` is never
+         * parsed as an event id.
+         */
+        path: 'eventos/nuevo',
+        lazy: async () => {
+          const { EventCreatePage } =
+            await import('@/features/events/pages/EventCreatePage')
+          return { Component: EventCreatePage }
+        },
+      },
+      {
+        /*
          * Event Detail (feature/event-detail-ui-foundation) — the route
          * value is a positive integer SGEB event id (never a UUID; only
          * USUARIO's public identifier is a UUID). Parsed/validated inside

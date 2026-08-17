@@ -1,12 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { EVENTOS_FIXTURE } from '@/features/events/fixtures/eventFixtures'
 import { EventsPage } from '@/features/events/pages/EventsPage'
 import type { EventoApiRecord } from '@/features/events/services/eventsApi'
+import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { SgebApplicationError, SgebNetworkError } from '@/shared/api/sgebApiError'
 import { requestSgeb } from '@/shared/api/sgebClient'
 
@@ -16,7 +17,16 @@ vi.mock('@/shared/api/sgebClient', () => ({
 
 beforeEach(() => {
   vi.mocked(requestSgeb).mockReset()
+  useOidcSessionStore.getState().reset()
 })
+
+function authenticate(rol: 'capitan' | 'admin' | 'mesero') {
+  useOidcSessionStore.getState().setAuthenticated({
+    accessToken: 'test-access-token',
+    accessTokenExpiresAt: Date.now() + 900_000,
+    user: { sub: 'uuid-test-user', rol },
+  })
+}
 
 function successEnvelope(data: EventoApiRecord[]) {
   return {
@@ -59,8 +69,14 @@ function renderPage() {
   })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter>
-        <EventsPage />
+      <MemoryRouter initialEntries={['/eventos']}>
+        <Routes>
+          <Route path="/eventos" element={<EventsPage />} />
+          <Route
+            path="/eventos/nuevo"
+            element={<div>Página de creación de evento</div>}
+          />
+        </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -186,14 +202,41 @@ describe('EventsPage', () => {
     expect(screen.getByText(/aún no está disponible en esta base/)).toBeInTheDocument()
   })
 
-  it('shows an honest inline notice instead of navigating when "Crear evento" is activated', async () => {
+  it('does not offer "Crear evento" to an unauthenticated session', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue(successEnvelope([RECORD_A]))
+    renderPage()
+
+    await screen.findByText('Boda García')
+    expect(screen.queryByRole('button', { name: 'Crear evento' })).not.toBeInTheDocument()
+  })
+
+  it('does not offer "Crear evento" to a mesero session (UX-only role gate)', async () => {
+    authenticate('mesero')
+    vi.mocked(requestSgeb).mockResolvedValue(successEnvelope([RECORD_A]))
+    renderPage()
+
+    await screen.findByText('Boda García')
+    expect(screen.queryByRole('button', { name: 'Crear evento' })).not.toBeInTheDocument()
+  })
+
+  it('navigates to the real, routed /eventos/nuevo when "Crear evento" is activated by a capitán session', async () => {
+    authenticate('capitan')
     vi.mocked(requestSgeb).mockResolvedValue(successEnvelope([RECORD_A]))
     const user = userEvent.setup()
     renderPage()
 
-    await user.click(screen.getByRole('button', { name: 'Crear evento' }))
+    await user.click(await screen.findByRole('button', { name: 'Crear evento' }))
 
-    expect(screen.getByText(/no está conectada a una ruta/)).toBeInTheDocument()
+    expect(await screen.findByText('Página de creación de evento')).toBeInTheDocument()
+  })
+
+  it('offers "Crear evento" to an admin session', async () => {
+    authenticate('admin')
+    vi.mocked(requestSgeb).mockResolvedValue(successEnvelope([RECORD_A]))
+    renderPage()
+
+    await screen.findByText('Boda García')
+    expect(screen.getByRole('button', { name: 'Crear evento' })).toBeInTheDocument()
   })
 
   it('renders a "Ver detalle" link to /eventos/{id} for each visible event', async () => {
