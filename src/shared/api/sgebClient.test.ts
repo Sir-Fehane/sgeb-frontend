@@ -74,6 +74,7 @@ function createTestClient(depsOverrides: Partial<SgebAuthDependencies> = {}) {
     getAccessToken: () => 'initial-token',
     refresh: vi.fn<() => Promise<TokenResult>>(),
     applyRefreshedAccessToken: vi.fn(() => true),
+    beginSilentAuthorization: vi.fn().mockResolvedValue('https://auth.example/authorize'),
     ...depsOverrides,
   }
 
@@ -350,7 +351,7 @@ describe('sgebClient — SGEB-1002 expired-token recovery', () => {
       currentToken = payload.accessToken
       return true
     })
-    const { adapter, request } = createTestClient({
+    const { adapter, deps, request } = createTestClient({
       getAccessToken: () => currentToken,
       refresh,
       applyRefreshedAccessToken,
@@ -382,6 +383,9 @@ describe('sgebClient — SGEB-1002 expired-token recovery', () => {
       'Bearer refreshed-token',
     )
     expect(result.result.code).toBe('SGEB-0000')
+    // Refresh succeeded — the silent-auth fallback is only for a failed
+    // refresh attempt, never invoked alongside a successful one.
+    expect(deps.beginSilentAuthorization).not.toHaveBeenCalled()
   })
 
   it('does not create an infinite loop when the retried request also returns SGEB-1002', async () => {
@@ -389,7 +393,7 @@ describe('sgebClient — SGEB-1002 expired-token recovery', () => {
       outcome: 'success',
       token: SUCCESS_TOKEN,
     })
-    const { adapter, request } = createTestClient({ refresh })
+    const { adapter, deps, request } = createTestClient({ refresh })
 
     adapter.mockImplementation((config) =>
       Promise.reject(
@@ -409,14 +413,18 @@ describe('sgebClient — SGEB-1002 expired-token recovery', () => {
     if (isSgebApplicationError(error)) {
       expect(error.code).toBe('SGEB-1002')
     }
+    // The second SGEB-1002 hit an already-retried request — no second
+    // refresh, and no silent-auth fallback either: only a genuinely failed
+    // refresh attempt triggers that.
+    expect(deps.beginSilentAuthorization).not.toHaveBeenCalled()
   })
 
-  it('does not retry the original request when refresh fails (oauth-error)', async () => {
+  it('does not retry the original request when refresh fails (oauth-error), and falls back to the identical silent-auth primitive used by bootstrap', async () => {
     const refresh = vi.fn<() => Promise<TokenResult>>().mockResolvedValue({
       outcome: 'oauth-error',
       error: { error: 'invalid_grant' },
     })
-    const { adapter, request } = createTestClient({ refresh })
+    const { adapter, deps, request } = createTestClient({ refresh })
 
     adapter.mockImplementation((config) =>
       Promise.reject(
@@ -436,14 +444,16 @@ describe('sgebClient — SGEB-1002 expired-token recovery', () => {
     if (isSgebApplicationError(error)) {
       expect(error.code).toBe('SGEB-1002')
     }
+    expect(deps.beginSilentAuthorization).toHaveBeenCalledOnce()
+    expect(deps.beginSilentAuthorization).toHaveBeenCalledWith({ prompt: 'none' })
   })
 
-  it('does not retry the original request when refresh fails (network-error)', async () => {
+  it('does not retry the original request when refresh fails (network-error), and falls back to silent auth exactly once', async () => {
     const refresh = vi.fn<() => Promise<TokenResult>>().mockResolvedValue({
       outcome: 'network-error',
       message: 'No pudimos renovar tu sesión.',
     })
-    const { adapter, request } = createTestClient({ refresh })
+    const { adapter, deps, request } = createTestClient({ refresh })
 
     adapter.mockImplementation((config) =>
       Promise.reject(
@@ -460,6 +470,37 @@ describe('sgebClient — SGEB-1002 expired-token recovery', () => {
     expect(refresh).toHaveBeenCalledOnce()
     expect(adapter).toHaveBeenCalledOnce()
     expect(isSgebApplicationError(error)).toBe(true)
+    expect(deps.beginSilentAuthorization).toHaveBeenCalledOnce()
+    expect(deps.beginSilentAuthorization).toHaveBeenCalledWith({ prompt: 'none' })
+  })
+
+  it('still surfaces the original SGEB-1002 even when the silent-auth fallback itself throws (e.g. broken OIDC config)', async () => {
+    const refresh = vi.fn<() => Promise<TokenResult>>().mockResolvedValue({
+      outcome: 'network-error',
+      message: 'No pudimos renovar tu sesión.',
+    })
+    const beginSilentAuthorization = vi
+      .fn()
+      .mockRejectedValue(new Error('Invalid OIDC configuration.'))
+    const { adapter, request } = createTestClient({ refresh, beginSilentAuthorization })
+
+    adapter.mockImplementation((config) =>
+      Promise.reject(
+        fakeAxiosError(
+          config,
+          401,
+          envelope(errorResult('SGEB-1002', 'Tu sesión ha expirado.')),
+        ),
+      ),
+    )
+
+    const error = await request({ url: '/eventos' }).catch((e: unknown) => e)
+
+    expect(beginSilentAuthorization).toHaveBeenCalledOnce()
+    expect(isSgebApplicationError(error)).toBe(true)
+    if (isSgebApplicationError(error)) {
+      expect(error.code).toBe('SGEB-1002')
+    }
   })
 
   it('does not retry when refresh succeeds but the session can no longer accept it (concurrent logout)', async () => {
@@ -473,7 +514,10 @@ describe('sgebClient — SGEB-1002 expired-token recovery', () => {
       token: SUCCESS_TOKEN,
     })
     const applyRefreshedAccessToken = vi.fn(() => false)
-    const { adapter, request } = createTestClient({ refresh, applyRefreshedAccessToken })
+    const { adapter, deps, request } = createTestClient({
+      refresh,
+      applyRefreshedAccessToken,
+    })
 
     adapter.mockImplementation((config) =>
       Promise.reject(
@@ -499,9 +543,13 @@ describe('sgebClient — SGEB-1002 expired-token recovery', () => {
       expect(error.code).toBe('SGEB-1002')
       expect(error.httpStatus).toBe(401)
     }
+    // The refresh attempt itself succeeded — this is a concurrent-logout
+    // rejection, not a "refresh failed" outcome, so silent auth must not
+    // fire and must never race an intentional logout with a re-auth redirect.
+    expect(deps.beginSilentAuthorization).not.toHaveBeenCalled()
   })
 
-  it('SGEB-1003 does not trigger a refresh', async () => {
+  it('SGEB-1003 does not trigger a refresh or silent auth', async () => {
     const { adapter, deps, request } = createTestClient()
     adapter.mockImplementation((config) =>
       Promise.reject(
@@ -516,6 +564,7 @@ describe('sgebClient — SGEB-1002 expired-token recovery', () => {
     const error = await request({ url: '/eventos' }).catch((e: unknown) => e)
 
     expect(deps.refresh).not.toHaveBeenCalled()
+    expect(deps.beginSilentAuthorization).not.toHaveBeenCalled()
     expect(adapter).toHaveBeenCalledOnce()
     expect(isSgebApplicationError(error)).toBe(true)
     if (isSgebApplicationError(error)) {
@@ -523,7 +572,29 @@ describe('sgebClient — SGEB-1002 expired-token recovery', () => {
     }
   })
 
-  it('a generic 401 without an explicit SGEB-1002 code does not trigger a refresh', async () => {
+  it('SGEB-1004 does not trigger a refresh or silent auth', async () => {
+    const { adapter, deps, request } = createTestClient()
+    adapter.mockImplementation((config) =>
+      Promise.reject(
+        fakeAxiosError(
+          config,
+          403,
+          envelope(errorResult('SGEB-1004', 'No tienes permisos.')),
+        ),
+      ),
+    )
+
+    const error = await request({ url: '/eventos' }).catch((e: unknown) => e)
+
+    expect(deps.refresh).not.toHaveBeenCalled()
+    expect(deps.beginSilentAuthorization).not.toHaveBeenCalled()
+    expect(isSgebApplicationError(error)).toBe(true)
+    if (isSgebApplicationError(error)) {
+      expect(error.code).toBe('SGEB-1004')
+    }
+  })
+
+  it('a generic 401 without an explicit SGEB-1002 code does not trigger a refresh or silent auth', async () => {
     const { adapter, deps, request } = createTestClient()
     adapter.mockImplementation((config) =>
       Promise.reject(
@@ -538,6 +609,7 @@ describe('sgebClient — SGEB-1002 expired-token recovery', () => {
     const error = await request({ url: '/eventos' }).catch((e: unknown) => e)
 
     expect(deps.refresh).not.toHaveBeenCalled()
+    expect(deps.beginSilentAuthorization).not.toHaveBeenCalled()
     expect(isSgebApplicationError(error)).toBe(true)
   })
 })
@@ -646,6 +718,7 @@ describe('sgebClient — transport failure', () => {
     expect(isSgebApplicationError(error)).toBe(false)
     expect(isSgebNetworkError(error)).toBe(false)
     expect(deps.refresh).not.toHaveBeenCalled()
+    expect(deps.beginSilentAuthorization).not.toHaveBeenCalled()
   })
 })
 
@@ -720,7 +793,7 @@ describe('sgebClient — retry integrity', () => {
       outcome: 'success',
       token: SUCCESS_TOKEN,
     })
-    const { adapter, request } = createTestClient({ refresh })
+    const { adapter, deps, request } = createTestClient({ refresh })
 
     adapter.mockImplementation((config) =>
       Promise.reject(
@@ -732,6 +805,7 @@ describe('sgebClient — retry integrity', () => {
 
     expect(refresh).toHaveBeenCalledOnce()
     expect(adapter).toHaveBeenCalledTimes(2)
+    expect(deps.beginSilentAuthorization).not.toHaveBeenCalled()
   })
 })
 

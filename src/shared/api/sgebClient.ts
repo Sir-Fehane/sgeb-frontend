@@ -5,6 +5,7 @@ import axios, {
 } from 'axios'
 
 import { refreshAccessToken as defaultRefreshAccessToken } from '@/features/oidc-client/client/tokenClient'
+import { beginAuthorization as defaultBeginAuthorization } from '@/features/oidc-client/protocol/authorizationRequest'
 import {
   applyRefreshedAccessToken as defaultApplyRefreshedAccessToken,
   getOidcAccessToken as defaultGetOidcAccessToken,
@@ -38,12 +39,24 @@ export interface SgebAuthDependencies {
   getAccessToken: () => string | undefined
   refresh: () => Promise<TokenResult>
   applyRefreshedAccessToken: (payload: RefreshedTokenPayload) => boolean
+  /**
+   * The identical silent (`prompt=none`) OIDC recovery primitive already
+   * used by cold-start bootstrap (`protocol/bootstrap.ts`) — never a second
+   * PKCE/state/nonce implementation. Invoked only when a SGEB-1002 refresh
+   * attempt itself fails (oauth-error/network-error outcome): the broader
+   * SSO session can still be alive even though the refresh-token cookie is
+   * not, exactly the reasoning `bootstrapSession` already relies on to
+   * recover on F5. A full-page navigation, same as bootstrap's own use —
+   * never awaited for its result to decide what this request does next.
+   */
+  beginSilentAuthorization: typeof defaultBeginAuthorization
 }
 
 const defaultDeps: SgebAuthDependencies = {
   getAccessToken: defaultGetOidcAccessToken,
   refresh: defaultRefreshAccessToken,
   applyRefreshedAccessToken: defaultApplyRefreshedAccessToken,
+  beginSilentAuthorization: defaultBeginAuthorization,
 }
 
 function toSgebNetworkError(error: unknown): SgebNetworkError {
@@ -74,12 +87,18 @@ function toSgebNetworkError(error: unknown): SgebNetworkError {
  *   OIDC refresh primitive (same-tab singleflight + cross-tab lock both
  *   live there — this never reimplements that coordination), applies the
  *   result to the existing session store, and retries the original
- *   request exactly once. Any other outcome — refresh failure, a second
+ *   request exactly once. If that one refresh attempt itself fails
+ *   (oauth-error/network-error — no valid refresh cookie), it triggers the
+ *   identical silent (`prompt=none`) OIDC recovery already used by
+ *   cold-start bootstrap (`protocol/bootstrap.ts`) as a last resort, then
+ *   still surfaces the original SGEB-1002 — never a second PKCE/state/nonce
+ *   implementation, never a retry loop. Any other outcome — a concurrent
+ *   logout that rejects an otherwise-successful refresh, a second
  *   SGEB-1002 on an already-retried request, `SGEB-1003`/`SGEB-1004`, any
  *   other HTTP/SGEB error, or a non-envelope/network failure — normalizes
  *   into `SgebApplicationError`/`SgebNetworkError`
- *   (`shared/api/sgebApiError.ts`) without retrying. Cancellation
- *   (`AbortSignal`) propagates unchanged.
+ *   (`shared/api/sgebApiError.ts`) without retrying and without invoking
+ *   silent auth. Cancellation (`AbortSignal`) propagates unchanged.
  *
  * Exported (rather than only the bound `sgebClient` below) so tests can
  * attach this to a throwaway instance with fake dependencies and a custom
@@ -132,11 +151,29 @@ export function attachSgebAuthInterceptors(
             config._sgebRetried = true
             return instance.request(config)
           }
+          // No live authenticated session to apply it to (e.g. a concurrent
+          // logout) — the refresh attempt itself succeeded, so this is not
+          // the "refresh failed" case below; fall through and surface the
+          // original SGEB-1002 without retrying further.
+        } else {
+          // The refresh attempt itself failed (oauth-error/network-error —
+          // no valid refresh cookie). The broader SSO session can still be
+          // alive even though this refresh-token cookie is not, exactly
+          // like a cold F5 recovers via `bootstrapSession`'s own fallback —
+          // so try that identical silent primitive here. Its outcome never
+          // changes what this request throws below: a synchronous full-page
+          // navigation may already be under way, and the caller's UI must
+          // keep behaving exactly as it does today for a failed SGEB-1002
+          // (e.g. `EventDetailPage`'s Retry button) rather than fabricate a
+          // new "redirecting" state.
+          try {
+            await deps.beginSilentAuthorization({ prompt: 'none' })
+          } catch {
+            // Same degrade-silently contract as `bootstrapSession`'s own
+            // catch — a broken OIDC config must never crash this request's
+            // error handling.
+          }
         }
-        // Refresh failed, or there was no live authenticated session to
-        // apply it to (e.g. a concurrent logout) — fall through and
-        // surface the original SGEB-1002 as a normalized, deterministic
-        // authentication failure rather than retrying further.
       }
 
       throw new SgebApplicationError(httpStatus, result)
