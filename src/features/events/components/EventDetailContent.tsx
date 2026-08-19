@@ -3,6 +3,7 @@ import {
   type EventDetailComandaSectionProps,
 } from '@/features/events/components/EventDetailComandaSection'
 import { EventDetailErrorState } from '@/features/events/components/EventDetailErrorState'
+import { EventDetailGeofenceSection } from '@/features/events/components/EventDetailGeofenceSection'
 import { EventDetailHeader } from '@/features/events/components/EventDetailHeader'
 import { EventDetailLifecycleSection } from '@/features/events/components/EventDetailLifecycleSection'
 import { EventDetailLoadingState } from '@/features/events/components/EventDetailLoadingState'
@@ -51,22 +52,24 @@ export interface EventDetailContentProps {
 }
 
 /**
- * The reusable presentational composition — header + (schedule/logistics
- * OR the edit form, mutually exclusive) + mesas + lifecycle actions +
- * comanda + operation roadmap, or exactly one of loading / error /
- * unavailable, selected purely from props. Mirrors `EventsContent`'s
- * architecture (`EventDetailPage` is the thin, live-wired layer around
- * it).
+ * The reusable presentational composition — header + (schedule/logistics/
+ * geofence-preview OR the edit form, mutually exclusive) + mesas +
+ * lifecycle actions + comanda + operation roadmap, or exactly one of
+ * loading / error / unavailable, selected purely from props. Mirrors
+ * `EventsContent`'s architecture (`EventDetailPage` is the thin,
+ * live-wired layer around it).
  *
  * `comanda`/`edit`/`lifecycle`/`mesas` are each passed as one bundled prop
  * object, not flattened — each is entirely its own section's
  * self-contained state/actions, so it is forwarded to its section
  * unchanged rather than re-declared as many more individual props here.
  *
- * While `edit.isEditing` is true, `EventEditForm` replaces the read-only
- * Schedule + Logistics sections (the exact fields it edits) rather than
- * sitting alongside them — showing both at once would let a stale
- * read-only value sit next to the same field mid-edit.
+ * While `edit.isEditing` is true, `EventEditForm` (which mounts its own
+ * `EventGeofenceMapPreview`) replaces the read-only Schedule + Logistics +
+ * `EventDetailGeofenceSection` sections (the exact fields/visualization it
+ * edits) rather than sitting alongside them — showing both at once would
+ * let a stale read-only value sit next to the same field mid-edit, AND
+ * would mount two `mapbox-gl` instances on the same page at once.
  */
 export function EventDetailContent({
   evento,
@@ -111,6 +114,7 @@ export function EventDetailContent({
         <>
           <EventDetailScheduleSection evento={evento} />
           <EventDetailLogisticsSection evento={evento} />
+          <EventDetailGeofenceSection evento={evento} />
         </>
       )}
 

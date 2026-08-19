@@ -113,7 +113,13 @@ describe('useCreateSalonMutation', () => {
     // background refetch lands.
     await mutationPromise
     expect(queryClient.getQueryData(salonesQueryKeys.list({ activo: true }))).toEqual([
-      { idSalon: 9, nombre: 'Salón Nuevo', capacidadMaxMesas: 30 },
+      {
+        idSalon: 9,
+        nombre: 'Salón Nuevo',
+        capacidadMaxMesas: 30,
+        latitud: 19.42,
+        longitud: -99.16,
+      },
     ])
   })
 
@@ -123,7 +129,13 @@ describe('useCreateSalonMutation', () => {
       data: RECORD,
     })
     const queryClient = new QueryClient()
-    const existing = { idSalon: 1, nombre: 'Salón Roble', capacidadMaxMesas: 40 }
+    const existing = {
+      idSalon: 1,
+      nombre: 'Salón Roble',
+      capacidadMaxMesas: 40,
+      latitud: 25.5428,
+      longitud: -103.4068,
+    }
     queryClient.setQueryData(salonesQueryKeys.list({ activo: true }), [existing])
 
     const { result } = renderHook(() => useCreateSalonMutation(), {
@@ -133,7 +145,13 @@ describe('useCreateSalonMutation', () => {
 
     expect(queryClient.getQueryData(salonesQueryKeys.list({ activo: true }))).toEqual([
       existing,
-      { idSalon: 9, nombre: 'Salón Nuevo', capacidadMaxMesas: 30 },
+      {
+        idSalon: 9,
+        nombre: 'Salón Nuevo',
+        capacidadMaxMesas: 30,
+        latitud: 19.42,
+        longitud: -99.16,
+      },
     ])
   })
 

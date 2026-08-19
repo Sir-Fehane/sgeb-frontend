@@ -12,6 +12,7 @@ import {
 import type { EventDetailComandaSectionProps } from '@/features/events/components/EventDetailComandaSection'
 import type { EventDetailMesasSectionProps } from '@/features/events/components/EventDetailMesasSection'
 import type { EventDetailViewModel } from '@/features/events/types/event'
+import { formatEventPresentationTime } from '@/features/events/utils/eventDetailFormatting'
 
 const EVENTO_CON_COMANDA: EventDetailViewModel = {
   idEvento: 1001,
@@ -128,9 +129,17 @@ describe('EventDetailContent — populated state', () => {
   it('renders salón, date, presentation time, and start time — the date shown once, never duplicated for inicio', () => {
     renderContent({ evento: EVENTO_CON_COMANDA })
 
-    expect(screen.getByText('Salón Roble')).toBeInTheDocument()
+    // Scoped to the Schedule section specifically — the geofence section
+    // below also shows the salón name as part of its own compact context,
+    // so an unscoped query would match twice.
+    const scheduleSection = screen.getByRole('region', { name: 'Fecha y ubicación' })
+    expect(within(scheduleSection).getByText('Salón Roble')).toBeInTheDocument()
     expect(screen.getByText('12/09/2026')).toBeInTheDocument()
-    expect(screen.getByText('16:00')).toBeInTheDocument()
+    // Localized 12-hour presentation time, same es-MX convention as "Hora
+    // de inicio" below — never the raw "16:00:00" wire-style string.
+    expect(
+      screen.getByText(formatEventPresentationTime(EVENTO_CON_COMANDA.horaPresentacion)),
+    ).toBeInTheDocument()
     expect(screen.getByText('Hora de inicio')).toBeInTheDocument()
     // Fecha (date-only) appears once; Hora de inicio derives only the time
     // component from `inicio`, never a second full date.

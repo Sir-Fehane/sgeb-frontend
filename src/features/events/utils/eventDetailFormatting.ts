@@ -22,6 +22,49 @@ export function formatEventGeofenceRadius(meters: number): string {
 }
 
 /**
+ * The address pieces `formatSalonAddress` reads — a subset of
+ * `services/salonesApi.ts`'s `SalonDetailViewModel`, kept as its own
+ * loose/optional shape here (rather than importing that interface
+ * directly) so this formatter stays testable in isolation and usable
+ * against a partial record.
+ */
+export interface SalonAddressParts {
+  calle?: string | undefined
+  colonia?: string | undefined
+  cp?: string | undefined
+  ciudad?: string | undefined
+  estado?: string | undefined
+}
+
+/**
+ * A single, human-readable address line — built ONLY from fields the
+ * resolved Salón record actually carries (never a fabricated address
+ * component). Blank/missing pieces are omitted gracefully rather than
+ * rendered as "undefined" or leaving a dangling `·` separator; `null` when
+ * nothing at all is available (`EventDetailGeofenceSection` then simply
+ * doesn't render an address line).
+ *
+ * `ciudad`/`estado` combine into one "Ciudad, Estado" piece (not two
+ * separate `·`-joined pieces) to read naturally, matching how a Mexican
+ * postal address is conventionally written.
+ */
+export function formatSalonAddress(salon: SalonAddressParts): string | null {
+  const ciudadEstado = [salon.ciudad, salon.estado]
+    .map((part) => part?.trim())
+    .filter((part): part is string => Boolean(part))
+    .join(', ')
+
+  const parts = [
+    salon.calle?.trim(),
+    salon.colonia?.trim() ? `Col. ${salon.colonia.trim()}` : undefined,
+    ciudadEstado || undefined,
+    salon.cp?.trim() ? `CP ${salon.cp.trim()}` : undefined,
+  ].filter((part): part is string => Boolean(part))
+
+  return parts.length > 0 ? parts.join(' · ') : null
+}
+
+/**
  * `fecha` — a `date`-only ISO string (`YYYY-MM-DD`), formatted as
  * `DD/MM/YYYY` without ever constructing a `Date` from it:
  * `new Date('2026-08-05')` parses as UTC midnight, which rolls back to
@@ -73,4 +116,41 @@ export function formatEventDateTime(dateTime: string): string {
  */
 export function formatEventTime(dateTime: string): string {
   return new Date(dateTime).toLocaleString('es-MX', { timeStyle: 'short' })
+}
+
+/**
+ * `horaPresentacion` — a bare time-of-day string, NOT a full date-time
+ * (`hora_presentacion`'s wire value: `HH:MM` as sent by the native
+ * `<input type="time">` this value comes from, or `HH:MM:SS` once
+ * round-tripped through a real `GET` response — the backend echoes a
+ * `:00` seconds component that field never actually captures). Formatted
+ * with the exact same es-MX 12-hour convention `formatEventTime` already
+ * uses for `inicio`, so `EventDetailScheduleSection`'s two time rows read
+ * consistently instead of one showing a raw "18:00:00" wire string next
+ * to the other's localized "6:09 p. m.".
+ *
+ * Deliberately never parses this as a `Date` directly (`new
+ * Date('18:00:00')` is invalid per the ECMAScript Date Time String
+ * Format — a bare time has no date component — and an engine that DOES
+ * accept it as a non-standard fallback typically treats it as UTC,
+ * shifting the displayed clock time by the local offset). Instead builds
+ * a `Date` for right now and overwrites only its hour/minute via the
+ * LOCAL `setHours` setter, then formats that same local `Date` directly —
+ * never round-tripped through `toISOString`/UTC — so the exact hour and
+ * minute the string names is the exact hour and minute shown, regardless
+ * of the runtime's timezone. Seconds are always dropped: this value is
+ * never user-configurable to second precision, so it is never displayed
+ * to that precision either.
+ */
+const PRESENTATION_TIME_PATTERN = /^(\d{2}):(\d{2})(?::\d{2})?$/
+
+export function formatEventPresentationTime(horaPresentacion: string): string {
+  const match = PRESENTATION_TIME_PATTERN.exec(horaPresentacion)
+  if (!match) {
+    return horaPresentacion
+  }
+  const [, hours, minutes] = match
+  const reference = new Date()
+  reference.setHours(Number(hours), Number(minutes), 0, 0)
+  return reference.toLocaleTimeString('es-MX', { timeStyle: 'short' })
 }

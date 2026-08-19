@@ -17,6 +17,20 @@ vi.mock('@/shared/api/sgebClient', () => ({
 }))
 
 /**
+ * Neither `SalonLocationPicker` (address → geocoding → map → marker) nor
+ * `EventGeofenceMapPreview` (the geofence circle preview, shown once a
+ * salón is selected) are this page's concern — both have their own
+ * dedicated coverage (`SalonLocationPicker.test.tsx`,
+ * `EventGeofenceMapPreview.test.tsx`) and both pull in real `mapbox-gl`,
+ * which cannot initialize WebGL under jsdom. Stubbed here so this page's
+ * own tests (submission, salón selection, session wiring) never trip over
+ * that.
+ */
+vi.mock('@/shared/components/ui/mapbox-map', () => ({
+  MapboxMap: () => <div data-testid="mapbox-map-stub" />,
+}))
+
+/**
  * `SalonLocationPicker` (address → geocoding → map → marker) has its own
  * dedicated coverage (`SalonLocationPicker.test.tsx`) and pulls in real
  * `mapbox-gl`, which cannot initialize WebGL under jsdom. This page's tests

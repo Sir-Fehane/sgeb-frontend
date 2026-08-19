@@ -28,17 +28,21 @@ export type EventStatus =
 export type EventType = 'social' | 'empresarial'
 
 /**
- * A salón option as used by the event-creation salón picker. Mirrors
- * only the `SalonCrear` fields this feature actually needs (`nombre`,
- * `capacidad_max_mesas` — the latter needed for the SGEB-4007
- * "num_mesas must not exceed capacidad_max_mesas" cross-check). Never
- * populated from a real endpoint on this branch — see
- * `features/events/fixtures`.
+ * A salón option as used by the event-creation salón picker. Mirrors the
+ * `SalonCrear`/`Salon` fields this feature needs: `nombre`,
+ * `capacidad_max_mesas` (the SGEB-4007 "num_mesas must not exceed
+ * capacidad_max_mesas" cross-check), and `latitud`/`longitud` (confirmed
+ * `Salon` fields — `services/salonesApi.ts`'s `SalonApiRecord`, field-for-
+ * field against the pinned backend's `Salon` model — used only by
+ * `EventGeofenceMapPreview` to center the geofence preview on the selected
+ * salón; never sent back to any request).
  */
 export interface EventSalonOption {
   idSalon: number
   nombre: string
   capacidadMaxMesas: number
+  latitud: number
+  longitud: number
 }
 
 /**
@@ -137,6 +141,21 @@ export interface EventListItemViewModel {
  *   `mapEventoToDetail` for that reason — `EventDetailPage` resolves the
  *   real name itself, separately, via `idSalon` above, and only feeds it
  *   into this same slot for display (see that page's own comment).
+ * - salonLatitud/salonLongitud: same presentation-only status and same
+ *   source as `salonNombre` — never populated by `mapEventoToDetail`,
+ *   only overlaid by `EventDetailPage` from the same already-resolved
+ *   `GET /salones/{id_salon}` response (`services/salonesApi.ts`'s
+ *   `SalonDetailViewModel`, itself a direct, confirmed `Salon.latitud`/
+ *   `Salon.longitud` passthrough — pre-v1.12 facts, not a new contract
+ *   surface). Feeds `EventGeofenceMapPreview`'s read-only Detail preview
+ *   and `EventEditForm`'s live one, without either needing its own
+ *   separate salón fetch.
+ * - salonAddress: same presentation-only status/source again — a single
+ *   pre-formatted line (`utils/eventDetailFormatting.ts`'s
+ *   `formatSalonAddress`) built from the same resolved
+ *   `SalonDetailViewModel`'s `calle`/`colonia`/`cp`/`ciudad`/`estado`,
+ *   `undefined` whenever none of those pieces are available. Read only by
+ *   `EventDetailGeofenceSection`'s compact read-only context under the map.
  *
  * Deliberately excluded: `uuid_capitan`/any captain identifier (no UX
  * purpose on this page, same reasoning as the list model), any
@@ -166,6 +185,9 @@ export interface EventDetailViewModel {
   tipo: EventType
   estado: EventStatus
   salonNombre?: string
+  salonLatitud?: number
+  salonLongitud?: number
+  salonAddress?: string
   fecha: string
   horaPresentacion: string
   inicio: string

@@ -1,7 +1,8 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useMemo } from 'react'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 
+import { EventGeofenceMapPreview } from '@/features/events/components/EventGeofenceMapPreview'
 import { EventGeofenceRadiusField } from '@/features/events/components/EventGeofenceRadiusField'
 import { EventTimeField } from '@/features/events/components/EventTimeField'
 import {
@@ -13,7 +14,6 @@ import { getTodayIsoDate } from '@/features/events/utils/eventScheduling'
 import {
   Button,
   FormField,
-  HelperText,
   Input,
   SectionHeading,
   Select,
@@ -67,7 +67,7 @@ export function EventCreateForm({
     register,
     handleSubmit,
     setValue,
-    watch,
+    control,
     formState: { errors },
   } = useForm<EventCreateFormValues>({
     resolver: zodResolver(schema),
@@ -84,6 +84,27 @@ export function EventCreateForm({
       setValue('id_salon', selectedSalonId, { shouldValidate: true })
     }
   }, [selectedSalonId, setValue])
+
+  /**
+   * `useWatch` (scoped to these two fields), not `methods.watch()` in the
+   * render body — the geofence preview subtree below is heavier than a
+   * plain input, so subscribing broadly (which re-renders this whole form
+   * on every keystroke of ANY field, a documented RHF gotcha) would redo
+   * that work on every unrelated keystroke (título, fecha, tarifa, ...)
+   * too. Scoped `useWatch` only re-renders when `id_salon`/
+   * `radio_geocerca_m` themselves change.
+   */
+  const watchedSalonId = useWatch({ control, name: 'id_salon' })
+  const watchedRadioGeocercaM = useWatch({ control, name: 'radio_geocerca_m' })
+
+  /**
+   * Resolves the selected salón's coordinates straight from the `salones`
+   * list this form already received as a prop (`EventCreatePage`'s live
+   * `GET /salones?activo=true`, now carrying `latitud`/`longitud` — see
+   * `mapSalonToOption`'s own comment) — never a second fetch, and reuses
+   * whatever TanStack Query cache that list already came from.
+   */
+  const selectedSalon = salones.find((salon) => salon.idSalon === watchedSalonId) ?? null
 
   async function submit(values: EventCreateFormValues) {
     try {
@@ -206,10 +227,21 @@ export function EventCreateForm({
           )}
         </FormField>
         <EventGeofenceRadiusField
-          value={watch('radio_geocerca_m')}
           disabled={isSubmitting}
           error={errors.radio_geocerca_m?.message}
           registration={register('radio_geocerca_m', { valueAsNumber: true })}
+        />
+        <EventGeofenceMapPreview
+          salon={
+            selectedSalon
+              ? {
+                  nombre: selectedSalon.nombre,
+                  lat: selectedSalon.latitud,
+                  lng: selectedSalon.longitud,
+                }
+              : null
+          }
+          radiusMeters={watchedRadioGeocercaM}
         />
       </section>
 
@@ -219,11 +251,6 @@ export function EventCreateForm({
           Este evento quedará a tu nombre, a partir de tu sesión iniciada.
         </Text>
       </section>
-
-      <HelperText>
-        La comanda se sube después de crear el evento, desde su detalle — no forma parte
-        de este alta.
-      </HelperText>
 
       <Button type="submit" loading={isSubmitting} className="w-full sm:w-auto">
         Crear evento

@@ -22,9 +22,27 @@ import type {
  */
 
 export const SALON_OPTIONS_FIXTURE: readonly EventSalonOption[] = [
-  { idSalon: 1, nombre: 'Salón Roble', capacidadMaxMesas: 40 },
-  { idSalon: 2, nombre: 'Salón Alameda', capacidadMaxMesas: 25 },
-  { idSalon: 3, nombre: 'Jardín Norte', capacidadMaxMesas: 60 },
+  {
+    idSalon: 1,
+    nombre: 'Salón Roble',
+    capacidadMaxMesas: 40,
+    latitud: 25.5428,
+    longitud: -103.4068,
+  },
+  {
+    idSalon: 2,
+    nombre: 'Salón Alameda',
+    capacidadMaxMesas: 25,
+    latitud: 25.5511,
+    longitud: -103.4192,
+  },
+  {
+    idSalon: 3,
+    nombre: 'Jardín Norte',
+    capacidadMaxMesas: 60,
+    latitud: 25.5623,
+    longitud: -103.44,
+  },
 ]
 
 export const EVENTOS_FIXTURE: readonly EventListItemViewModel[] = [

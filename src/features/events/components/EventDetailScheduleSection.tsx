@@ -2,6 +2,7 @@ import { EventDetailSection } from '@/features/events/components/EventDetailSect
 import type { EventDetailViewModel } from '@/features/events/types/event'
 import {
   formatEventDate,
+  formatEventPresentationTime,
   formatEventTime,
 } from '@/features/events/utils/eventDetailFormatting'
 
@@ -36,7 +37,7 @@ export function EventDetailScheduleSection({ evento }: EventDetailScheduleSectio
             Hora de presentación
           </dt>
           <dd className="font-sans text-body-sm text-foreground font-medium">
-            {evento.horaPresentacion}
+            {formatEventPresentationTime(evento.horaPresentacion)}
           </dd>
         </div>
         <div className="flex flex-col gap-1">

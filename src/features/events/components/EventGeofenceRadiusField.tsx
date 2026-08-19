@@ -1,11 +1,8 @@
-import { IconMapPin } from '@tabler/icons-react'
 import type { UseFormRegisterReturn } from 'react-hook-form'
 
-import { Caption, FormField, Input } from '@/shared/components'
+import { FormField, Input } from '@/shared/components'
 
 export interface EventGeofenceRadiusFieldProps {
-  /** The field's current (possibly `NaN`, while empty) numeric value — only used to size the visual. */
-  value: number
   disabled?: boolean | undefined
   error?: string | undefined
   /**
@@ -18,61 +15,46 @@ export interface EventGeofenceRadiusFieldProps {
   registration: UseFormRegisterReturn
 }
 
-const RADIO_GEOCERCA_MIN = 10
-const RADIO_GEOCERCA_MAX = 1000
-
-const VISUAL_BOX_PX = 104
-const VISUAL_MIN_PX = 22
-const VISUAL_MAX_PX = 96
-
-const SQRT_RADIO_MIN = Math.sqrt(RADIO_GEOCERCA_MIN)
-const SQRT_RADIO_MAX = Math.sqrt(RADIO_GEOCERCA_MAX)
-
 const BASE_HELPER_TEXT =
   'El personal debe estar dentro de esta distancia del salón para poder registrar su llegada.'
 
 /**
- * Square-root map from the 10–1000 m documented range onto a small
- * illustrative circle — never a real distance/map scale, and never fed
- * back into the submitted value (only `diameter` below reads this; the
- * `<input>` itself always carries the exact `radioGeocercaM` the user
- * typed).
- *
- * A LINEAR map over this 100x range visually flattens the low end: 10,
- * 50, and 100 m land within a few px of each other while 500–1000 m
- * dominates the whole visible spread. Mapping on `sqrt(meters)` instead
- * (area-like scaling, the same intuition as a linear-radius circle's
- * *area* growing with the square) spreads the low/mid checkpoints out
- * evenly while still bounding the maximum size — see
- * `EventGeofenceRadiusField.test.tsx` for the exact px deltas asserted
- * across 10/50/100/250/500/1000 m.
+ * Same confirmed 10-1000 m contract `createEventFormSchema`/
+ * `editEventFormSchema` already enforce (Zod remains the actual source of
+ * truth/error message) — exposed here only as the native `<input
+ * min/max>` attributes, for the accessible/semantic hint browsers and
+ * assistive tech derive from them (e.g. spinner-arrow bounds, ARIA
+ * valuemin/valuemax). Native `min`/`max` on `type="number"` never clamps
+ * or auto-corrects a typed value on its own — 9 or 1001 still reach Zod
+ * exactly as typed, which still rejects them via `error` below.
  */
-function radiusToVisualDiameter(meters: number): number {
-  if (!Number.isFinite(meters)) {
-    return VISUAL_MIN_PX
-  }
-  const clamped = Math.min(Math.max(meters, RADIO_GEOCERCA_MIN), RADIO_GEOCERCA_MAX)
-  const ratio = (Math.sqrt(clamped) - SQRT_RADIO_MIN) / (SQRT_RADIO_MAX - SQRT_RADIO_MIN)
-  return VISUAL_MIN_PX + ratio * (VISUAL_MAX_PX - VISUAL_MIN_PX)
-}
+const RADIO_GEOCERCA_MIN = 10
+const RADIO_GEOCERCA_MAX = 1000
 
 /**
  * Presents `radioGeocercaM` as a real-world "arrival radius" rather than a
- * bare DTO number — same backend contract and 10–1000 m range as before
- * (`createEventFormSchema`/`editEventFormSchema`), just with helper copy
- * explaining what the number means and a small, explicitly schematic
- * (never cartographic) circle that scales with the current value. No map
- * dependency, no salón coordinates plotted — see this branch's report for
- * why a real map is deliberately out of scope here.
+ * bare DTO number — same backend contract and 10-1000 m range as before
+ * (`createEventFormSchema`/`editEventFormSchema`), with helper copy
+ * explaining what the number means.
+ *
+ * No longer renders its own schematic circle: that CSS-scaled illustration
+ * (never a real distance/map scale) has been retired now that
+ * `EventGeofenceMapPreview` renders a REAL, geodesic map preview next to
+ * this field on `EventCreateForm`/`EventEditForm`. Keeping both would show
+ * two competing visualizations of the same value at once — one accurate,
+ * one merely schematic — which is worse than showing only the accurate
+ * one. `EventGeofenceMapPreview` already degrades gracefully on its own
+ * (a compact empty/unavailable state) whenever Mapbox or the salón's
+ * coordinates aren't available, so this field never needs a visual
+ * fallback of its own to stay usable — it is, and remains, a plain numeric
+ * input.
  */
 export function EventGeofenceRadiusField({
-  value,
   disabled,
   error,
   extraDescription,
   registration,
 }: EventGeofenceRadiusFieldProps) {
-  const diameter = radiusToVisualDiameter(value)
   const description = extraDescription
     ? `${BASE_HELPER_TEXT} ${extraDescription}`
     : BASE_HELPER_TEXT
@@ -85,40 +67,23 @@ export function EventGeofenceRadiusField({
       description={error ? undefined : description}
     >
       {(controlProps) => (
-        <div className="flex items-center gap-4">
-          <div className="relative w-full max-w-40">
-            <Input
-              {...controlProps}
-              type="number"
-              inputMode="numeric"
-              disabled={disabled}
-              className="pr-9"
-              {...registration}
-            />
-            <span
-              aria-hidden="true"
-              className="text-muted-foreground pointer-events-none absolute inset-y-0 right-3 flex items-center font-sans text-body-sm"
-            >
-              m
-            </span>
-          </div>
-
-          <div className="flex shrink-0 flex-col items-center gap-1">
-            <div
-              aria-hidden="true"
-              className="border-border bg-background relative flex items-center justify-center overflow-hidden rounded-full border"
-              style={{ width: VISUAL_BOX_PX, height: VISUAL_BOX_PX }}
-            >
-              <span
-                className="border-info bg-info/10 rounded-full border-2"
-                style={{ width: diameter, height: diameter }}
-              />
-              <IconMapPin className="text-foreground absolute size-4" />
-            </div>
-            <Caption className="text-center">
-              Representación aproximada del área permitida.
-            </Caption>
-          </div>
+        <div className="relative w-full max-w-40">
+          <Input
+            {...controlProps}
+            type="number"
+            inputMode="numeric"
+            min={RADIO_GEOCERCA_MIN}
+            max={RADIO_GEOCERCA_MAX}
+            disabled={disabled}
+            className="pr-9"
+            {...registration}
+          />
+          <span
+            aria-hidden="true"
+            className="text-muted-foreground pointer-events-none absolute inset-y-0 right-3 flex items-center font-sans text-body-sm"
+          >
+            m
+          </span>
         </div>
       )}
     </FormField>

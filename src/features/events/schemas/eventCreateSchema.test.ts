@@ -4,7 +4,13 @@ import { createEventFormSchema } from '@/features/events/schemas/eventCreateSche
 import type { EventSalonOption } from '@/features/events/types/event'
 
 const SALONES: EventSalonOption[] = [
-  { idSalon: 1, nombre: 'Salón Roble', capacidadMaxMesas: 40 },
+  {
+    idSalon: 1,
+    nombre: 'Salón Roble',
+    capacidadMaxMesas: 40,
+    latitud: 25.5428,
+    longitud: -103.4068,
+  },
 ]
 
 function validValues() {
@@ -99,5 +105,35 @@ describe('createEventFormSchema', () => {
     })
 
     expect(result.success).toBe(true)
+  })
+
+  describe('radio_geocerca_m boundaries (10-1000 m inclusive)', () => {
+    it('rejects 9 — one below the documented minimum', () => {
+      const schema = createEventFormSchema(SALONES)
+      expect(schema.safeParse({ ...validValues(), radio_geocerca_m: 9 }).success).toBe(
+        false,
+      )
+    })
+
+    it('accepts 10 — the documented minimum, inclusive', () => {
+      const schema = createEventFormSchema(SALONES)
+      expect(schema.safeParse({ ...validValues(), radio_geocerca_m: 10 }).success).toBe(
+        true,
+      )
+    })
+
+    it('accepts 1000 — the documented maximum, inclusive', () => {
+      const schema = createEventFormSchema(SALONES)
+      expect(schema.safeParse({ ...validValues(), radio_geocerca_m: 1000 }).success).toBe(
+        true,
+      )
+    })
+
+    it('rejects 1001 — one above the documented maximum', () => {
+      const schema = createEventFormSchema(SALONES)
+      expect(schema.safeParse({ ...validValues(), radio_geocerca_m: 1001 }).success).toBe(
+        false,
+      )
+    })
   })
 })

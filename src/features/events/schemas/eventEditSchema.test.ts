@@ -40,6 +40,32 @@ describe('editEventFormSchema', () => {
     ).toBe(false)
   })
 
+  describe('radio_geocerca_m boundaries (10-1000 m inclusive)', () => {
+    it('rejects 9 — one below the documented minimum', () => {
+      expect(
+        editEventFormSchema.safeParse({ ...VALID, radio_geocerca_m: 9 }).success,
+      ).toBe(false)
+    })
+
+    it('accepts 10 — the documented minimum, inclusive', () => {
+      expect(
+        editEventFormSchema.safeParse({ ...VALID, radio_geocerca_m: 10 }).success,
+      ).toBe(true)
+    })
+
+    it('accepts 1000 — the documented maximum, inclusive', () => {
+      expect(
+        editEventFormSchema.safeParse({ ...VALID, radio_geocerca_m: 1000 }).success,
+      ).toBe(true)
+    })
+
+    it('rejects 1001 — one above the documented maximum', () => {
+      expect(
+        editEventFormSchema.safeParse({ ...VALID, radio_geocerca_m: 1001 }).success,
+      ).toBe(false)
+    })
+  })
+
   it('has no id_salon, fecha, hora_presentacion, or inicio fields', () => {
     const result = editEventFormSchema.safeParse(VALID)
     expect(result.success && result.data).not.toHaveProperty('id_salon')

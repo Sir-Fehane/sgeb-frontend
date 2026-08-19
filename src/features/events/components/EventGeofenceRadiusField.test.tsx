@@ -16,12 +16,11 @@ function Host({
   error?: string
   extraDescription?: string
 }) {
-  const { register, watch } = useForm<{ radio_geocerca_m: number }>({
+  const { register } = useForm<{ radio_geocerca_m: number }>({
     defaultValues: { radio_geocerca_m: defaultValue },
   })
   return (
     <EventGeofenceRadiusField
-      value={watch('radio_geocerca_m')}
       disabled={disabled}
       error={error}
       extraDescription={extraDescription}
@@ -84,13 +83,6 @@ describe('EventGeofenceRadiusField', () => {
     expect(screen.getByText('m')).toBeInTheDocument()
   })
 
-  it('renders the schematic radius visual as decorative — never competing with the real accessible name/value', () => {
-    const { container } = render(<Host defaultValue={150} />)
-
-    const decorative = container.querySelectorAll('[aria-hidden="true"]')
-    expect(decorative.length).toBeGreaterThan(0)
-  })
-
   it('respects disabled', () => {
     render(<Host defaultValue={150} disabled />)
 
@@ -99,61 +91,34 @@ describe('EventGeofenceRadiusField', () => {
     ).toBeDisabled()
   })
 
-  it('shows concise, decorative-adjacent copy naming the visual as approximate — never claiming geographic accuracy', () => {
+  it('renders no schematic circle visual — EventGeofenceMapPreview is now the sole visualization, never a competing second one', () => {
     render(<Host defaultValue={150} />)
 
     expect(
-      screen.getByText('Representación aproximada del área permitida.'),
-    ).toBeInTheDocument()
+      screen.queryByText('Representación aproximada del área permitida.'),
+    ).not.toBeInTheDocument()
   })
 
-  describe('low-to-high radius visual distinguishability (10–1000 m)', () => {
-    function visualDiameterPx(defaultValue: number): number {
-      const { container } = render(<Host defaultValue={defaultValue} />)
-      const circle = container.querySelector<HTMLElement>('.border-info')
-      if (!circle) {
-        throw new Error('Expected the schematic radius circle to render')
-      }
-      return Number.parseFloat(circle.style.width)
-    }
-
-    it('keeps 10 m clearly visible — never collapsing to (near) zero size', () => {
-      expect(visualDiameterPx(10)).toBeGreaterThanOrEqual(20)
-    })
-
-    it('bounds the maximum size at 1000 m', () => {
-      expect(visualDiameterPx(1000)).toBeLessThanOrEqual(96)
-    })
-
-    it('makes every documented checkpoint (10/50/100/250/500/1000 m) visually distinguishable — each strictly larger than the last, by a perceptible margin', () => {
-      const checkpoints = [10, 50, 100, 250, 500, 1000]
-      const sizes = checkpoints.map(visualDiameterPx)
-
-      for (let i = 1; i < sizes.length; i += 1) {
-        const delta = sizes[i]! - sizes[i - 1]!
-        expect(delta).toBeGreaterThan(4)
-      }
-    })
-
-    it('spreads the low end (10/50/100 m) more evenly than a linear map would — the low-end step is not dramatically smaller than the high-end step', () => {
-      const [d10, d50, d100, , d500, d1000] = [10, 50, 100, 250, 500, 1000].map(
-        visualDiameterPx,
-      )
-      const lowStep = d100! - d10!
-      const highStep = d1000! - d500!
-
-      // A pure linear (proportional-to-meters) map would make this ratio
-      // tiny (~0.13) since 10→100 m is a small slice of the 10–1000 m
-      // range while 500→1000 m is half of it. The sqrt map keeps the low
-      // end reasonably close to the high end instead.
-      expect(lowStep / highStep).toBeGreaterThan(0.4)
-      // Sanity: 50 m sits strictly between 10 m and 100 m.
-      expect(d50).toBeGreaterThan(d10!)
-      expect(d50).toBeLessThan(d100!)
-    })
-  })
-
-  it('clamps and preserves visual stability for out-of-range/invalid values without ever throwing', () => {
+  it('never throws for an out-of-range/invalid value — clamping/validation stays the form schema’s job', () => {
     expect(() => render(<Host defaultValue={Number.NaN} />)).not.toThrow()
+  })
+
+  it('exposes the documented 10-1000 m range as native min/max attributes', () => {
+    render(<Host defaultValue={150} />)
+
+    const input = screen.getByLabelText(/^Radio permitido para registrar llegada/)
+    expect(input).toHaveAttribute('min', '10')
+    expect(input).toHaveAttribute('max', '1000')
+  })
+
+  it('never auto-corrects an out-of-range typed value — min/max are hints, not clamps', () => {
+    render(<Host defaultValue={9} />)
+
+    // 9 is below the documented minimum but the input still shows it
+    // verbatim — the native min attribute alone never rewrites a typed
+    // value; only Zod (via `error`) decides validity.
+    expect(screen.getByLabelText(/^Radio permitido para registrar llegada/)).toHaveValue(
+      9,
+    )
   })
 })

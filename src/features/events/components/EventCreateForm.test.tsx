@@ -6,6 +6,17 @@ import { EventCreateForm } from '@/features/events/components/EventCreateForm'
 import { SALON_OPTIONS_FIXTURE } from '@/features/events/fixtures/eventFixtures'
 import { getTodayIsoDate } from '@/features/events/utils/eventScheduling'
 
+/**
+ * This form's own tests exercise validation/submission, not the geofence
+ * preview's map behavior (see `EventGeofenceMapPreview.test.tsx` for that)
+ * — stubbed here purely so selecting a salón doesn't pull in real
+ * `mapbox-gl` (unsafe/unsupported under jsdom), same reasoning as
+ * `SalonLocationPicker.test.tsx`'s own stub.
+ */
+vi.mock('@/shared/components/ui/mapbox-map', () => ({
+  MapboxMap: () => <div data-testid="mapbox-map-stub" />,
+}))
+
 function renderForm(onSubmit = vi.fn()) {
   render(<EventCreateForm onSubmit={onSubmit} salones={SALON_OPTIONS_FIXTURE} />)
   return { onSubmit }
@@ -243,6 +254,23 @@ describe('EventCreateForm', () => {
     expect(radiusInput).toHaveValue(150)
   })
 
+  it('shows a geofence map empty state until a salón is selected, then the map preview', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    expect(
+      screen.getByText('Selecciona un salón para ver la vista previa de la geocerca.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByTestId('mapbox-map-stub')).not.toBeInTheDocument()
+
+    await user.selectOptions(screen.getByLabelText(/^Salón/), '1')
+
+    expect(await screen.findByTestId('mapbox-map-stub')).toBeInTheDocument()
+    expect(
+      screen.queryByText('Selecciona un salón para ver la vista previa de la geocerca.'),
+    ).not.toBeInTheDocument()
+  })
+
   it('never renders an authenticated-user id, creator id, token, or role field', () => {
     renderForm()
 
@@ -266,22 +294,15 @@ describe('EventCreateForm', () => {
     ).toBeInTheDocument()
   })
 
-  it('does not render a comanda URL field or a file input, and explains comanda is a post-creation step honestly', () => {
+  it('does not render a comanda URL field, a file input, or any comanda copy — comanda stays an Event Detail concern only', () => {
     renderForm()
 
     expect(document.querySelector('input[type="file"]')).toBeNull()
     expect(document.querySelector('[name="comanda_url"]')).toBeNull()
     expect(screen.queryByLabelText(/comanda/i)).not.toBeInTheDocument()
-    // The real contract never declares comanda on EventoCrear at all
-    // (docs/decisions.md ADR-007) — this must never claim the upload
-    // endpoint is undefined; it is, just not part of this form.
-    expect(
-      screen.queryByText(/pendiente de definición del endpoint/i),
-    ).not.toBeInTheDocument()
-    expect(
-      screen.getByText(
-        'La comanda se sube después de crear el evento, desde su detalle — no forma parte de este alta.',
-      ),
-    ).toBeInTheDocument()
+    // A manual UX review found the old "la comanda se sube después..."
+    // helper copy redundant now that the form structure is clearer —
+    // removed entirely, not replaced with different wording.
+    expect(screen.queryByText(/comanda/i)).not.toBeInTheDocument()
   })
 })

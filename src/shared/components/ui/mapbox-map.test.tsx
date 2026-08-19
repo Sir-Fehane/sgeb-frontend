@@ -56,6 +56,7 @@ const { FakeMap, FakeMarker, FakeNavigationControl, mapInstances, markerInstance
       options: Record<string, unknown>
       listeners: Record<string, ((payload: FakeEventPayload) => void)[]> = {}
       flyToCalls: unknown[] = []
+      fitBoundsCalls: unknown[] = []
       removed = false
 
       constructor(options: Record<string, unknown>) {
@@ -72,10 +73,13 @@ const { FakeMap, FakeMarker, FakeNavigationControl, mapInstances, markerInstance
       flyTo(options: unknown) {
         this.flyToCalls.push(options)
       }
+      fitBounds(bounds: unknown, options: unknown) {
+        this.fitBoundsCalls.push({ bounds, options })
+      }
       remove() {
         this.removed = true
       }
-      emit(event: string, payload: FakeEventPayload) {
+      emit(event: string, payload: FakeEventPayload = {}) {
         this.listeners[event]?.forEach((handler) => {
           handler(payload)
         })
@@ -219,5 +223,75 @@ describe('MapboxMap', () => {
     expect(
       screen.getByRole('application', { name: 'Mapa del salón' }),
     ).toBeInTheDocument()
+  })
+
+  it('calls onMapReady with the map instance once the style has loaded', () => {
+    const onMapReady = vi.fn()
+    render(
+      <MapboxMap
+        accessToken="pk.token"
+        center={{ lat: 19.4, lng: -99.1 }}
+        onMapReady={onMapReady}
+      />,
+    )
+
+    expect(onMapReady).not.toHaveBeenCalled()
+
+    const map = getLastMap()
+    map.emit('load')
+
+    expect(onMapReady).toHaveBeenCalledWith(map)
+  })
+
+  it('fits bounds instead of flying to center/zoom when bounds is given', () => {
+    render(
+      <MapboxMap
+        accessToken="pk.token"
+        center={{ lat: 19.4, lng: -99.1 }}
+        bounds={{ sw: { lat: 19.3, lng: -99.2 }, ne: { lat: 19.5, lng: -99.0 } }}
+      />,
+    )
+
+    const map = getLastMap()
+    expect(map.fitBoundsCalls).toContainEqual({
+      bounds: [
+        [-99.2, 19.3],
+        [-99.0, 19.5],
+      ],
+      options: { padding: 40 },
+    })
+    expect(map.flyToCalls).toHaveLength(0)
+  })
+
+  it('re-fits bounds when the bounds prop changes, using the given padding', () => {
+    const { rerender } = render(
+      <MapboxMap
+        accessToken="pk.token"
+        center={{ lat: 19.4, lng: -99.1 }}
+        bounds={{ sw: { lat: 19.3, lng: -99.2 }, ne: { lat: 19.5, lng: -99.0 } }}
+      />,
+    )
+    const initialInstanceCount = mapInstances.length
+
+    rerender(
+      <MapboxMap
+        accessToken="pk.token"
+        center={{ lat: 19.4, lng: -99.1 }}
+        bounds={{
+          sw: { lat: 19.35, lng: -99.15 },
+          ne: { lat: 19.45, lng: -99.05 },
+          padding: 64,
+        }}
+      />,
+    )
+
+    expect(mapInstances).toHaveLength(initialInstanceCount)
+    expect(getLastMap().fitBoundsCalls).toContainEqual({
+      bounds: [
+        [-99.15, 19.35],
+        [-99.05, 19.45],
+      ],
+      options: { padding: 64 },
+    })
   })
 })

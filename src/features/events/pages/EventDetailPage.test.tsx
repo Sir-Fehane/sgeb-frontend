@@ -10,12 +10,25 @@ import type { ComandaApiRecord } from '@/features/events/services/comandaApi'
 import type { EventoApiRecord } from '@/features/events/services/eventsApi'
 import type { MesaApiRecord } from '@/features/events/services/mesasApi'
 import type { SalonApiRecord } from '@/features/events/services/salonesApi'
+import { formatEventPresentationTime } from '@/features/events/utils/eventDetailFormatting'
 import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { SgebApplicationError, SgebNetworkError } from '@/shared/api/sgebApiError'
 import { requestSgeb, type SgebRequestConfig } from '@/shared/api/sgebClient'
 
 vi.mock('@/shared/api/sgebClient', () => ({
   requestSgeb: vi.fn(),
+}))
+
+/**
+ * This page's own tests exercise data wiring (comanda/mesas/edit/lifecycle
+ * state), not the geofence preview's map behavior (see
+ * `EventGeofenceMapPreview.test.tsx` for that) — stubbed here purely so a
+ * resolved salón (capitán/admin sessions) doesn't pull in real `mapbox-gl`
+ * (unsafe/unsupported under jsdom), same reasoning as
+ * `SalonLocationPicker.test.tsx`'s own stub.
+ */
+vi.mock('@/shared/components/ui/mapbox-map', () => ({
+  MapboxMap: () => <div data-testid="mapbox-map-stub" />,
 }))
 
 beforeEach(() => {
@@ -206,7 +219,9 @@ describe('EventDetailPage', () => {
     renderAt('/eventos/1001')
 
     await screen.findByRole('heading', { level: 2, name: 'Boda García' })
-    expect(screen.getByText('16:00')).toBeInTheDocument()
+    expect(
+      screen.getByText(formatEventPresentationTime(RECORD.hora_presentacion)),
+    ).toBeInTheDocument()
     expect(screen.getAllByText('Información pendiente de integración')).toHaveLength(1)
     expect(
       vi
@@ -420,7 +435,13 @@ describe('EventDetailPage — Salón resolution (GET /salones/{id_salon})', () =
     renderAt('/eventos/1001')
 
     await screen.findByRole('heading', { level: 2, name: 'Boda García' })
-    expect(await screen.findByText('Salón Roble')).toBeInTheDocument()
+    // Rendered twice by design once resolved: the Schedule section's own
+    // "Salón" row, and the geofence section's compact name/address/radio
+    // context (`EventDetailGeofenceSection`) — both read this same
+    // resolved name, so this asserts presence rather than a single match.
+    await waitFor(() => {
+      expect(screen.getAllByText('Salón Roble').length).toBeGreaterThan(0)
+    })
     expect(
       screen.queryByText('Información pendiente de integración'),
     ).not.toBeInTheDocument()
@@ -435,7 +456,9 @@ describe('EventDetailPage — Salón resolution (GET /salones/{id_salon})', () =
 
     renderAt('/eventos/1001')
 
-    expect(await screen.findByText('Salón Roble')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getAllByText('Salón Roble').length).toBeGreaterThan(0)
+    })
   })
 
   it('never calls GET /salones/{id_salon} for a mesero session — the pinned backend restricts it to capitán/admin — and keeps the existing fallback text', async () => {

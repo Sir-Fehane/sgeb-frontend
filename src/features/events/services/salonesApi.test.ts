@@ -36,11 +36,13 @@ const RECORD: SalonApiRecord = {
 }
 
 describe('mapSalonToOption', () => {
-  it('maps only idSalon/nombre/capacidadMaxMesas — no address/geolocation fields', () => {
+  it('maps idSalon/nombre/capacidadMaxMesas/latitud/longitud — no address fields', () => {
     expect(mapSalonToOption(RECORD)).toEqual({
       idSalon: 1,
       nombre: 'Salón Roble',
       capacidadMaxMesas: 40,
+      latitud: 19.4,
+      longitud: -99.1,
     })
   })
 })
@@ -74,12 +76,17 @@ describe('fetchSalones', () => {
 })
 
 describe('mapSalonToDetail', () => {
-  it('maps idSalon/nombre/ciudad/estado — no address/geolocation/capacity fields', () => {
+  it('maps idSalon/nombre/calle/colonia/cp/ciudad/estado/latitud/longitud — no capacity fields', () => {
     expect(mapSalonToDetail(RECORD)).toEqual({
       idSalon: 1,
       nombre: 'Salón Roble',
+      calle: 'Calle 1',
+      colonia: 'Centro',
+      cp: '00000',
       ciudad: 'CDMX',
       estado: 'CDMX',
+      latitud: 19.4,
+      longitud: -99.1,
     })
   })
 })

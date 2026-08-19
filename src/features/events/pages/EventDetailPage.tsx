@@ -26,6 +26,7 @@ import {
   type UpdateEventoRequest,
 } from '@/features/events/services/eventsApi'
 import type { EventStatus } from '@/features/events/types/event'
+import { formatSalonAddress } from '@/features/events/utils/eventDetailFormatting'
 import { parseEventId } from '@/features/events/utils/parseEventId'
 import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
@@ -177,18 +178,33 @@ export function EventDetailPage() {
    */
   const salonQuery = useSalonQuery(canManageEvent && evento ? evento.idSalon : null)
 
+  /** A single pre-formatted address line, or `null` if the resolved Salón carries none of its address pieces — see `formatSalonAddress`'s own comment. */
+  const salonAddress = salonQuery.data ? formatSalonAddress(salonQuery.data) : null
+
   /**
    * The evento passed to `EventDetailContent` for DISPLAY only — never
    * reused for any mutation/permission logic above, which all read the
-   * real query's `evento` directly. `salonNombre` is the one field this
-   * overlays: `mapEventoToDetail` deliberately never populates it (see
-   * that function's own comment), so `EventDetailScheduleSection`'s
-   * existing "pendiente de integración" fallback keeps working unchanged
+   * real query's `evento` directly. `salonNombre`/`salonLatitud`/
+   * `salonLongitud`/`salonAddress` are the fields this overlays:
+   * `mapEventoToDetail` deliberately never populates any of them (see that
+   * function's own comment), so `EventDetailScheduleSection`'s existing
+   * "pendiente de integración" fallback and `EventGeofenceMapPreview`'s own
+   * "no pudimos resolver la ubicación" fallback both keep working unchanged
    * whenever `salonQuery` hasn't resolved yet, is disabled for this role,
    * or fails.
    */
   const eventoForDisplay = evento
-    ? { ...evento, ...(salonQuery.data ? { salonNombre: salonQuery.data.nombre } : {}) }
+    ? {
+        ...evento,
+        ...(salonQuery.data
+          ? {
+              salonNombre: salonQuery.data.nombre,
+              salonLatitud: salonQuery.data.latitud,
+              salonLongitud: salonQuery.data.longitud,
+            }
+          : {}),
+        ...(salonAddress ? { salonAddress } : {}),
+      }
     : null
 
   async function handleOpenComanda(signal: AbortSignal, tab: Window | null) {

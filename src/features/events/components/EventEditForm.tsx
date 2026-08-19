@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useForm } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 
+import { EventGeofenceMapPreview } from '@/features/events/components/EventGeofenceMapPreview'
 import { EventGeofenceRadiusField } from '@/features/events/components/EventGeofenceRadiusField'
 import {
   editEventFormSchema,
@@ -55,7 +56,7 @@ export function EventEditForm({
   const {
     register,
     handleSubmit,
-    watch,
+    control,
     formState: { errors },
   } = useForm<EventEditFormValues>({
     resolver: zodResolver(editEventFormSchema),
@@ -68,6 +69,14 @@ export function EventEditForm({
       radio_geocerca_m: evento.radioGeocercaM,
     },
   })
+
+  /**
+   * Scoped `useWatch`, not `methods.watch()` in the render body — see
+   * `EventCreateForm`'s identical comment: the geofence preview subtree is
+   * heavier than a plain input, so a broad subscription would re-render it
+   * on every keystroke of unrelated fields (título, tarifa, ...) too.
+   */
+  const watchedRadioGeocercaM = useWatch({ control, name: 'radio_geocerca_m' })
 
   async function submit(values: EventEditFormValues) {
     try {
@@ -151,7 +160,6 @@ export function EventEditForm({
           )}
         </FormField>
         <EventGeofenceRadiusField
-          value={watch('radio_geocerca_m')}
           disabled={isSubmitting || !canEditRadioGeocerca}
           error={errors.radio_geocerca_m?.message}
           extraDescription={
@@ -160,6 +168,19 @@ export function EventEditForm({
               : 'Solo editable mientras el evento está en borrador — cambiarlo después invalidaría asistencias ya confirmadas.'
           }
           registration={register('radio_geocerca_m', { valueAsNumber: true })}
+        />
+        <EventGeofenceMapPreview
+          salon={
+            evento.salonLatitud !== undefined && evento.salonLongitud !== undefined
+              ? {
+                  nombre: evento.salonNombre,
+                  lat: evento.salonLatitud,
+                  lng: evento.salonLongitud,
+                }
+              : null
+          }
+          radiusMeters={watchedRadioGeocercaM}
+          emptyStateMessage="No pudimos obtener la ubicación del salón para mostrar la vista previa."
         />
       </section>
 

@@ -45,15 +45,21 @@ export interface SalonesListParams {
 
 /**
  * Maps one `Salon` wire record to the event-creation salón picker's option
- * shape. Only `idSalon`/`nombre`/`capacidadMaxMesas` are needed there (the
- * latter for the client-side SGEB-4007 cross-check against `numMesas`) —
- * the address/geolocation fields have no UI use in that picker.
+ * shape: `idSalon`/`nombre`/`capacidadMaxMesas` (the latter for the
+ * client-side SGEB-4007 cross-check against `numMesas`), plus
+ * `latitud`/`longitud` — carried through unchanged so `EventCreateForm` can
+ * feed the selected salón straight into `EventGeofenceMapPreview` from this
+ * same already-fetched `GET /salones` list, with no second request. The
+ * remaining address fields (`calle`/`cp`/`colonia`/`ciudad`/`estado`) still
+ * have no UI use in that picker and stay excluded.
  */
 export function mapSalonToOption(record: SalonApiRecord): EventSalonOption {
   return {
     idSalon: record.id_salon,
     nombre: record.nombre,
     capacidadMaxMesas: record.capacidad_max_mesas,
+    latitud: record.latitud,
+    longitud: record.longitud,
   }
 }
 
@@ -77,28 +83,41 @@ export async function fetchSalones(
 
 /**
  * Event Detail's Salón field needs a name plus enough address context to
- * be actually useful (not just "integrated") — `nombre`/`ciudad`/`estado`
- * only, the smallest addition that improves on a bare name. No
- * capacity/coordinates: nothing on Event Detail compares against
+ * be actually useful (not just "integrated") — `nombre`/`calle`/`colonia`/
+ * `cp`/`ciudad`/`estado` (the full postal address, used by
+ * `formatSalonAddress` for the geofence section's compact read-only
+ * context), plus `latitud`/`longitud` for `EventGeofenceMapPreview`'s real
+ * geographic preview (Event Detail's read-only preview and
+ * `EventEditForm`'s live one both resolve their salón through this same
+ * `useSalonQuery` call — see `EventDetailPage`'s `eventoForDisplay`
+ * overlay). No capacity: nothing on Event Detail compares against
  * `capacidadMaxMesas` (that cross-check is `EventCreateForm`'s own,
- * client-side-only SGEB-4007 concern) and no map/geocoding exists here to
- * plot latitud/longitud (explicitly out of scope — see this branch's
- * report).
+ * client-side-only SGEB-4007 concern).
  */
 export interface SalonDetailViewModel {
   idSalon: number
   nombre: string
+  calle: string
+  colonia: string
+  cp: string
   ciudad: string
   estado: string
+  latitud: number
+  longitud: number
 }
 
-/** Maps only the fields `SalonDetailViewModel` needs — see that type's own comment for why the rest of `SalonApiRecord` is left out. */
+/** Maps only the fields `SalonDetailViewModel` needs — see that type's own comment for why `capacidad_max_mesas`/`capacidad_personas`/`activo` are left out. */
 export function mapSalonToDetail(record: SalonApiRecord): SalonDetailViewModel {
   return {
     idSalon: record.id_salon,
     nombre: record.nombre,
+    calle: record.calle,
+    colonia: record.colonia,
+    cp: record.cp,
     ciudad: record.ciudad,
     estado: record.estado,
+    latitud: record.latitud,
+    longitud: record.longitud,
   }
 }
 

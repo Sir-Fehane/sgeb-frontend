@@ -5,6 +5,17 @@ import { describe, expect, it, vi } from 'vitest'
 import { EventEditForm } from '@/features/events/components/EventEditForm'
 import type { EventDetailViewModel } from '@/features/events/types/event'
 
+/**
+ * This form's own tests exercise field editability/submission, not the
+ * geofence preview's map behavior (see `EventGeofenceMapPreview.test.tsx`
+ * for that) — stubbed here purely so a resolved salón doesn't pull in real
+ * `mapbox-gl` (unsafe/unsupported under jsdom), same reasoning as
+ * `SalonLocationPicker.test.tsx`'s own stub.
+ */
+vi.mock('@/shared/components/ui/mapbox-map', () => ({
+  MapboxMap: () => <div data-testid="mapbox-map-stub" />,
+}))
+
 const BORRADOR_EVENTO: EventDetailViewModel = {
   idEvento: 1001,
   idSalon: 1,
@@ -18,6 +29,13 @@ const BORRADOR_EVENTO: EventDetailViewModel = {
   numMesas: 20,
   tarifaPorMesero: 450,
   radioGeocercaM: 150,
+}
+
+const BORRADOR_EVENTO_CON_SALON: EventDetailViewModel = {
+  ...BORRADOR_EVENTO,
+  salonNombre: 'Salón Roble',
+  salonLatitud: 25.5428,
+  salonLongitud: -103.4068,
 }
 
 const PUBLICADO_EVENTO: EventDetailViewModel = { ...BORRADOR_EVENTO, estado: 'publicado' }
@@ -100,6 +118,32 @@ describe('EventEditForm', () => {
     expect(
       screen.getByText('El evento no admite esta operación en su estado actual.'),
     ).toBeInTheDocument()
+  })
+
+  it('shows the geofence empty state when the salón location cannot be resolved', () => {
+    render(
+      <EventEditForm evento={BORRADOR_EVENTO} onSubmit={vi.fn()} onCancel={vi.fn()} />,
+    )
+
+    expect(
+      screen.getByText(
+        'No pudimos obtener la ubicación del salón para mostrar la vista previa.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('shows the real map preview once the salón location is resolved, without exposing an editable location field', async () => {
+    render(
+      <EventEditForm
+        evento={BORRADOR_EVENTO_CON_SALON}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    expect(await screen.findByTestId('mapbox-map-stub')).toBeInTheDocument()
+    expect(screen.queryByLabelText(/^Latitud/)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/^Longitud/)).not.toBeInTheDocument()
   })
 
   it('does not render salón, fecha, hora de presentación, or inicio fields — not part of PUT /eventos/{id}', () => {
