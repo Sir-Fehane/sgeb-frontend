@@ -125,14 +125,16 @@ describe('EventDetailContent — populated state', () => {
     expect(screen.getByText('Social')).toBeInTheDocument()
   })
 
-  it('renders salón, date, presentation time, and start date/time', () => {
+  it('renders salón, date, presentation time, and start time — the date shown once, never duplicated for inicio', () => {
     renderContent({ evento: EVENTO_CON_COMANDA })
 
     expect(screen.getByText('Salón Roble')).toBeInTheDocument()
     expect(screen.getByText('12/09/2026')).toBeInTheDocument()
     expect(screen.getByText('16:00')).toBeInTheDocument()
-    expect(screen.getByText('Inicio')).toBeInTheDocument()
-    expect(screen.getAllByText(/2026/).length).toBeGreaterThan(0)
+    expect(screen.getByText('Hora de inicio')).toBeInTheDocument()
+    // Fecha (date-only) appears once; Hora de inicio derives only the time
+    // component from `inicio`, never a second full date.
+    expect(screen.queryAllByText(/2026/)).toHaveLength(1)
   })
 
   it('renders waiter capacity, table count, MXN-formatted rate, and geofence radius', () => {

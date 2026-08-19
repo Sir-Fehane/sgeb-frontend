@@ -5,6 +5,7 @@ import {
   formatEventDateTime,
   formatEventGeofenceRadius,
   formatEventTarifa,
+  formatEventTime,
 } from '@/features/events/utils/eventDetailFormatting'
 
 describe('formatEventTarifa', () => {
@@ -75,5 +76,18 @@ describe('formatEventDateTime', () => {
     const equivalentOffset = formatEventDateTime('2026-09-12T12:00:00-06:00')
 
     expect(utc).toBe(equivalentOffset)
+  })
+})
+
+describe('formatEventTime', () => {
+  it("formats only inicio's time component, matching Date's own locale time formatting", () => {
+    const input = '2026-09-12T18:00:00'
+    expect(formatEventTime(input)).toBe(
+      new Date(input).toLocaleString('es-MX', { timeStyle: 'short' }),
+    )
+  })
+
+  it('never includes the date — the date is already shown separately (Fecha)', () => {
+    expect(formatEventTime('2026-09-12T18:00:00')).not.toMatch(/2026/)
   })
 })

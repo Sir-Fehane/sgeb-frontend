@@ -62,3 +62,15 @@ export function formatEventDateTime(dateTime: string): string {
     timeStyle: 'short',
   })
 }
+
+/**
+ * `inicio`'s TIME component only — used where the date is already shown
+ * separately (`EventDetailScheduleSection`'s own "Fecha" row), so the
+ * event's start is never presented as two redundant full dates. Same
+ * parsing rules as `formatEventDateTime` (delegates straight to `Date`,
+ * correct for naive/Z/offset forms alike); only the requested style
+ * differs.
+ */
+export function formatEventTime(dateTime: string): string {
+  return new Date(dateTime).toLocaleString('es-MX', { timeStyle: 'short' })
+}

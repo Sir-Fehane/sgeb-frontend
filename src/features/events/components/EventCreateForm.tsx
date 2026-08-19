@@ -2,14 +2,18 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useMemo } from 'react'
 import { useForm } from 'react-hook-form'
 
+import { EventGeofenceRadiusField } from '@/features/events/components/EventGeofenceRadiusField'
+import { EventTimeField } from '@/features/events/components/EventTimeField'
 import {
   createEventFormSchema,
   type EventCreateFormValues,
 } from '@/features/events/schemas/eventCreateSchema'
 import type { EventSalonOption } from '@/features/events/types/event'
+import { getTodayIsoDate } from '@/features/events/utils/eventScheduling'
 import {
   Button,
   FormField,
+  HelperText,
   Input,
   SectionHeading,
   Select,
@@ -63,6 +67,7 @@ export function EventCreateForm({
     register,
     handleSubmit,
     setValue,
+    watch,
     formState: { errors },
   } = useForm<EventCreateFormValues>({
     resolver: zodResolver(schema),
@@ -70,7 +75,7 @@ export function EventCreateForm({
       titulo: '',
       fecha: '',
       hora_presentacion: '',
-      inicio: '',
+      hora_inicio: '',
     },
   })
 
@@ -98,7 +103,7 @@ export function EventCreateForm({
       className="flex flex-col gap-6"
     >
       <section className="flex flex-col gap-4">
-        <SectionHeading>Datos generales</SectionHeading>
+        <SectionHeading>Información general</SectionHeading>
         <FormField label="Título" required error={errors.titulo?.message}>
           {(controlProps) => (
             <Input
@@ -118,48 +123,6 @@ export function EventCreateForm({
             </Select>
           )}
         </FormField>
-      </section>
-
-      <section className="flex flex-col gap-4">
-        <SectionHeading>Programación</SectionHeading>
-        <FormField label="Fecha del evento" required error={errors.fecha?.message}>
-          {(controlProps) => (
-            <Input
-              {...controlProps}
-              type="date"
-              disabled={isSubmitting}
-              {...register('fecha')}
-            />
-          )}
-        </FormField>
-        <FormField
-          label="Hora de presentación del personal"
-          required
-          error={errors.hora_presentacion?.message}
-        >
-          {(controlProps) => (
-            <Input
-              {...controlProps}
-              type="time"
-              disabled={isSubmitting}
-              {...register('hora_presentacion')}
-            />
-          )}
-        </FormField>
-        <FormField label="Fecha y hora de inicio" required error={errors.inicio?.message}>
-          {(controlProps) => (
-            <Input
-              {...controlProps}
-              type="datetime-local"
-              disabled={isSubmitting}
-              {...register('inicio')}
-            />
-          )}
-        </FormField>
-      </section>
-
-      <section className="flex flex-col gap-4">
-        <SectionHeading>Salón y capacidad</SectionHeading>
         <FormField label="Salón" required error={errors.id_salon?.message}>
           {(controlProps) => (
             <Select
@@ -176,16 +139,37 @@ export function EventCreateForm({
             </Select>
           )}
         </FormField>
-        <FormField label="Número de mesas" required error={errors.num_mesas?.message}>
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <SectionHeading>Programación</SectionHeading>
+        <FormField label="Fecha del evento" required error={errors.fecha?.message}>
           {(controlProps) => (
             <Input
               {...controlProps}
-              type="number"
+              type="date"
+              min={getTodayIsoDate()}
               disabled={isSubmitting}
-              {...register('num_mesas', { valueAsNumber: true })}
+              {...register('fecha')}
             />
           )}
         </FormField>
+        <EventTimeField
+          label="Hora de presentación del personal"
+          disabled={isSubmitting}
+          error={errors.hora_presentacion?.message}
+          registration={register('hora_presentacion')}
+        />
+        <EventTimeField
+          label="Hora de inicio del evento"
+          disabled={isSubmitting}
+          error={errors.hora_inicio?.message}
+          registration={register('hora_inicio')}
+        />
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <SectionHeading>Operación</SectionHeading>
         <FormField label="Cupo de meseros" required error={errors.cupo_meseros?.message}>
           {(controlProps) => (
             <Input
@@ -196,24 +180,16 @@ export function EventCreateForm({
             />
           )}
         </FormField>
-        <FormField
-          label="Radio de geocerca (metros)"
-          required
-          error={errors.radio_geocerca_m?.message}
-        >
+        <FormField label="Número de mesas" required error={errors.num_mesas?.message}>
           {(controlProps) => (
             <Input
               {...controlProps}
               type="number"
               disabled={isSubmitting}
-              {...register('radio_geocerca_m', { valueAsNumber: true })}
+              {...register('num_mesas', { valueAsNumber: true })}
             />
           )}
         </FormField>
-      </section>
-
-      <section className="flex flex-col gap-4">
-        <SectionHeading>Tarifa</SectionHeading>
         <FormField
           label="Tarifa por mesero (MXN)"
           required
@@ -229,6 +205,12 @@ export function EventCreateForm({
             />
           )}
         </FormField>
+        <EventGeofenceRadiusField
+          value={watch('radio_geocerca_m')}
+          disabled={isSubmitting}
+          error={errors.radio_geocerca_m?.message}
+          registration={register('radio_geocerca_m', { valueAsNumber: true })}
+        />
       </section>
 
       <section className="flex flex-col gap-4">
@@ -238,13 +220,10 @@ export function EventCreateForm({
         </Text>
       </section>
 
-      <section className="flex flex-col gap-4">
-        <SectionHeading>Comanda</SectionHeading>
-        <Text size="sm" className="text-muted-foreground">
-          La comanda se sube después de crear el evento, desde su detalle — no forma parte
-          de este alta.
-        </Text>
-      </section>
+      <HelperText>
+        La comanda se sube después de crear el evento, desde su detalle — no forma parte
+        de este alta.
+      </HelperText>
 
       <Button type="submit" loading={isSubmitting} className="w-full sm:w-auto">
         Crear evento

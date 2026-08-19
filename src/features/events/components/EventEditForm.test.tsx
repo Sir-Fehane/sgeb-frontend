@@ -32,7 +32,9 @@ describe('EventEditForm', () => {
     expect(screen.getByLabelText(/^Número de mesas/)).toHaveValue(20)
     expect(screen.getByLabelText(/^Cupo de meseros/)).toHaveValue(12)
     expect(screen.getByLabelText(/^Tarifa por mesero/)).toHaveValue(450)
-    expect(screen.getByLabelText(/^Radio de geocerca/)).toHaveValue(150)
+    expect(screen.getByLabelText(/^Radio permitido para registrar llegada/)).toHaveValue(
+      150,
+    )
   })
 
   it('leaves radio_geocerca_m editable while the event is in borrador', () => {
@@ -40,7 +42,7 @@ describe('EventEditForm', () => {
       <EventEditForm evento={BORRADOR_EVENTO} onSubmit={vi.fn()} onCancel={vi.fn()} />,
     )
 
-    expect(screen.getByLabelText(/^Radio de geocerca/)).toBeEnabled()
+    expect(screen.getByLabelText(/^Radio permitido para registrar llegada/)).toBeEnabled()
   })
 
   it('disables radio_geocerca_m once the event is no longer borrador — a real SGEB-4013 restriction', () => {
@@ -48,7 +50,9 @@ describe('EventEditForm', () => {
       <EventEditForm evento={PUBLICADO_EVENTO} onSubmit={vi.fn()} onCancel={vi.fn()} />,
     )
 
-    expect(screen.getByLabelText(/^Radio de geocerca/)).toBeDisabled()
+    expect(
+      screen.getByLabelText(/^Radio permitido para registrar llegada/),
+    ).toBeDisabled()
     expect(
       screen.getByText(/Solo editable mientras el evento está en borrador/),
     ).toBeInTheDocument()

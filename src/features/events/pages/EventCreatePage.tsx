@@ -9,6 +9,7 @@ import { useSalonesQuery } from '@/features/events/queries/useSalonesQuery'
 import type { EventCreateFormValues } from '@/features/events/schemas/eventCreateSchema'
 import type { CreateSalonFormValues } from '@/features/events/schemas/salonCreateSchema'
 import type { CreateEventoRequest } from '@/features/events/services/eventsApi'
+import { buildInicioDateTime } from '@/features/events/utils/eventScheduling'
 import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
 import { Alert, Button, SectionHeading, Spinner, Text, Toast } from '@/shared/components'
@@ -38,7 +39,7 @@ function toCreateEventoRequest(
     tipo: values.tipo,
     fecha: values.fecha,
     horaPresentacion: values.hora_presentacion,
-    inicio: values.inicio,
+    inicio: buildInicioDateTime(values.fecha, values.hora_inicio),
     cupoMeseros: values.cupo_meseros,
     numMesas: values.num_mesas,
     tarifaPorMesero: values.tarifa_por_mesero,

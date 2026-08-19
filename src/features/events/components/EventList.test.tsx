@@ -1,7 +1,6 @@
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import { EventList } from '@/features/events/components/EventList'
 import { EVENTOS_FIXTURE } from '@/features/events/fixtures/eventFixtures'
@@ -45,45 +44,25 @@ describe('EventList', () => {
     expect(screen.getByText('Borrador')).toBeInTheDocument()
   })
 
-  it('exposes exactly one select button and one "Ver detalle" link per event — no duplicate accessible names across the responsive presentation', () => {
+  it('exposes exactly two links per event — the main card surface and "Ver detalle" — no button, no duplicate accessible names', () => {
     renderList({ eventos: EVENTOS_FIXTURE })
 
-    expect(screen.getAllByRole('button')).toHaveLength(EVENTOS_FIXTURE.length)
+    expect(screen.queryAllByRole('button')).toHaveLength(0)
+    expect(screen.getAllByRole('link')).toHaveLength(EVENTOS_FIXTURE.length * 2)
     expect(screen.getAllByRole('link', { name: /^Ver detalle de / })).toHaveLength(
       EVENTOS_FIXTURE.length,
     )
   })
 
-  it('invokes onSelectEvent with the opaque string event id when an event is chosen', async () => {
-    const user = userEvent.setup()
-    const onSelectEvent = vi.fn()
-    renderList({ eventos: EVENTOS_FIXTURE, onSelectEvent })
+  it('the main card surface navigates to /eventos/{id}, keyboard-operable like any link', () => {
+    renderList({ eventos: EVENTOS_FIXTURE })
 
-    const first = EVENTOS_FIXTURE[0]
-    if (!first) {
-      throw new Error('Expected at least one fixture event')
-    }
-
-    await user.click(screen.getByText(first.titulo))
-
-    expect(onSelectEvent).toHaveBeenCalledWith(String(first.idEvento))
-    expect(typeof onSelectEvent.mock.calls[0]?.[0]).toBe('string')
-  })
-
-  it('is keyboard-operable — Enter on a focused event activates selection', async () => {
-    const user = userEvent.setup()
-    const onSelectEvent = vi.fn()
-    renderList({ eventos: EVENTOS_FIXTURE, onSelectEvent })
-
-    const buttons = screen.getAllByRole('button')
-    const firstButton = buttons[0]
-    if (!firstButton) {
-      throw new Error('Expected at least one event button')
-    }
-    firstButton.focus()
-    await user.keyboard('{Enter}')
-
-    expect(onSelectEvent).toHaveBeenCalledOnce()
+    const mainLinks = screen.getAllByRole('link', { name: /^Ver detalles de/ })
+    expect(mainLinks).toHaveLength(EVENTOS_FIXTURE.length)
+    mainLinks.forEach((link, index) => {
+      const evento = EVENTOS_FIXTURE[index]
+      expect(link).toHaveAttribute('href', `/eventos/${String(evento?.idEvento)}`)
+    })
   })
 
   it('each "Ver detalle" link points to its matching /eventos/{id}, with an accessible name', () => {

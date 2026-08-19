@@ -1,12 +1,20 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 
+import { EventGeofenceRadiusField } from '@/features/events/components/EventGeofenceRadiusField'
 import {
   editEventFormSchema,
   type EventEditFormValues,
 } from '@/features/events/schemas/eventEditSchema'
 import type { EventDetailViewModel } from '@/features/events/types/event'
-import { Alert, Button, FormField, Input, Select } from '@/shared/components'
+import {
+  Alert,
+  Button,
+  FormField,
+  Input,
+  SectionHeading,
+  Select,
+} from '@/shared/components'
 
 export interface EventEditFormProps {
   evento: EventDetailViewModel
@@ -47,6 +55,7 @@ export function EventEditForm({
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors },
   } = useForm<EventEditFormValues>({
     resolver: zodResolver(editEventFormSchema),
@@ -82,78 +91,77 @@ export function EventEditForm({
         </Alert>
       ) : null}
 
-      <FormField label="Título" required error={errors.titulo?.message}>
-        {(controlProps) => (
-          <Input
-            {...controlProps}
-            maxLength={120}
-            disabled={isSubmitting}
-            {...register('titulo')}
-          />
-        )}
-      </FormField>
-      <FormField label="Tipo de evento" required error={errors.tipo?.message}>
-        {(controlProps) => (
-          <Select {...controlProps} disabled={isSubmitting} {...register('tipo')}>
-            <option value="social">Social</option>
-            <option value="empresarial">Empresarial</option>
-          </Select>
-        )}
-      </FormField>
-      <FormField label="Número de mesas" required error={errors.num_mesas?.message}>
-        {(controlProps) => (
-          <Input
-            {...controlProps}
-            type="number"
-            disabled={isSubmitting}
-            {...register('num_mesas', { valueAsNumber: true })}
-          />
-        )}
-      </FormField>
-      <FormField label="Cupo de meseros" required error={errors.cupo_meseros?.message}>
-        {(controlProps) => (
-          <Input
-            {...controlProps}
-            type="number"
-            disabled={isSubmitting}
-            {...register('cupo_meseros', { valueAsNumber: true })}
-          />
-        )}
-      </FormField>
-      <FormField
-        label="Tarifa por mesero (MXN)"
-        required
-        error={errors.tarifa_por_mesero?.message}
-      >
-        {(controlProps) => (
-          <Input
-            {...controlProps}
-            type="number"
-            step="0.01"
-            disabled={isSubmitting}
-            {...register('tarifa_por_mesero', { valueAsNumber: true })}
-          />
-        )}
-      </FormField>
-      <FormField
-        label="Radio de geocerca (metros)"
-        required
-        error={errors.radio_geocerca_m?.message}
-        description={
-          canEditRadioGeocerca
-            ? undefined
-            : 'Solo editable mientras el evento está en borrador — cambiarlo después invalidaría asistencias ya confirmadas.'
-        }
-      >
-        {(controlProps) => (
-          <Input
-            {...controlProps}
-            type="number"
-            disabled={isSubmitting || !canEditRadioGeocerca}
-            {...register('radio_geocerca_m', { valueAsNumber: true })}
-          />
-        )}
-      </FormField>
+      <section className="flex flex-col gap-4">
+        <SectionHeading>Información general</SectionHeading>
+        <FormField label="Título" required error={errors.titulo?.message}>
+          {(controlProps) => (
+            <Input
+              {...controlProps}
+              maxLength={120}
+              disabled={isSubmitting}
+              {...register('titulo')}
+            />
+          )}
+        </FormField>
+        <FormField label="Tipo de evento" required error={errors.tipo?.message}>
+          {(controlProps) => (
+            <Select {...controlProps} disabled={isSubmitting} {...register('tipo')}>
+              <option value="social">Social</option>
+              <option value="empresarial">Empresarial</option>
+            </Select>
+          )}
+        </FormField>
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <SectionHeading>Operación</SectionHeading>
+        <FormField label="Cupo de meseros" required error={errors.cupo_meseros?.message}>
+          {(controlProps) => (
+            <Input
+              {...controlProps}
+              type="number"
+              disabled={isSubmitting}
+              {...register('cupo_meseros', { valueAsNumber: true })}
+            />
+          )}
+        </FormField>
+        <FormField label="Número de mesas" required error={errors.num_mesas?.message}>
+          {(controlProps) => (
+            <Input
+              {...controlProps}
+              type="number"
+              disabled={isSubmitting}
+              {...register('num_mesas', { valueAsNumber: true })}
+            />
+          )}
+        </FormField>
+        <FormField
+          label="Tarifa por mesero (MXN)"
+          required
+          error={errors.tarifa_por_mesero?.message}
+        >
+          {(controlProps) => (
+            <Input
+              {...controlProps}
+              type="number"
+              step="0.01"
+              disabled={isSubmitting}
+              {...register('tarifa_por_mesero', { valueAsNumber: true })}
+            />
+          )}
+        </FormField>
+        <EventGeofenceRadiusField
+          value={watch('radio_geocerca_m')}
+          disabled={isSubmitting || !canEditRadioGeocerca}
+          error={errors.radio_geocerca_m?.message}
+          extraDescription={
+            canEditRadioGeocerca
+              ? undefined
+              : 'Solo editable mientras el evento está en borrador — cambiarlo después invalidaría asistencias ya confirmadas.'
+          }
+          registration={register('radio_geocerca_m', { valueAsNumber: true })}
+        />
+      </section>
 
       <div className="flex gap-2">
         <Button type="submit" loading={isSubmitting}>

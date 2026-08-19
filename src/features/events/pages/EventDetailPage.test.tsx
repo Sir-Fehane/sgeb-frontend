@@ -744,7 +744,9 @@ describe('EventDetailPage — edit (PUT /eventos/{id})', () => {
     renderAt('/eventos/1001')
 
     await user.click(await screen.findByRole('button', { name: 'Editar evento' }))
-    expect(screen.getByLabelText(/^Radio de geocerca/)).toBeDisabled()
+    expect(
+      screen.getByLabelText(/^Radio permitido para registrar llegada/),
+    ).toBeDisabled()
     await user.click(screen.getByRole('button', { name: 'Guardar cambios' }))
 
     await waitFor(() => {

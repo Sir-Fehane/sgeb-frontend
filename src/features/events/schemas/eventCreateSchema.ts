@@ -1,5 +1,9 @@
 import { z } from 'zod'
 
+import {
+  buildInicioDateTime,
+  getTodayIsoDate,
+} from '@/features/events/utils/eventScheduling'
 import type { EventSalonOption } from '@/features/events/types/event'
 
 const TITULO_MIN = 3
@@ -15,10 +19,6 @@ const RADIO_GEOCERCA_MAX = 1000
 
 const HORA_PATTERN = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/
 const TWO_DECIMALS_PATTERN = /^\d+(\.\d{1,2})?$/
-
-function todayIsoDate(): string {
-  return new Date().toISOString().slice(0, 10)
-}
 
 /**
  * Client-side validation for the real `POST /eventos` creation flow
@@ -45,7 +45,11 @@ function todayIsoDate(): string {
  *
  * - SGEB-2007 — `fecha` must not be before today.
  * - SGEB-2008 — `inicio`'s date component must match `fecha`, and
- *   `inicio` must not be in the past.
+ *   `inicio` must not be in the past. This form never asks for `inicio`'s
+ *   date separately (see `hora_inicio` below) — its date component is
+ *   `fecha` BY CONSTRUCTION, so only the "not in the past" half is a real
+ *   cross-field check here; the "must match `fecha`" half of SGEB-2008 can
+ *   no longer fail.
  * - SGEB-4007 — `num_mesas` must not exceed the selected salón's
  *   `capacidad_max_mesas`. This one needs the salón options list, so
  *   the schema is built by a factory rather than exported as a static
@@ -58,7 +62,10 @@ function todayIsoDate(): string {
  * `CreateEventoRequest` for the full writeup). `useCreateEventoMutation`'s
  * caller is responsible for translating between the two, the same
  * established pattern `closureApi.ts`'s `createMermaReport` already uses
- * for its own camelCase `costoEstimado` translation.
+ * for its own camelCase `costoEstimado` translation. The same caller also
+ * derives the wire `inicio` datetime from `fecha` + `hora_inicio` via
+ * `buildInicioDateTime` — this schema's own `hora_inicio` field is a UI
+ * convenience, not a literal `EventoCrear` field name.
  */
 export function createEventFormSchema(salones: readonly EventSalonOption[]) {
   return z
@@ -77,19 +84,22 @@ export function createEventFormSchema(salones: readonly EventSalonOption[]) {
         .string()
         .regex(/^\d{4}-\d{2}-\d{2}$/, 'Ingresa una fecha válida.')
         .refine(
-          (fecha) => fecha >= todayIsoDate(),
+          (fecha) => fecha >= getTodayIsoDate(),
           'La fecha del evento no puede ser anterior a hoy.',
         ),
       hora_presentacion: z
         .string()
         .regex(HORA_PATTERN, 'Ingresa una hora válida (HH:MM).'),
-      inicio: z
+      /**
+       * The event's start TIME only — its date is always `fecha` above,
+       * never asked twice (see `EventCreateForm`). Combined with `fecha`
+       * into the real wire `inicio` datetime by `buildInicioDateTime`,
+       * both here (for the "not in the past" check below) and in
+       * `EventCreatePage`'s request builder.
+       */
+      hora_inicio: z
         .string()
-        .min(1, 'Ingresa la fecha y hora de inicio.')
-        .refine(
-          (value) => !Number.isNaN(Date.parse(value)),
-          'Ingresa una fecha y hora válidas.',
-        ),
+        .regex(HORA_PATTERN, 'Ingresa una hora de inicio válida (HH:MM).'),
       cupo_meseros: z
         .number({ error: 'Ingresa el cupo de meseros.' })
         .int()
@@ -133,19 +143,12 @@ export function createEventFormSchema(salones: readonly EventSalonOption[]) {
         ),
     })
     .superRefine((data, ctx) => {
-      const inicioDate = data.inicio.slice(0, 10)
-      if (inicioDate !== data.fecha) {
+      const inicio = buildInicioDateTime(data.fecha, data.hora_inicio)
+      if (!Number.isNaN(Date.parse(inicio)) && new Date(inicio) < new Date()) {
         ctx.addIssue({
           code: 'custom',
-          path: ['inicio'],
-          message: 'La fecha de inicio debe coincidir con la fecha del evento.',
-        })
-      }
-      if (!Number.isNaN(Date.parse(data.inicio)) && new Date(data.inicio) < new Date()) {
-        ctx.addIssue({
-          code: 'custom',
-          path: ['inicio'],
-          message: 'La fecha y hora de inicio no pueden ser anteriores a este momento.',
+          path: ['hora_inicio'],
+          message: 'La hora de inicio no puede ser anterior a este momento.',
         })
       }
 

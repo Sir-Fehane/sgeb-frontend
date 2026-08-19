@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { EVENTOS_FIXTURE } from '@/features/events/fixtures/eventFixtures'
 import { EventsPage } from '@/features/events/pages/EventsPage'
 import type { EventoApiRecord } from '@/features/events/services/eventsApi'
+import type { SalonApiRecord } from '@/features/events/services/salonesApi'
 import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { SgebApplicationError, SgebNetworkError } from '@/shared/api/sgebApiError'
 import { requestSgeb } from '@/shared/api/sgebClient'
@@ -59,6 +60,25 @@ const RECORD_B: EventoApiRecord = {
   estado: 'cancelado',
 }
 
+const SALON_RECORD: SalonApiRecord = {
+  id_salon: 1,
+  nombre: 'Salón Roble',
+  calle: 'Av. Reforma 100',
+  cp: '06600',
+  colonia: 'Juárez',
+  ciudad: 'CDMX',
+  estado: 'CDMX',
+  latitud: 19.43,
+  longitud: -99.13,
+  capacidad_max_mesas: 40,
+  capacidad_personas: 300,
+  activo: true,
+}
+
+function salonEnvelope(record: SalonApiRecord) {
+  return { result: { code: 'SGEB-0000', message: 'ok' }, data: record }
+}
+
 function renderPage() {
   // `retryDelay: 0` — the hook itself decides whether a given error retries
   // (see `useEventsListQuery`'s own `retry` function); zeroing the delay
@@ -76,6 +96,7 @@ function renderPage() {
             path="/eventos/nuevo"
             element={<div>Página de creación de evento</div>}
           />
+          <Route path="/eventos/:id" element={<div>Página de detalle de evento</div>} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -192,14 +213,15 @@ describe('EventsPage', () => {
     ])
   })
 
-  it('shows an honest inline notice instead of navigating when an event is selected', async () => {
+  it('navigates to the real /eventos/{id} when the main card surface is clicked — no stale "detail unavailable" notice', async () => {
     vi.mocked(requestSgeb).mockResolvedValue(successEnvelope([RECORD_A]))
     const user = userEvent.setup()
     renderPage()
 
     await user.click(await screen.findByText('Boda García'))
 
-    expect(screen.getByText(/aún no está disponible en esta base/)).toBeInTheDocument()
+    expect(await screen.findByText('Página de detalle de evento')).toBeInTheDocument()
+    expect(screen.queryByText(/aún no está disponible/)).not.toBeInTheDocument()
   })
 
   it('does not offer "Crear evento" to an unauthenticated session', async () => {
@@ -245,5 +267,47 @@ describe('EventsPage', () => {
 
     const link = await screen.findByRole('link', { name: 'Ver detalle de Boda García' })
     expect(link).toHaveAttribute('href', '/eventos/1001')
+  })
+
+  it('resolves the real salón name on each card for a capitán session, deduplicating one GET /salones/{id} across events that share a salón', async () => {
+    authenticate('capitan')
+    vi.mocked(requestSgeb).mockImplementation((config) => {
+      if (config.url === '/eventos') {
+        return Promise.resolve(successEnvelope([RECORD_A, RECORD_B]))
+      }
+      if (config.url === '/salones/1') {
+        return Promise.resolve(salonEnvelope(SALON_RECORD))
+      }
+      return Promise.reject(new Error(`Unexpected request: ${String(config.url)}`))
+    })
+    renderPage()
+
+    await screen.findByText('Boda García')
+    await screen.findByText('Conferencia anual')
+
+    expect(await screen.findAllByText('Salón Roble')).toHaveLength(2)
+    expect(
+      vi.mocked(requestSgeb).mock.calls.filter((call) => call[0].url === '/salones/1'),
+    ).toHaveLength(1)
+  })
+
+  it('keeps the existing "pendiente de integración" fallback for a mesero session — GET /salones/{id} is capitán/admin-only, never requested', async () => {
+    authenticate('mesero')
+    vi.mocked(requestSgeb).mockImplementation((config) => {
+      if (config.url === '/eventos') {
+        return Promise.resolve(successEnvelope([RECORD_A]))
+      }
+      return Promise.reject(new Error(`Unexpected request: ${String(config.url)}`))
+    })
+    renderPage()
+
+    await screen.findByText('Boda García')
+
+    expect(
+      screen.getAllByText('Información pendiente de integración').length,
+    ).toBeGreaterThan(0)
+    expect(
+      vi.mocked(requestSgeb).mock.calls.some((call) => call[0].url === '/salones/1'),
+    ).toBe(false)
   })
 })

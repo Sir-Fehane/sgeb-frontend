@@ -108,11 +108,11 @@ async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
   await user.selectOptions(screen.getByLabelText(/^Tipo de evento/), 'social')
   await user.type(screen.getByLabelText(/^Fecha del evento/), '2099-01-10')
   await user.type(screen.getByLabelText(/^Hora de presentación/), '16:00')
-  await user.type(screen.getByLabelText(/^Fecha y hora de inicio/), '2099-01-10T18:00')
+  await user.type(screen.getByLabelText(/^Hora de inicio del evento/), '18:00')
   await user.selectOptions(screen.getByLabelText(/^Salón/), '1')
   await user.type(screen.getByLabelText(/^Número de mesas/), '10')
   await user.type(screen.getByLabelText(/^Cupo de meseros/), '5')
-  await user.type(screen.getByLabelText(/^Radio de geocerca/), '150')
+  await user.type(screen.getByLabelText(/^Radio permitido para registrar llegada/), '150')
   await user.type(screen.getByLabelText(/^Tarifa por mesero/), '400')
 }
 
@@ -170,7 +170,9 @@ describe('EventCreatePage', () => {
       idSalon: 1,
       titulo: 'Evento válido de prueba',
       tipo: 'social',
+      fecha: '2099-01-10',
       horaPresentacion: '16:00',
+      inicio: '2099-01-10T18:00',
       cupoMeseros: 5,
       numMesas: 10,
       tarifaPorMesero: 400,
@@ -182,6 +184,61 @@ describe('EventCreatePage', () => {
     expect(
       await screen.findByText('Detalle del evento — justCreated: true'),
     ).toBeInTheDocument()
+  })
+
+  it('asks for the event date once — no separate inicio-date input exists — and derives inicio from fecha + the selected start time', async () => {
+    authenticate()
+    mockTransport()
+    const user = userEvent.setup()
+    renderPage()
+
+    expect(await screen.findByLabelText(/^Fecha del evento/)).toHaveAttribute(
+      'type',
+      'date',
+    )
+    expect(screen.queryByLabelText(/^Fecha y hora de inicio/)).not.toBeInTheDocument()
+    const horaInicioInput = screen.getByLabelText(/^Hora de inicio del evento/)
+    expect(horaInicioInput).toHaveAttribute('type', 'time')
+
+    await fillValidForm(user)
+    await user.click(screen.getByRole('button', { name: 'Crear evento' }))
+
+    await waitFor(() => {
+      const createCall = vi
+        .mocked(requestSgeb)
+        .mock.calls.find(
+          (call) => call[0].url === '/eventos' && call[0].method === 'POST',
+        )
+      expect(createCall?.[0].data).toMatchObject({
+        fecha: '2099-01-10',
+        inicio: '2099-01-10T18:00',
+      })
+    })
+  })
+
+  it('changing fecha produces an inicio whose date matches the new fecha, keeping the selected start time', async () => {
+    authenticate()
+    mockTransport()
+    const user = userEvent.setup()
+    renderPage()
+
+    await fillValidForm(user)
+    const fechaInput = screen.getByLabelText(/^Fecha del evento/)
+    await user.clear(fechaInput)
+    await user.type(fechaInput, '2099-02-20')
+    await user.click(screen.getByRole('button', { name: 'Crear evento' }))
+
+    await waitFor(() => {
+      const createCall = vi
+        .mocked(requestSgeb)
+        .mock.calls.find(
+          (call) => call[0].url === '/eventos' && call[0].method === 'POST',
+        )
+      expect(createCall?.[0].data).toMatchObject({
+        fecha: '2099-02-20',
+        inicio: '2099-02-20T18:00',
+      })
+    })
   })
 
   it('never sends an estado field, and never auto-publishes (only one POST /eventos call, no PATCH estado)', async () => {
@@ -272,10 +329,13 @@ describe('EventCreatePage', () => {
     await user.selectOptions(screen.getByLabelText(/^Tipo de evento/), 'social')
     await user.type(screen.getByLabelText(/^Fecha del evento/), '2099-01-10')
     await user.type(screen.getByLabelText(/^Hora de presentación/), '16:00')
-    await user.type(screen.getByLabelText(/^Fecha y hora de inicio/), '2099-01-10T18:00')
+    await user.type(screen.getByLabelText(/^Hora de inicio del evento/), '18:00')
     await user.type(screen.getByLabelText(/^Número de mesas/), '10')
     await user.type(screen.getByLabelText(/^Cupo de meseros/), '5')
-    await user.type(screen.getByLabelText(/^Radio de geocerca/), '150')
+    await user.type(
+      screen.getByLabelText(/^Radio permitido para registrar llegada/),
+      '150',
+    )
     await user.type(screen.getByLabelText(/^Tarifa por mesero/), '400')
     await user.click(screen.getByRole('button', { name: 'Crear evento' }))
 

@@ -19,7 +19,6 @@ export interface EventsContentProps {
   onFilterChange: (filters: EventsFilterState) => void
   /** Salón options for the filter's `id_salon` picker — dev fixtures on this branch. */
   salones: readonly EventSalonOption[]
-  onSelectEvent?: (id: string) => void
   onCreate?: () => void
 }
 
@@ -40,7 +39,6 @@ export function EventsContent({
   filters,
   onFilterChange,
   salones,
-  onSelectEvent,
   onCreate,
 }: EventsContentProps) {
   return (
@@ -59,7 +57,7 @@ export function EventsContent({
       ) : events.length === 0 ? (
         <EventsEmptyState onCreate={onCreate} />
       ) : (
-        <EventList eventos={events} onSelectEvent={onSelectEvent} />
+        <EventList eventos={events} />
       )}
     </div>
   )

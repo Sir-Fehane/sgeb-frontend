@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { EventCreateForm } from '@/features/events/components/EventCreateForm'
 import { SALON_OPTIONS_FIXTURE } from '@/features/events/fixtures/eventFixtures'
+import { getTodayIsoDate } from '@/features/events/utils/eventScheduling'
 
 function renderForm(onSubmit = vi.fn()) {
   render(<EventCreateForm onSubmit={onSubmit} salones={SALON_OPTIONS_FIXTURE} />)
@@ -13,7 +14,12 @@ function renderForm(onSubmit = vi.fn()) {
 /** Fills every required field with a valid value, except overrides. */
 async function fillValidForm(
   user: ReturnType<typeof userEvent.setup>,
-  overrides: { titulo?: string; numMesas?: string; inicio?: string; fecha?: string } = {},
+  overrides: {
+    titulo?: string
+    numMesas?: string
+    fecha?: string
+    horaInicio?: string
+  } = {},
 ) {
   await user.type(
     screen.getByLabelText(/^Título/),
@@ -25,14 +31,14 @@ async function fillValidForm(
   await user.type(screen.getByLabelText(/^Fecha del evento/), fecha)
   await user.type(screen.getByLabelText(/^Hora de presentación/), '16:00')
   await user.type(
-    screen.getByLabelText(/^Fecha y hora de inicio/),
-    overrides.inicio ?? `${fecha}T18:00`,
+    screen.getByLabelText(/^Hora de inicio del evento/),
+    overrides.horaInicio ?? '18:00',
   )
 
   await user.selectOptions(screen.getByLabelText(/^Salón/), '1')
   await user.type(screen.getByLabelText(/^Número de mesas/), overrides.numMesas ?? '10')
   await user.type(screen.getByLabelText(/^Cupo de meseros/), '5')
-  await user.type(screen.getByLabelText(/^Radio de geocerca/), '150')
+  await user.type(screen.getByLabelText(/^Radio permitido para registrar llegada/), '150')
   await user.type(screen.getByLabelText(/^Tarifa por mesero/), '400')
 }
 
@@ -118,17 +124,79 @@ describe('EventCreateForm', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
-  it('enforces SGEB-2008: inicio date must match fecha', async () => {
-    const user = userEvent.setup()
-    const { onSubmit } = renderForm()
+  it('asks for the event date exactly once — a single date input, plus separate presentation/start TIME inputs, no duplicate inicio-date field', () => {
+    renderForm()
 
-    await fillValidForm(user, { fecha: '2099-01-10', inicio: '2099-01-11T18:00' })
-    await user.click(screen.getByRole('button', { name: 'Crear evento' }))
+    expect(screen.getAllByLabelText(/^Fecha/)).toHaveLength(1)
+    expect(screen.getByLabelText(/^Fecha del evento/)).toHaveAttribute('type', 'date')
+    expect(screen.getByLabelText(/^Hora de presentación/)).toHaveAttribute('type', 'time')
+    expect(screen.getByLabelText(/^Hora de inicio del evento/)).toHaveAttribute(
+      'type',
+      'time',
+    )
+  })
 
-    expect(
-      await screen.findByText(/fecha de inicio debe coincidir con la fecha del evento/),
-    ).toBeInTheDocument()
-    expect(onSubmit).not.toHaveBeenCalled()
+  it('sets the date input min to today, so the native picker cannot offer a past date', () => {
+    renderForm()
+
+    expect(screen.getByLabelText(/^Fecha del evento/)).toHaveAttribute(
+      'min',
+      getTodayIsoDate(),
+    )
+  })
+
+  it('rejects a hora_inicio combined with fecha that is already in the past, without introducing any horaPresentacion ordering rule', async () => {
+    // A fixed system time makes "today" + "an earlier hora_inicio" a
+    // deterministic past instant, regardless of when this suite actually
+    // runs (never a flaky, wall-clock-dependent near-midnight case).
+    // `fireEvent` (synchronous, no internal delays) avoids any interaction
+    // between fake timers and userEvent's own timer-driven typing. Only
+    // `Date` is faked — `setTimeout`/`setInterval` stay real, so
+    // `findByText`'s own internal polling (which relies on a real timer)
+    // still ticks normally instead of hanging until the outer test timeout.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2099-01-10T12:00:00'))
+    try {
+      const onSubmit = vi.fn()
+      render(<EventCreateForm onSubmit={onSubmit} salones={SALON_OPTIONS_FIXTURE} />)
+
+      fireEvent.change(screen.getByLabelText(/^Título/), {
+        target: { value: 'Evento válido de prueba' },
+      })
+      fireEvent.change(screen.getByLabelText(/^Tipo de evento/), {
+        target: { value: 'social' },
+      })
+      fireEvent.change(screen.getByLabelText(/^Fecha del evento/), {
+        target: { value: '2099-01-10' },
+      })
+      fireEvent.change(screen.getByLabelText(/^Hora de presentación/), {
+        target: { value: '16:00' },
+      })
+      fireEvent.change(screen.getByLabelText(/^Hora de inicio del evento/), {
+        target: { value: '08:00' },
+      })
+      fireEvent.change(screen.getByLabelText(/^Salón/), { target: { value: '1' } })
+      fireEvent.change(screen.getByLabelText(/^Número de mesas/), {
+        target: { value: '10' },
+      })
+      fireEvent.change(screen.getByLabelText(/^Cupo de meseros/), {
+        target: { value: '5' },
+      })
+      fireEvent.change(screen.getByLabelText(/^Radio permitido para registrar llegada/), {
+        target: { value: '150' },
+      })
+      fireEvent.change(screen.getByLabelText(/^Tarifa por mesero/), {
+        target: { value: '400' },
+      })
+      fireEvent.click(screen.getByRole('button', { name: 'Crear evento' }))
+
+      expect(
+        await screen.findByText(/hora de inicio no puede ser anterior a este momento/),
+      ).toBeInTheDocument()
+      expect(onSubmit).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('invokes the supplied callback with only the fields this form actually captures, never fabricating uuid_capitan or comanda_url', async () => {
@@ -155,6 +223,24 @@ describe('EventCreateForm', () => {
     expect(payload).not.toHaveProperty('uuid_capitan')
     expect(payload).not.toHaveProperty('id_capitan')
     expect(payload).not.toHaveProperty('comanda_url')
+  })
+
+  it('presents radio_geocerca_m as a real-world arrival radius — helper copy and an "m" unit, same 10-1000 range, no invented default', async () => {
+    const user = userEvent.setup()
+    renderForm()
+
+    expect(
+      screen.getByText(
+        /El personal debe estar dentro de esta distancia del salón para poder registrar su llegada/,
+      ),
+    ).toBeInTheDocument()
+    expect(screen.getByText('m')).toBeInTheDocument()
+
+    const radiusInput = screen.getByLabelText(/^Radio permitido para registrar llegada/)
+    expect(radiusInput).toHaveValue(null)
+
+    await user.type(radiusInput, '150')
+    expect(radiusInput).toHaveValue(150)
   })
 
   it('never renders an authenticated-user id, creator id, token, or role field', () => {
