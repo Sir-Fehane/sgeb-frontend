@@ -30,6 +30,7 @@ function baseProps(
   overrides: Partial<EventDetailComandaSectionProps> = {},
 ): EventDetailComandaSectionProps {
   return {
+    idEvento: 1001,
     comanda: null,
     isLoading: false,
     canManage: false,
@@ -281,6 +282,101 @@ describe('EventDetailComandaSection — upload', () => {
     expect(onUpload).toHaveBeenCalledWith(file)
   })
 
+  it('shows a distinct success message for a first upload (no prior comanda)', async () => {
+    const user = userEvent.setup()
+    render(
+      <EventDetailComandaSection {...baseProps({ canManage: true, comanda: null })} />,
+    )
+
+    await user.upload(screen.getByLabelText('Subir comanda'), pdfFile())
+    await user.click(screen.getByRole('button', { name: 'Subir comanda' }))
+
+    expect(await screen.findByText('Comanda subida')).toBeInTheDocument()
+    expect(screen.getByText('La comanda se guardó correctamente.')).toBeInTheDocument()
+    expect(screen.queryByText(/reemplazada/)).not.toBeInTheDocument()
+  })
+
+  it('shows a distinct success message for a replace (a comanda already existed)', async () => {
+    const user = userEvent.setup()
+    render(
+      <EventDetailComandaSection {...baseProps({ canManage: true, comanda: COMANDA })} />,
+    )
+
+    await user.upload(screen.getByLabelText('Reemplazar comanda'), pdfFile())
+    await user.click(screen.getByRole('button', { name: 'Reemplazar comanda' }))
+
+    expect(await screen.findByText('Comanda reemplazada')).toBeInTheDocument()
+    expect(
+      screen.getByText('La nueva comanda se guardó correctamente.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Comanda subida')).not.toBeInTheDocument()
+  })
+
+  it('renders the success feedback as a viewport-fixed toast, not inline in the comanda content flow', async () => {
+    const user = userEvent.setup()
+    render(
+      <EventDetailComandaSection {...baseProps({ canManage: true, comanda: null })} />,
+    )
+
+    await user.upload(screen.getByLabelText('Subir comanda'), pdfFile())
+    await user.click(screen.getByRole('button', { name: 'Subir comanda' }))
+    const title = await screen.findByText('Comanda subida')
+
+    // A polite, non-interrupting status region (not `role="alert"`) whose
+    // nearest ancestor with a `fixed` class is the toast's own outer
+    // wrapper, not the comanda section's normal `EventDetailSection` flow.
+    const statusRegion = title.closest('[role="status"]')
+    expect(statusRegion).not.toBeNull()
+    expect(statusRegion?.closest('.fixed')).not.toBeNull()
+  })
+
+  it('clears the upload success message once a new file is selected', async () => {
+    const user = userEvent.setup()
+    render(
+      <EventDetailComandaSection {...baseProps({ canManage: true, comanda: null })} />,
+    )
+
+    await user.upload(screen.getByLabelText('Subir comanda'), pdfFile())
+    await user.click(screen.getByRole('button', { name: 'Subir comanda' }))
+    await screen.findByText('Comanda subida')
+
+    await user.upload(screen.getByLabelText('Subir comanda'), pdfFile('otra.pdf'))
+
+    expect(screen.queryByText('Comanda subida')).not.toBeInTheDocument()
+  })
+
+  it('does not leave a stale success message behind after a later failed upload', async () => {
+    const user = userEvent.setup()
+    const onUpload = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(
+        new SgebApplicationError(409, {
+          code: 'SGEB-4013',
+          message: 'El evento no está en la etapa requerida para esta operación.',
+        }),
+      )
+    render(
+      <EventDetailComandaSection
+        {...baseProps({ canManage: true, comanda: null, onUpload })}
+      />,
+    )
+
+    await user.upload(screen.getByLabelText('Subir comanda'), pdfFile())
+    await user.click(screen.getByRole('button', { name: 'Subir comanda' }))
+    await screen.findByText('Comanda subida')
+
+    await user.upload(screen.getByLabelText('Subir comanda'), pdfFile('otra.pdf'))
+    await user.click(screen.getByRole('button', { name: 'Subir comanda' }))
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('El evento no está en la etapa requerida para esta operación.'),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.queryByText('Comanda subida')).not.toBeInTheDocument()
+  })
+
   it('surfaces the real backend validation message (e.g. SGEB-4013 wrong event state) without technical_message', async () => {
     const user = userEvent.setup()
     const onUpload = vi.fn().mockRejectedValue(
@@ -348,5 +444,104 @@ describe('EventDetailComandaSection — retire', () => {
     expect(
       screen.queryByRole('button', { name: 'Retirar comanda' }),
     ).not.toBeInTheDocument()
+  })
+
+  it('shows a success message once the comanda is retired', async () => {
+    const user = userEvent.setup()
+    render(
+      <EventDetailComandaSection {...baseProps({ comanda: COMANDA, canManage: true })} />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Retirar comanda' }))
+    await user.click(screen.getByRole('button', { name: 'Confirmar retiro' }))
+
+    expect(await screen.findByText('Comanda retirada')).toBeInTheDocument()
+  })
+
+  it('keeps the retire success message visible once the caller’s query invalidation flips comanda to null (the real empty state)', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(
+      <EventDetailComandaSection {...baseProps({ comanda: COMANDA, canManage: true })} />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Retirar comanda' }))
+    await user.click(screen.getByRole('button', { name: 'Confirmar retiro' }))
+    await screen.findByText('Comanda retirada')
+
+    // Mirrors what `EventDetailPage` really does after `onRetire` resolves:
+    // `useRetireComandaMutation`'s `onSuccess` invalidates the comanda
+    // query, which refetches into `comanda: null` and re-renders this
+    // section with that new prop.
+    rerender(
+      <EventDetailComandaSection {...baseProps({ comanda: null, canManage: true })} />,
+    )
+
+    expect(screen.getByText('Comanda retirada')).toBeInTheDocument()
+    expect(
+      screen.getByText('No hay una comanda disponible para este evento.'),
+    ).toBeInTheDocument()
+  })
+
+  it('does not leave a stale retire success message after a later failed retire attempt', async () => {
+    const user = userEvent.setup()
+    const onRetire = vi
+      .fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(
+        new SgebApplicationError(409, {
+          code: 'SGEB-4013',
+          message: 'El evento no está en la etapa requerida para esta operación.',
+        }),
+      )
+    const { rerender } = render(
+      <EventDetailComandaSection
+        {...baseProps({ comanda: COMANDA, canManage: true, onRetire })}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Retirar comanda' }))
+    await user.click(screen.getByRole('button', { name: 'Confirmar retiro' }))
+    await screen.findByText('Comanda retirada')
+
+    // A second comanda now exists (server truth, via the parent's own
+    // query) — re-render with it present so "Retirar comanda" is offered
+    // again for the failing attempt.
+    rerender(
+      <EventDetailComandaSection
+        {...baseProps({ comanda: COMANDA, canManage: true, onRetire })}
+      />,
+    )
+    await user.click(screen.getByRole('button', { name: 'Retirar comanda' }))
+    await user.click(screen.getByRole('button', { name: 'Confirmar retiro' }))
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('El evento no está en la etapa requerida para esta operación.'),
+      ).toBeInTheDocument(),
+    )
+    expect(screen.queryByText('Comanda retirada')).not.toBeInTheDocument()
+  })
+})
+
+describe('EventDetailComandaSection — success feedback lifecycle across events', () => {
+  it('clears a success message once this section is reused for a different event', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(
+      <EventDetailComandaSection
+        {...baseProps({ idEvento: 1001, canManage: true, comanda: null })}
+      />,
+    )
+
+    await user.upload(screen.getByLabelText('Subir comanda'), pdfFile())
+    await user.click(screen.getByRole('button', { name: 'Subir comanda' }))
+    await screen.findByText('Comanda subida')
+
+    rerender(
+      <EventDetailComandaSection
+        {...baseProps({ idEvento: 1002, canManage: true, comanda: null })}
+      />,
+    )
+
+    expect(screen.queryByText('Comanda subida')).not.toBeInTheDocument()
   })
 })

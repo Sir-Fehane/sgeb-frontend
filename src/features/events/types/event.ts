@@ -121,6 +121,11 @@ export interface EventListItemViewModel {
  * - idEvento/titulo/tipo/fecha/horaPresentacion/inicio/cupoMeseros/
  *   numMesas/tarifaPorMesero/radioGeocercaM: `EventoCrear`.
  * - estado: data dictionary EVENTO table (server-generated).
+ * - idSalon: `EventoCrear.id_salon` (required FK, `integer`) — same
+ *   confirmed field `EventListItemViewModel` already carries. Used to
+ *   resolve the real salón through the existing, separate `GET
+ *   /salones/{id_salon}` endpoint (`services/salonesApi.ts`'s
+ *   `fetchSalonById`), never to render anything by itself.
  * - salonNombre: NOT part of any documented `/eventos/{id}` response —
  *   a presentation-only convenience, exactly like
  *   `EventListItemViewModel.salonNombre`. (`DashboardCapitan.
@@ -128,7 +133,10 @@ export interface EventListItemViewModel {
  *   plain `salon: string` field, showing the backend has *a* display-name
  *   concept for salón elsewhere — but that's a different endpoint's
  *   response, not this one, so it still doesn't confirm this field for
- *   `GET /eventos/{id_evento}`.)
+ *   `GET /eventos/{id_evento}`.) Still never populated by
+ *   `mapEventoToDetail` for that reason — `EventDetailPage` resolves the
+ *   real name itself, separately, via `idSalon` above, and only feeds it
+ *   into this same slot for display (see that page's own comment).
  *
  * Deliberately excluded: `uuid_capitan`/any captain identifier (no UX
  * purpose on this page, same reasoning as the list model), any
@@ -153,6 +161,7 @@ export interface EventListItemViewModel {
  */
 export interface EventDetailViewModel {
   idEvento: number
+  idSalon: number
   titulo: string
   tipo: EventType
   estado: EventStatus

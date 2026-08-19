@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { EventDetailContent } from '@/features/events/components/EventDetailContent'
 import type { EventDetailComandaSectionProps } from '@/features/events/components/EventDetailComandaSection'
@@ -15,6 +15,7 @@ import { useEventDetailQuery } from '@/features/events/queries/useEventDetailQue
 import { useMesasQuery } from '@/features/events/queries/useMesasQuery'
 import { useOpenComandaMutation } from '@/features/events/queries/useOpenComandaMutation'
 import { useRetireComandaMutation } from '@/features/events/queries/useRetireComandaMutation'
+import { useSalonQuery } from '@/features/events/queries/useSalonQuery'
 import { useUpdateEventoMutation } from '@/features/events/queries/useUpdateEventoMutation'
 import { useUploadComandaMutation } from '@/features/events/queries/useUploadComandaMutation'
 import type { EventEditFormValues } from '@/features/events/schemas/eventEditSchema'
@@ -28,6 +29,7 @@ import type { EventStatus } from '@/features/events/types/event'
 import { parseEventId } from '@/features/events/utils/parseEventId'
 import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
+import { Toast } from '@/shared/components'
 
 /**
  * Never renders `technical_message` — mirrors `EventsPage`'s own
@@ -68,10 +70,17 @@ function toSafeErrorMessage(error: unknown): string {
  * (`PATCH /eventos/{id}/estado` → publish/start/return-to-draft/cancel —
  * finalization stays owned by Closure, never duplicated here).
  */
+/** Shape of the one-time router state `EventCreatePage` hands off after a successful `POST /eventos`. */
+interface EventDetailLocationState {
+  justCreated?: boolean
+}
+
 export function EventDetailPage() {
   const { id } = useParams<{ id: string }>()
   const idEvento = parseEventId(id)
   const detailQuery = useEventDetailQuery(idEvento)
+  const location = useLocation()
+  const navigate = useNavigate()
 
   const notFound = idEvento === null || isEventoNotFoundError(detailQuery.error)
   const evento = notFound ? null : (detailQuery.data ?? null)
@@ -99,6 +108,29 @@ export function EventDetailPage() {
   const changeEstadoMutation = useChangeEventoEstadoMutation(idEvento ?? -1)
 
   const [isEditing, setIsEditing] = useState(false)
+
+  /**
+   * One-time "Evento creado" toast — driven by React Router `state`
+   * (`EventCreatePage`'s `navigate(..., { state: { justCreated: true } })`),
+   * never a global store: the lazy initializer reads it exactly once, on
+   * this component's first render, so it survives even though the effect
+   * below clears the underlying router state on mount.
+   */
+  const [showCreatedFeedback, setShowCreatedFeedback] = useState(() =>
+    Boolean((location.state as EventDetailLocationState | null)?.justCreated),
+  )
+
+  useEffect(() => {
+    if ((location.state as EventDetailLocationState | null)?.justCreated) {
+      // Replaces this history entry's state with nothing — a same-route
+      // `replace` navigation, so it neither remounts this page nor adds a
+      // new back-button stop. This is what keeps an F5 reload (which
+      // reuses the same history entry) from ever seeing `justCreated`
+      // again, and what stops a direct visit to this URL (no `state` to
+      // begin with) from ever showing it in the first place.
+      void navigate(location.pathname, { replace: true, state: null })
+    }
+  }, [location, navigate])
 
   // Plain refs, not `mutation.isPending` — mirrors `EventClosurePage`'s own
   // `isSubmittingRef`/`isFinalizingRef`: TanStack Query's mutation state
@@ -135,6 +167,29 @@ export function EventDetailPage() {
     evento !== null &&
     evento.estado !== 'finalizado' &&
     evento.estado !== 'cancelado'
+
+  /**
+   * Resolves the real salón behind `evento.idSalon` — only for a session
+   * that could actually reach `GET /salones/{id_salon}` (see
+   * `useSalonQuery`'s own comment for the confirmed `capitan`/`admin`-only
+   * gap). A `mesero` session, or the event not having loaded yet, both
+   * pass `null`, which never sends a request (`skipToken`).
+   */
+  const salonQuery = useSalonQuery(canManageEvent && evento ? evento.idSalon : null)
+
+  /**
+   * The evento passed to `EventDetailContent` for DISPLAY only — never
+   * reused for any mutation/permission logic above, which all read the
+   * real query's `evento` directly. `salonNombre` is the one field this
+   * overlays: `mapEventoToDetail` deliberately never populates it (see
+   * that function's own comment), so `EventDetailScheduleSection`'s
+   * existing "pendiente de integración" fallback keeps working unchanged
+   * whenever `salonQuery` hasn't resolved yet, is disabled for this role,
+   * or fails.
+   */
+  const eventoForDisplay = evento
+    ? { ...evento, ...(salonQuery.data ? { salonNombre: salonQuery.data.nombre } : {}) }
+    : null
 
   async function handleOpenComanda(signal: AbortSignal, tab: Window | null) {
     await openComandaMutation.mutateAsync({ signal, tab })
@@ -201,6 +256,7 @@ export function EventDetailPage() {
   }
 
   const comandaSectionProps: EventDetailComandaSectionProps = {
+    idEvento: idEvento ?? -1,
     comanda: comandaData,
     isLoading: comandaIsLoading,
     canManage: canManageEvent,
@@ -249,8 +305,21 @@ export function EventDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      {showCreatedFeedback ? (
+        <Toast
+          title="Evento creado"
+          onDismiss={() => {
+            setShowCreatedFeedback(false)
+          }}
+        >
+          <p>
+            El evento se creó correctamente. Ya puedes continuar con su configuración.
+          </p>
+        </Toast>
+      ) : null}
+
       <EventDetailContent
-        evento={evento}
+        evento={eventoForDisplay}
         isLoading={isLoading}
         {...(hasRealError ? { errorMessage: toSafeErrorMessage(detailQuery.error) } : {})}
         onRetry={() => void detailQuery.refetch()}

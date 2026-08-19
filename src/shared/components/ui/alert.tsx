@@ -16,6 +16,15 @@ export interface AlertProps extends Omit<ComponentPropsWithoutRef<'div'>, 'title
    * of this prop.
    */
   assertive?: boolean
+  /**
+   * An optional trailing control, e.g. a dismiss button for a transient
+   * toast (`shared/components/ui/toast.tsx`). Rendered as a third flex
+   * item after the title/body content, never overlapping it. Omitted by
+   * every persistent, in-context Alert (validation/application errors) —
+   * those stay dismiss-less on purpose, unaffected by this prop's
+   * addition since it defaults to nothing rendered.
+   */
+  action?: ReactNode
 }
 
 export function Alert({
@@ -23,6 +32,7 @@ export function Alert({
   icon,
   title,
   assertive = false,
+  action,
   className,
   children,
   ...props
@@ -51,10 +61,11 @@ export function Alert({
           {icon}
         </span>
       ) : null}
-      <div className="flex flex-col gap-1">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
         {title ? <p className="font-medium">{title}</p> : null}
         {children}
       </div>
+      {action ? <div className="shrink-0">{action}</div> : null}
     </div>
   )
 }

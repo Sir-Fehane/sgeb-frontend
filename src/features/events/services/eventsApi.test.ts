@@ -103,6 +103,7 @@ describe('mapEventoToDetail', () => {
   it('maps the fields the Event Detail view model actually uses', () => {
     expect(mapEventoToDetail(RECORD)).toEqual({
       idEvento: 1001,
+      idSalon: 3,
       titulo: 'Boda García',
       tipo: 'social',
       estado: 'publicado',

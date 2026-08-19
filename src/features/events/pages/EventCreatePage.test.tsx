@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { EventCreatePage } from '@/features/events/pages/EventCreatePage'
@@ -78,6 +78,15 @@ function mockTransport(options: { salones?: SalonApiRecord[] } = {}) {
   })
 }
 
+/** Reveals whether the route it lands on carried `{ justCreated: true }` router state — reused by the "hands off one-time feedback state" test below. */
+function DetailPlaceholder() {
+  const location = useLocation()
+  const justCreated = Boolean(
+    (location.state as { justCreated?: boolean } | null)?.justCreated,
+  )
+  return <div>Detalle del evento — justCreated: {String(justCreated)}</div>
+}
+
 function renderPage() {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, retryDelay: 0 } },
@@ -87,7 +96,7 @@ function renderPage() {
       <MemoryRouter initialEntries={['/eventos/nuevo']}>
         <Routes>
           <Route path="/eventos/nuevo" element={<EventCreatePage />} />
-          <Route path="/eventos/:id" element={<div>Detalle del evento</div>} />
+          <Route path="/eventos/:id" element={<DetailPlaceholder />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -167,7 +176,12 @@ describe('EventCreatePage', () => {
       tarifaPorMesero: 400,
       radioGeocercaM: 150,
     })
-    expect(await screen.findByText('Detalle del evento')).toBeInTheDocument()
+    // Navigates with the one-time `justCreated` route-state flag —
+    // `EventDetailPage` reads and immediately consumes it; see that
+    // page's own tests for the full consume/no-replay behavior.
+    expect(
+      await screen.findByText('Detalle del evento — justCreated: true'),
+    ).toBeInTheDocument()
   })
 
   it('never sends an estado field, and never auto-publishes (only one POST /eventos call, no PATCH estado)', async () => {
@@ -190,17 +204,7 @@ describe('EventCreatePage', () => {
     ).toBe(false)
   })
 
-  it('creating a salón inline calls POST /salones and auto-selects it in the form', async () => {
-    authenticate()
-    mockTransport({ salones: [] })
-    const user = userEvent.setup()
-    renderPage()
-
-    await screen.findByText('No hay salones disponibles')
-    await user.click(
-      screen.getByRole('button', { name: '¿No encuentras tu salón? Crear uno nuevo' }),
-    )
-
+  async function fillSalonCreateForm(user: ReturnType<typeof userEvent.setup>) {
     await user.type(screen.getByLabelText(/^Nombre/), 'Salón Nuevo')
     await user.type(screen.getByLabelText(/^Calle/), 'Av. Reforma 100')
     await user.type(screen.getByLabelText(/^Código postal/), '06600')
@@ -211,6 +215,91 @@ describe('EventCreatePage', () => {
     await user.type(screen.getByLabelText(/^Longitud/), '-99.16')
     await user.type(screen.getByLabelText(/^Capacidad máxima de mesas/), '30')
     await user.type(screen.getByLabelText(/^Capacidad de personas/), '150')
+  }
+
+  it('actually selects the newly-created salón — even before the background list refetch resolves — and submits that exact id for the event (regression: manual testing found the select silently failing to update)', async () => {
+    authenticate()
+    mockTransport({ salones: [] })
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByText('No hay salones disponibles')
+    await user.click(
+      screen.getByRole('button', { name: '¿No encuentras tu salón? Crear uno nuevo' }),
+    )
+    await fillSalonCreateForm(user)
+
+    vi.mocked(requestSgeb).mockImplementation((config: SgebRequestConfig) => {
+      if (config.url === '/salones' && config.method === 'POST') {
+        return Promise.resolve({
+          result: { code: 'SGEB-0001', message: 'Creado.' },
+          data: {
+            id_salon: 7,
+            ...(config.data as object),
+            activo: true,
+          } as SalonApiRecord,
+        })
+      }
+      if (config.url === '/salones') {
+        // The real, unawaited background refetch `invalidateQueries`
+        // schedules — deliberately never resolves in this test, to prove
+        // the select's real value does not depend on it (only on the
+        // mutation's own synchronous cache write).
+        return new Promise(() => undefined)
+      }
+      if (config.url === '/eventos' && config.method === 'POST') {
+        return Promise.resolve({
+          result: { code: 'SGEB-0001', message: 'Creado.' },
+          data: { ...CREATED_RECORD, id_salon: 7 },
+        })
+      }
+      return Promise.reject(new Error(`Unhandled request in test: ${config.url}`))
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Crear salón' }))
+
+    const select = await screen.findByLabelText<HTMLSelectElement>(/^Salón/)
+    await waitFor(() => {
+      expect(select.value).toBe('7')
+    })
+    // The real option backing that value actually exists — not just a
+    // numeric match on an empty/absent option.
+    expect(
+      within(select).getByRole('option', { name: /Salón Nuevo/ }),
+    ).toBeInTheDocument()
+
+    await user.type(screen.getByLabelText(/^Título/), 'Evento válido de prueba')
+    await user.selectOptions(screen.getByLabelText(/^Tipo de evento/), 'social')
+    await user.type(screen.getByLabelText(/^Fecha del evento/), '2099-01-10')
+    await user.type(screen.getByLabelText(/^Hora de presentación/), '16:00')
+    await user.type(screen.getByLabelText(/^Fecha y hora de inicio/), '2099-01-10T18:00')
+    await user.type(screen.getByLabelText(/^Número de mesas/), '10')
+    await user.type(screen.getByLabelText(/^Cupo de meseros/), '5')
+    await user.type(screen.getByLabelText(/^Radio de geocerca/), '150')
+    await user.type(screen.getByLabelText(/^Tarifa por mesero/), '400')
+    await user.click(screen.getByRole('button', { name: 'Crear evento' }))
+
+    await waitFor(() => {
+      const createCall = vi
+        .mocked(requestSgeb)
+        .mock.calls.find(
+          (call) => call[0].url === '/eventos' && call[0].method === 'POST',
+        )
+      expect(createCall?.[0].data).toMatchObject({ idSalon: 7 })
+    })
+  })
+
+  it('shows a branded floating success toast naming the created salón, only once it is created and selected', async () => {
+    authenticate()
+    mockTransport({ salones: [] })
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByText('No hay salones disponibles')
+    await user.click(
+      screen.getByRole('button', { name: '¿No encuentras tu salón? Crear uno nuevo' }),
+    )
+    await fillSalonCreateForm(user)
 
     vi.mocked(requestSgeb).mockImplementation((config: SgebRequestConfig) => {
       if (config.url === '/salones' && config.method === 'POST') {
@@ -232,11 +321,77 @@ describe('EventCreatePage', () => {
       return Promise.reject(new Error(`Unhandled request in test: ${config.url}`))
     })
 
+    expect(screen.queryByText('Salón creado')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Crear salón' }))
+
+    // The select is already correctly populated by the time the toast
+    // appears — the message never claims a selection that hasn't happened.
+    await waitFor(() => {
+      expect(screen.getByLabelText<HTMLSelectElement>(/^Salón/).value).toBe('7')
+    })
+    expect(await screen.findByText('Salón creado')).toBeInTheDocument()
+    expect(
+      screen.getByText('Salón Nuevo fue creado y seleccionado para este evento.'),
+    ).toBeInTheDocument()
+    // The creation form collapses on success, so this toast can't be
+    // mistaken for something still pending.
+    expect(screen.queryByRole('button', { name: 'Crear salón' })).not.toBeInTheDocument()
+  })
+
+  it('reopening "crear salón" clears the previous success toast, and a failed second attempt never shows a stale one', async () => {
+    authenticate()
+    mockTransport({ salones: [] })
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByText('No hay salones disponibles')
+    await user.click(
+      screen.getByRole('button', { name: '¿No encuentras tu salón? Crear uno nuevo' }),
+    )
+    await fillSalonCreateForm(user)
+    vi.mocked(requestSgeb).mockImplementation((config: SgebRequestConfig) => {
+      if (config.url === '/salones' && config.method === 'POST') {
+        return Promise.resolve({
+          result: { code: 'SGEB-0001', message: 'Creado.' },
+          data: {
+            id_salon: 7,
+            ...(config.data as object),
+            activo: true,
+          } as SalonApiRecord,
+        })
+      }
+      if (config.url === '/salones') {
+        return Promise.resolve({
+          result: { code: 'SGEB-0000', message: 'ok' },
+          data: [{ id_salon: 7, nombre: 'Salón Nuevo', capacidad_max_mesas: 30 }],
+        })
+      }
+      return Promise.reject(new Error(`Unhandled request in test: ${config.url}`))
+    })
+    await user.click(screen.getByRole('button', { name: 'Crear salón' }))
+    await screen.findByText('Salón creado')
+
+    await user.click(
+      screen.getByRole('button', { name: '¿No encuentras tu salón? Crear uno nuevo' }),
+    )
+    expect(screen.queryByText('Salón creado')).not.toBeInTheDocument()
+
+    await fillSalonCreateForm(user)
+    vi.mocked(requestSgeb).mockImplementation((config: SgebRequestConfig) => {
+      if (config.url === '/salones' && config.method === 'POST') {
+        return Promise.reject(new Error('boom'))
+      }
+      return Promise.resolve({
+        result: { code: 'SGEB-0000', message: 'ok' },
+        data: [{ id_salon: 7, nombre: 'Salón Nuevo', capacidad_max_mesas: 30 }],
+      })
+    })
     await user.click(screen.getByRole('button', { name: 'Crear salón' }))
 
     await waitFor(() => {
-      const select = screen.getByLabelText<HTMLSelectElement>(/^Salón/)
-      expect(select.value).toBe('7')
+      expect(screen.getByRole('button', { name: 'Crear salón' })).toBeInTheDocument()
     })
+    expect(screen.queryByText('Salón creado')).not.toBeInTheDocument()
   })
 })

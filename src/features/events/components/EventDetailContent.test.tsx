@@ -15,6 +15,7 @@ import type { EventDetailViewModel } from '@/features/events/types/event'
 
 const EVENTO_CON_COMANDA: EventDetailViewModel = {
   idEvento: 1001,
+  idSalon: 1,
   titulo: 'Evento de demostración — boda',
   tipo: 'social',
   estado: 'publicado',
@@ -30,6 +31,7 @@ const EVENTO_CON_COMANDA: EventDetailViewModel = {
 
 const EVENTO_SIN_COMANDA: EventDetailViewModel = {
   idEvento: 1006,
+  idSalon: 2,
   titulo: 'Evento de demostración — conferencia en curso',
   tipo: 'empresarial',
   estado: 'en_curso',
@@ -52,6 +54,7 @@ const EVENTO_SIN_COMANDA: EventDetailViewModel = {
  */
 function defaultComandaProps(): EventDetailComandaSectionProps {
   return {
+    idEvento: 1001,
     comanda: null,
     isLoading: false,
     canManage: false,

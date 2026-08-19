@@ -12,6 +12,7 @@ import type { TeamSelectionParticipantViewModel } from '@/features/events/team-s
 
 const EVENTO: EventDetailViewModel = {
   idEvento: 1001,
+  idSalon: 1,
   titulo: 'Evento de demostración — boda',
   tipo: 'social',
   estado: 'publicado',

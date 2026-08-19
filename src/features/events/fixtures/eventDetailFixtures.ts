@@ -43,6 +43,7 @@ import type { EventDetailViewModel } from '@/features/events/types/event'
 export const EVENT_DETAIL_FIXTURES: readonly EventDetailViewModel[] = [
   {
     idEvento: 1001,
+    idSalon: 1,
     titulo: 'Evento de demostración — boda',
     tipo: 'social',
     estado: 'publicado',
@@ -57,6 +58,7 @@ export const EVENT_DETAIL_FIXTURES: readonly EventDetailViewModel[] = [
   },
   {
     idEvento: 2001,
+    idSalon: 2,
     titulo: 'Evento de demostración — conferencia en curso',
     tipo: 'empresarial',
     estado: 'en_curso',
@@ -71,6 +73,7 @@ export const EVENT_DETAIL_FIXTURES: readonly EventDetailViewModel[] = [
   },
   {
     idEvento: 3001,
+    idSalon: 1,
     titulo: 'Evento de demostración — aniversario finalizado',
     tipo: 'social',
     estado: 'finalizado',

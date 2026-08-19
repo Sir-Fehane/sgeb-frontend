@@ -13,6 +13,7 @@ import type { EventDetailViewModel } from '@/features/events/types/event'
 
 const EVENTO: EventDetailViewModel = {
   idEvento: 3001,
+  idSalon: 1,
   titulo: 'Evento de demostración — aniversario finalizado',
   tipo: 'social',
   estado: 'finalizado',

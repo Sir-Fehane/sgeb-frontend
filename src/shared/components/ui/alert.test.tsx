@@ -48,4 +48,25 @@ describe('Alert', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('Acción requerida de inmediato')
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
+
+  it('renders an optional trailing `action`, and omits it entirely when not given (no layout change for existing callers)', () => {
+    render(
+      <Alert
+        tone="success"
+        title="Con acción"
+        action={<button type="button">Cerrar</button>}
+      >
+        Cuerpo.
+      </Alert>,
+    )
+
+    expect(screen.getByRole('button', { name: 'Cerrar' })).toBeInTheDocument()
+
+    render(
+      <Alert tone="success" title="Sin acción">
+        Cuerpo.
+      </Alert>,
+    )
+    expect(screen.queryAllByRole('button')).toHaveLength(1)
+  })
 })

@@ -7,6 +7,7 @@ import type { EventDetailViewModel } from '@/features/events/types/event'
 
 const BORRADOR_EVENTO: EventDetailViewModel = {
   idEvento: 1001,
+  idSalon: 1,
   titulo: 'Boda García',
   tipo: 'social',
   estado: 'borrador',

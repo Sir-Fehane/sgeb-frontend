@@ -149,17 +149,27 @@ export function isEventoNotFoundError(error: unknown): boolean {
  * Maps one `Evento` wire record to the Event Detail presentation model.
  *
  * Deliberately narrower than `mapEventoToListItem`:
- * `EventDetailViewModel` has no `idSalon`/`fin`/`creadoEn` fields (the
- * existing foundation never displays them), and `salonNombre` is
- * INTENTIONALLY never populated from the live response even though the
- * backend sends it — `EventoService.obtener` does `.preload('salon')`,
- * and Lucid serializes that as an undocumented `salon: {...}` object (the
- * `@belongsTo` relation has no `serializeAs: null`). This is the same
- * undocumented-implementation-detail question already decided against
- * in `mapEventoToListItem` (see that comment) — not part of the
- * documented `Evento` schema, so not depended on here either. Stays
- * `undefined`; `EventDetailScheduleSection` already renders the
- * "pendiente de integración" fallback for it.
+ * `EventDetailViewModel` has no `fin`/`creadoEn` fields (the existing
+ * foundation never displays them). `idSalon` IS mapped, unlike those two —
+ * it is the same confirmed `EventoCrear.id_salon` FK `mapEventoToListItem`
+ * already carries, and `EventDetailPage` needs it to resolve the real
+ * salón through the separate `GET /salones/{id_salon}` endpoint
+ * (`services/salonesApi.ts`'s `fetchSalonById`).
+ *
+ * `salonNombre` is a different story and stays INTENTIONALLY unpopulated
+ * here even though `idSalon` now is: `EventoService.obtener` does
+ * `.preload('salon')`, and Lucid serializes that as an undocumented
+ * `salon: {...}` object (the `@belongsTo` relation has no
+ * `serializeAs: null`) — the same undocumented-implementation-detail
+ * question already decided against in `mapEventoToListItem` (see that
+ * comment), not part of the documented `Evento` schema, so not depended on
+ * here either. This mapper stays a pure, stateless translation of the wire
+ * record; resolving the real salón name is `EventDetailPage`'s job (a
+ * second, separate `GET /salones/{id_salon}` request keyed off `idSalon`
+ * above), not this function's — `EventDetailScheduleSection` renders
+ * whatever name (if any) that resolution produces, falling back to the
+ * existing "pendiente de integración" text exactly as before when it
+ * can't (no permission, no network, still loading).
  *
  * `record.comanda_url` is likewise real and always present in the wire
  * response, but is deliberately read by NOTHING here — `EventDetailViewModel`
@@ -176,6 +186,7 @@ export function isEventoNotFoundError(error: unknown): boolean {
 export function mapEventoToDetail(record: EventoApiRecord): EventDetailViewModel {
   return {
     idEvento: record.id_evento,
+    idSalon: record.id_salon,
     titulo: record.titulo,
     tipo: record.tipo,
     estado: record.estado,

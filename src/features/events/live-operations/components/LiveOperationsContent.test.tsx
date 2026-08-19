@@ -12,6 +12,7 @@ import type { EventDetailViewModel } from '@/features/events/types/event'
 
 const EVENTO: EventDetailViewModel = {
   idEvento: 1001,
+  idSalon: 1,
   titulo: 'Evento de demostración — boda',
   tipo: 'social',
   estado: 'en_curso',

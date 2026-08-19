@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { EVENT_DETAIL_FIXTURES } from '@/features/events/fixtures/eventDetailFixtures'
@@ -9,6 +9,7 @@ import { EventDetailPage } from '@/features/events/pages/EventDetailPage'
 import type { ComandaApiRecord } from '@/features/events/services/comandaApi'
 import type { EventoApiRecord } from '@/features/events/services/eventsApi'
 import type { MesaApiRecord } from '@/features/events/services/mesasApi'
+import type { SalonApiRecord } from '@/features/events/services/salonesApi'
 import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { SgebApplicationError, SgebNetworkError } from '@/shared/api/sgebApiError'
 import { requestSgeb, type SgebRequestConfig } from '@/shared/api/sgebClient'
@@ -58,24 +59,43 @@ const COMANDA_NOT_FOUND = new SgebApplicationError(404, {
   message: 'No encontramos la información solicitada.',
 })
 
+const SALON_RECORD: SalonApiRecord = {
+  id_salon: 1,
+  nombre: 'Salón Roble',
+  calle: 'Calle 1',
+  cp: '00000',
+  colonia: 'Centro',
+  ciudad: 'CDMX',
+  estado: 'CDMX',
+  latitud: 19.4,
+  longitud: -99.1,
+  capacidad_max_mesas: 40,
+  capacidad_personas: 200,
+  activo: true,
+}
+
 /**
- * Routes `/eventos/{id}`, `/eventos/{id}/comanda`, and
- * `/eventos/{id}/mesas` to independent scripted outcomes —
- * `EventDetailPage` now fires all three queries. Defaults to a found
+ * Routes `/eventos/{id}`, `/eventos/{id}/comanda`, `/eventos/{id}/mesas`,
+ * and `/salones/{id_salon}` to independent scripted outcomes —
+ * `EventDetailPage` now fires all four queries (the last one only for a
+ * `capitan`/`admin` session, see `useSalonQuery`). Defaults to a found
  * event, "no active comanda" (the real backend's actual `SGEB-3001` shape
- * for that state, not a null-data guess), and an empty mesas list.
+ * for that state, not a null-data guess), an empty mesas list, and a
+ * resolvable salón.
  */
 function mockTransport(
   options: {
     eventoResult?: EventoApiRecord | Error
     comandaResult?: ComandaApiRecord | Error
     mesasResult?: MesaApiRecord[] | Error
+    salonResult?: SalonApiRecord | Error
   } = {},
 ) {
   const {
     eventoResult = RECORD,
     comandaResult = COMANDA_NOT_FOUND,
     mesasResult = [],
+    salonResult = SALON_RECORD,
   } = options
   vi.mocked(requestSgeb).mockImplementation((config: SgebRequestConfig) => {
     if (config.url.includes('/comanda')) {
@@ -87,6 +107,11 @@ function mockTransport(
       return mesasResult instanceof Error
         ? Promise.reject(mesasResult)
         : Promise.resolve(successEnvelope(mesasResult))
+    }
+    if (config.url.startsWith('/salones/')) {
+      return salonResult instanceof Error
+        ? Promise.reject(salonResult)
+        : Promise.resolve(successEnvelope(salonResult))
     }
     return eventoResult instanceof Error
       ? Promise.reject(eventoResult)
@@ -102,7 +127,20 @@ function authenticate(rol: 'capitan' | 'admin' | 'mesero') {
   })
 }
 
-function renderAt(path: string) {
+/**
+ * Renders alongside `EventDetailPage` (inside the same `MemoryRouter`, but
+ * outside the routed `<Route>` element) purely to observe the CURRENT
+ * router location's `state` from outside the page — used to prove the
+ * page's own "consume the `justCreated` flag" effect actually clears it
+ * (a same-instance `replace` navigation), not merely to read its initial
+ * value.
+ */
+function LocationStateProbe() {
+  const location = useLocation()
+  return <div data-testid="location-state">{JSON.stringify(location.state)}</div>
+}
+
+function renderAt(path: string, options: { state?: unknown } = {}) {
   // `retryDelay: 0` — the hook decides whether a given error retries (see
   // `useEventDetailQuery`'s own `retry` function); zeroing the delay just
   // keeps the network-error test from waiting out the default backoff.
@@ -111,7 +149,8 @@ function renderAt(path: string) {
   })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[path]}>
+      <MemoryRouter initialEntries={[{ pathname: path, state: options.state }]}>
+        <LocationStateProbe />
         <Routes>
           <Route path="/eventos/:id" element={<EventDetailPage />} />
         </Routes>
@@ -161,7 +200,7 @@ describe('EventDetailPage', () => {
     ).toBeInTheDocument()
   })
 
-  it('maps documented wire fields and leaves salonNombre unpopulated (undocumented field)', async () => {
+  it('maps documented wire fields; leaves the salón fallback in place when there is no session to resolve it (GET /salones/{id_salon} is capitán/admin-only)', async () => {
     mockTransport()
 
     renderAt('/eventos/1001')
@@ -169,6 +208,11 @@ describe('EventDetailPage', () => {
     await screen.findByRole('heading', { level: 2, name: 'Boda García' })
     expect(screen.getByText('16:00')).toBeInTheDocument()
     expect(screen.getAllByText('Información pendiente de integración')).toHaveLength(1)
+    expect(
+      vi
+        .mocked(requestSgeb)
+        .mock.calls.some((call) => call[0].url.startsWith('/salones/')),
+    ).toBe(false)
   })
 
   it('renders the unavailable state for a malformed route id, without ever calling the transport', () => {
@@ -308,6 +352,122 @@ describe('EventDetailPage', () => {
     for (const call of vi.mocked(requestSgeb).mock.calls) {
       expect(['GET', undefined]).toContain(call[0].method)
     }
+  })
+})
+
+describe('EventDetailPage — "Evento creado" one-time toast (router state)', () => {
+  it('shows the toast when arriving with { justCreated: true } router state', async () => {
+    mockTransport()
+
+    renderAt('/eventos/1001', { state: { justCreated: true } })
+
+    await screen.findByRole('heading', { level: 2, name: 'Boda García' })
+    expect(await screen.findByText('Evento creado')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'El evento se creó correctamente. Ya puedes continuar con su configuración.',
+      ),
+    ).toBeInTheDocument()
+  })
+
+  it('does not show the toast on a normal direct visit (no router state)', async () => {
+    mockTransport()
+
+    renderAt('/eventos/1001')
+
+    await screen.findByRole('heading', { level: 2, name: 'Boda García' })
+    expect(screen.queryByText('Evento creado')).not.toBeInTheDocument()
+  })
+
+  it('does not show the toast for unrelated router state', async () => {
+    mockTransport()
+
+    renderAt('/eventos/1001', { state: { somethingElse: true } })
+
+    await screen.findByRole('heading', { level: 2, name: 'Boda García' })
+    expect(screen.queryByText('Evento creado')).not.toBeInTheDocument()
+  })
+
+  it('consumes the router state immediately — clearing it so a reload (which reuses the same history entry) can never replay the toast', async () => {
+    mockTransport()
+
+    renderAt('/eventos/1001', { state: { justCreated: true } })
+
+    await screen.findByText('Evento creado')
+    await waitFor(() => {
+      expect(screen.getByTestId('location-state').textContent).toBe('null')
+    })
+  })
+
+  it('can be dismissed manually before it would auto-dismiss', async () => {
+    mockTransport()
+    const user = userEvent.setup()
+
+    renderAt('/eventos/1001', { state: { justCreated: true } })
+
+    await screen.findByText('Evento creado')
+    await user.click(screen.getByRole('button', { name: 'Cerrar notificación' }))
+
+    expect(screen.queryByText('Evento creado')).not.toBeInTheDocument()
+  })
+})
+
+describe('EventDetailPage — Salón resolution (GET /salones/{id_salon})', () => {
+  it('resolves and renders the real salón name for a capitán session', async () => {
+    authenticate('capitan')
+    mockTransport()
+
+    renderAt('/eventos/1001')
+
+    await screen.findByRole('heading', { level: 2, name: 'Boda García' })
+    expect(await screen.findByText('Salón Roble')).toBeInTheDocument()
+    expect(
+      screen.queryByText('Información pendiente de integración'),
+    ).not.toBeInTheDocument()
+    expect(requestSgeb).toHaveBeenCalledWith(
+      expect.objectContaining({ url: '/salones/1' }),
+    )
+  })
+
+  it('resolves the real salón name for an admin session too', async () => {
+    authenticate('admin')
+    mockTransport()
+
+    renderAt('/eventos/1001')
+
+    expect(await screen.findByText('Salón Roble')).toBeInTheDocument()
+  })
+
+  it('never calls GET /salones/{id_salon} for a mesero session — the pinned backend restricts it to capitán/admin — and keeps the existing fallback text', async () => {
+    authenticate('mesero')
+    mockTransport()
+
+    renderAt('/eventos/1001')
+
+    await screen.findByRole('heading', { level: 2, name: 'Boda García' })
+    expect(screen.getByText('Información pendiente de integración')).toBeInTheDocument()
+    expect(
+      vi
+        .mocked(requestSgeb)
+        .mock.calls.some((call) => call[0].url.startsWith('/salones/')),
+    ).toBe(false)
+  })
+
+  it('falls back to the existing placeholder — not an error banner — when the salón lookup itself fails', async () => {
+    authenticate('capitan')
+    mockTransport({
+      salonResult: new SgebNetworkError('No pudimos comunicarnos con el servidor.'),
+    })
+
+    renderAt('/eventos/1001')
+
+    await screen.findByRole('heading', { level: 2, name: 'Boda García' })
+    expect(
+      await screen.findByText('Información pendiente de integración'),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('No pudimos comunicarnos con el servidor.'),
+    ).not.toBeInTheDocument()
   })
 })
 

@@ -91,6 +91,52 @@ describe('useCreateSalonMutation', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: salonesQueryKeys.lists() })
   })
 
+  it('writes the created salón into the cached salones list SYNCHRONOUSLY — before mutateAsync resolves, independent of any background refetch (regression: this is the actual fix for the confirmed "created salón not really selected" bug)', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0001', message: 'Creado.' },
+      data: RECORD,
+    })
+    const queryClient = new QueryClient()
+    // Seeds the exact cache entry `EventCreatePage`'s `useSalonesQuery`
+    // reads, mirroring a page that already loaded its (possibly empty)
+    // salón list before the user triggered "crear salón".
+    queryClient.setQueryData(salonesQueryKeys.list({ activo: true }), [])
+
+    const { result } = renderHook(() => useCreateSalonMutation(), {
+      wrapper: createWrapper(queryClient),
+    })
+    const mutationPromise = result.current.mutateAsync(REQUEST)
+
+    // Asserted on the resolved promise, not via `waitFor` polling — proves
+    // the cache already contains the new salón in the very same tick
+    // `mutateAsync` resolves, not merely "eventually" once some later
+    // background refetch lands.
+    await mutationPromise
+    expect(queryClient.getQueryData(salonesQueryKeys.list({ activo: true }))).toEqual([
+      { idSalon: 9, nombre: 'Salón Nuevo', capacidadMaxMesas: 30 },
+    ])
+  })
+
+  it('appends to, rather than replaces, an already-populated cached list', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0001', message: 'Creado.' },
+      data: RECORD,
+    })
+    const queryClient = new QueryClient()
+    const existing = { idSalon: 1, nombre: 'Salón Roble', capacidadMaxMesas: 40 }
+    queryClient.setQueryData(salonesQueryKeys.list({ activo: true }), [existing])
+
+    const { result } = renderHook(() => useCreateSalonMutation(), {
+      wrapper: createWrapper(queryClient),
+    })
+    await result.current.mutateAsync(REQUEST)
+
+    expect(queryClient.getQueryData(salonesQueryKeys.list({ activo: true }))).toEqual([
+      existing,
+      { idSalon: 9, nombre: 'Salón Nuevo', capacidadMaxMesas: 30 },
+    ])
+  })
+
   it('is not retried on failure', async () => {
     const error = new Error('boom')
     vi.mocked(requestSgeb).mockRejectedValue(error)

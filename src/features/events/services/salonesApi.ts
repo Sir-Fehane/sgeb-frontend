@@ -76,6 +76,73 @@ export async function fetchSalones(
 }
 
 /**
+ * Event Detail's Salón field needs a name plus enough address context to
+ * be actually useful (not just "integrated") — `nombre`/`ciudad`/`estado`
+ * only, the smallest addition that improves on a bare name. No
+ * capacity/coordinates: nothing on Event Detail compares against
+ * `capacidadMaxMesas` (that cross-check is `EventCreateForm`'s own,
+ * client-side-only SGEB-4007 concern) and no map/geocoding exists here to
+ * plot latitud/longitud (explicitly out of scope — see this branch's
+ * report).
+ */
+export interface SalonDetailViewModel {
+  idSalon: number
+  nombre: string
+  ciudad: string
+  estado: string
+}
+
+/** Maps only the fields `SalonDetailViewModel` needs — see that type's own comment for why the rest of `SalonApiRecord` is left out. */
+export function mapSalonToDetail(record: SalonApiRecord): SalonDetailViewModel {
+  return {
+    idSalon: record.id_salon,
+    nombre: record.nombre,
+    ciudad: record.ciudad,
+    estado: record.estado,
+  }
+}
+
+/**
+ * `GET /salones/{id_salon}` — a real, documented, already-implemented
+ * endpoint (`docs/api/openapi-sgeb.yaml`; the pinned backend's
+ * `SalonesController.mostrar`), not called from anywhere in this codebase
+ * before this branch. Used by `EventDetailPage` to resolve the real salón
+ * behind `Evento.id_salon` (see `types/event.ts`'s own comment for why
+ * `mapEventoToDetail` can't just embed the name itself).
+ *
+ * Confirmed against the pinned backend's route table
+ * (`start/routes.ts`): this endpoint sits in the same `capitan`/`admin`
+ * -only route group as `GET /salones` and `POST /salones` — a `mesero`
+ * session gets `SGEB-1004` here even though `GET /eventos/{id_evento}`
+ * itself is open to any authenticated role. `EventDetailPage` accounts for
+ * this by never even calling this function for a session that isn't
+ * `capitan`/`admin` (the exact same role check the "crear salón" fallback
+ * already gates on) — a guaranteed-403 request would be pure noise, not a
+ * genuine attempt. See this branch's report for the full writeup of that
+ * gap; it is a backend contract fact, not something this function or its
+ * caller works around.
+ *
+ * No `SalonesListParams`-style filter here — the path segment is the only
+ * input, exactly like `fetchEventoDetalle`.
+ */
+export async function fetchSalonById(
+  idSalon: number,
+  signal?: AbortSignal,
+): Promise<SalonDetailViewModel> {
+  const envelope = await requestSgeb<SalonApiRecord>({
+    url: `/salones/${String(idSalon)}`,
+    ...(signal ? { signal } : {}),
+  })
+  if (envelope.data === null) {
+    // Never observed against the pinned backend — a successful lookup
+    // always returns the Salon record — guarded defensively rather than
+    // assumed, same as `fetchEventoDetalle`.
+    throw new SgebNetworkError('No pudimos interpretar la respuesta del servidor.')
+  }
+  return mapSalonToDetail(envelope.data)
+}
+
+/**
  * `POST /salones` request body — exact field set confirmed against the
  * pinned backend's `salonValidator`
  * (`app/modules/eventos/controllers/salones_controller.ts`). This branch

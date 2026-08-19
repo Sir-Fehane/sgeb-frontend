@@ -11,7 +11,7 @@ import type { CreateSalonFormValues } from '@/features/events/schemas/salonCreat
 import type { CreateEventoRequest } from '@/features/events/services/eventsApi'
 import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
-import { Alert, Button, SectionHeading, Spinner, Text } from '@/shared/components'
+import { Alert, Button, SectionHeading, Spinner, Text, Toast } from '@/shared/components'
 
 /** Never renders `technical_message` — same helper as every other page in this feature. */
 function toSafeErrorMessage(error: unknown): string {
@@ -73,6 +73,23 @@ export function EventCreatePage() {
   const [justCreatedSalonId, setJustCreatedSalonId] = useState<number | undefined>(
     undefined,
   )
+  /**
+   * Holds the just-created salón's name only long enough to show one
+   * floating success `Toast` — cleared the moment the "crear salón" form
+   * reopens (a fresh attempt should never sit behind a stale success from
+   * a previous one), and by the toast's own manual/auto dismissal. Local,
+   * transient UI state, not a query/mutation result:
+   * `createSalonMutation.isSuccess` alone can't drive this, since it would
+   * stay `true` (and so would a naive render off it) even after the user
+   * reopens the form to create a second salón and that attempt is still
+   * pending or has failed. Only ever set once `salon.idSalon` has been
+   * handed to `EventCreateForm` as `selectedSalonId` below AND
+   * `useCreateSalonMutation`'s `onSuccess` has already written that salón
+   * into the cached list synchronously (see that hook's own comment) —
+   * so by the time this renders, the selection this message claims has
+   * genuinely already happened, not merely been requested.
+   */
+  const [createdSalonName, setCreatedSalonName] = useState<string | null>(null)
 
   // A plain ref, not `mutation.isPending` — mirrors `EventClosurePage`'s
   // own `isSubmittingRef`/`isFinalizingRef`: TanStack Query's mutation
@@ -89,6 +106,7 @@ export function EventCreatePage() {
     try {
       const salon = await createSalonMutation.mutateAsync(values)
       setJustCreatedSalonId(salon.idSalon)
+      setCreatedSalonName(salon.nombre)
       setShowCreateSalon(false)
     } finally {
       isCreatingSalonRef.current = false
@@ -104,7 +122,13 @@ export function EventCreatePage() {
       const created = await createEventoMutation.mutateAsync(
         toCreateEventoRequest(values, session.user.sub),
       )
-      void navigate(`/eventos/${String(created.idEvento)}`)
+      // One-time route-state flag, not global state — `EventDetailPage`
+      // reads and immediately consumes it (replacing its own history
+      // entry) so a direct visit never shows it and a reload can't replay
+      // it. See that page's own comment.
+      void navigate(`/eventos/${String(created.idEvento)}`, {
+        state: { justCreated: true },
+      })
     } finally {
       isCreatingEventoRef.current = false
     }
@@ -121,6 +145,17 @@ export function EventCreatePage() {
   return (
     <div className="flex flex-col gap-6">
       <SectionHeading className="text-heading">Crear evento</SectionHeading>
+
+      {createdSalonName ? (
+        <Toast
+          title="Salón creado"
+          onDismiss={() => {
+            setCreatedSalonName(null)
+          }}
+        >
+          <p>{createdSalonName} fue creado y seleccionado para este evento.</p>
+        </Toast>
+      ) : null}
 
       {salonesQuery.isPending ? (
         <div className="flex items-center gap-2">
@@ -160,6 +195,7 @@ export function EventCreatePage() {
               className="w-fit"
               onClick={() => {
                 setShowCreateSalon(true)
+                setCreatedSalonName(null)
               }}
             >
               ¿No encuentras tu salón? Crear uno nuevo

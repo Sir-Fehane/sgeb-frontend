@@ -13,9 +13,27 @@ import {
 } from '@/features/events/utils/comandaFormatting'
 import { formatEventDateTime } from '@/features/events/utils/eventDetailFormatting'
 import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
-import { Alert, Button, FormField, Input, Spinner, Text } from '@/shared/components'
+import {
+  Alert,
+  Button,
+  FormField,
+  Input,
+  Spinner,
+  Text,
+  Toast,
+} from '@/shared/components'
 
 export interface EventDetailComandaSectionProps {
+  /**
+   * Identifies the event this section belongs to — used only to reset this
+   * section's own local, transient UI state (upload/retire success
+   * messages) when the caller reuses this component instance across a
+   * different event, since React Router does not remount
+   * `EventDetailPage` on an id-only param change. Never sent to the
+   * network from here (the real requests are already scoped by
+   * `onUpload`/`onRetire`'s own closures).
+   */
+  idEvento: number
   /** `null` means no active comanda for this event — a legitimate empty state, not a loading gap. */
   comanda: ComandaMetadataViewModel | null
   isLoading: boolean
@@ -42,6 +60,12 @@ export interface EventDetailComandaSectionProps {
   onOpen: (signal: AbortSignal, tab: Window | null) => Promise<void>
   onUpload: (file: File) => Promise<void>
   onRetire: () => Promise<void>
+}
+
+/** One floating `Toast`'s worth of copy for whichever comanda mutation most recently succeeded. */
+interface ComandaFeedback {
+  title: string
+  body: string
 }
 
 /**
@@ -91,6 +115,7 @@ function toSafeErrorMessage(error: unknown): string {
  * Detail is a multi-section overview where Comanda is only one of many).
  */
 export function EventDetailComandaSection({
+  idEvento,
   comanda,
   isLoading,
   errorMessage,
@@ -114,6 +139,16 @@ export function EventDetailComandaSection({
   const [isRetiring, setIsRetiring] = useState(false)
   const [retireError, setRetireError] = useState<string | null>(null)
 
+  /**
+   * Whichever comanda mutation most recently succeeded — a single slot,
+   * not one per action, since only one floating `Toast` is ever shown at
+   * once (see `Toast`'s own comment: this component owns showing/hiding
+   * exactly one). Cleared at the START of every new upload/retire attempt
+   * (so a later failure never leaves the previous success visible) and by
+   * the toast's own manual/auto dismissal.
+   */
+  const [comandaFeedback, setComandaFeedback] = useState<ComandaFeedback | null>(null)
+
   useEffect(() => {
     return () => {
       openControllerRef.current?.abort()
@@ -123,9 +158,24 @@ export function EventDetailComandaSection({
     }
   }, [])
 
+  // This component instance can be reused across different events (Event
+  // Detail does not remount on an id-only route change) — clears any
+  // success feedback so a real action on THIS event can never be read as
+  // leftover confirmation from a previously viewed one. Adjusted during
+  // render (React's documented pattern for resetting state on a prop
+  // change: https://react.dev/learn/you-might-not-need-an-effect), not in
+  // an effect — an effect would run one render late, letting the stale
+  // message flash before clearing.
+  const [renderedForIdEvento, setRenderedForIdEvento] = useState(idEvento)
+  if (idEvento !== renderedForIdEvento) {
+    setRenderedForIdEvento(idEvento)
+    setComandaFeedback(null)
+  }
+
   function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0] ?? null
     setUploadError(null)
+    setComandaFeedback(null)
     if (!file) {
       setSelectedFile(null)
       setFileValidationError(null)
@@ -140,14 +190,27 @@ export function EventDetailComandaSection({
     if (!selectedFile || isUploading) {
       return
     }
+    // Captured before the request: `comanda` reflects the pre-upload state,
+    // so the success message can honestly distinguish a first upload from
+    // a replace even though the real backend has one endpoint for both.
+    const wasReplacing = comanda !== null
     setIsUploading(true)
     setUploadError(null)
+    setComandaFeedback(null)
     try {
       await onUpload(selectedFile)
       setSelectedFile(null)
       // Remounts the native file input so its own internal value resets —
       // a controlled `value` isn't possible on `type="file"`.
       setUploadInputKey((key) => key + 1)
+      setComandaFeedback(
+        wasReplacing
+          ? {
+              title: 'Comanda reemplazada',
+              body: 'La nueva comanda se guardó correctamente.',
+            }
+          : { title: 'Comanda subida', body: 'La comanda se guardó correctamente.' },
+      )
     } catch (error) {
       setUploadError(toSafeErrorMessage(error))
     } finally {
@@ -198,9 +261,14 @@ export function EventDetailComandaSection({
     }
     setIsRetiring(true)
     setRetireError(null)
+    setComandaFeedback(null)
     try {
       await onRetire()
       setConfirmingRetire(false)
+      setComandaFeedback({
+        title: 'Comanda retirada',
+        body: 'La comanda fue retirada correctamente.',
+      })
     } catch (error) {
       setRetireError(toSafeErrorMessage(error))
     } finally {
@@ -210,6 +278,16 @@ export function EventDetailComandaSection({
 
   return (
     <EventDetailSection title="Comanda">
+      {comandaFeedback ? (
+        <Toast
+          title={comandaFeedback.title}
+          onDismiss={() => {
+            setComandaFeedback(null)
+          }}
+        >
+          <p>{comandaFeedback.body}</p>
+        </Toast>
+      ) : null}
       <div className="flex flex-col gap-4">
         {isLoading ? (
           <div className="flex items-center gap-2">
