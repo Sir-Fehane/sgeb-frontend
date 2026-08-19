@@ -290,7 +290,7 @@ describe('processAuthorizationCallback — silent (prompt=none) login_required r
     )
 
     expect(exchange).not.toHaveBeenCalled()
-    expect(outcome).toEqual({ kind: 'retry-visible' })
+    expect(outcome).toEqual({ kind: 'retry-visible', returnTo: '/reportes' })
   })
 
   it('does not retry-visible for a different error on a silent transaction — shows the normal error', async () => {

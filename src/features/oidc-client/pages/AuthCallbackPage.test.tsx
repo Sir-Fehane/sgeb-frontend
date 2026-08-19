@@ -105,9 +105,10 @@ describe('AuthCallbackPage', () => {
     }
   })
 
-  it('on a retry-visible outcome, starts a normal visible authorization request and shows no error', async () => {
+  it("on a retry-visible outcome, starts a normal visible authorization request preserving the failed silent attempt's returnTo, and shows no error", async () => {
     vi.spyOn(callbackModule, 'processAuthorizationCallback').mockResolvedValue({
       kind: 'retry-visible',
+      returnTo: '/eventos/nuevo',
     })
     const beginAuthorizationSpy = vi
       .spyOn(authorizationRequestModule, 'beginAuthorization')
@@ -118,7 +119,7 @@ describe('AuthCallbackPage', () => {
     await waitFor(() => {
       expect(beginAuthorizationSpy).toHaveBeenCalledOnce()
     })
-    expect(beginAuthorizationSpy).toHaveBeenCalledWith()
+    expect(beginAuthorizationSpy).toHaveBeenCalledWith({ returnTo: '/eventos/nuevo' })
     expect(
       screen.getByRole('heading', { level: 1, name: 'Verificando tu inicio de sesión' }),
     ).toBeInTheDocument()

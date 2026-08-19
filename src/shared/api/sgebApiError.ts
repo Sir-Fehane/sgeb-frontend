@@ -1,3 +1,4 @@
+import { SGEB_CODE } from '@/shared/api/sgebCodes'
 import type { ApiResult } from '@/shared/types/api'
 
 /**
@@ -58,4 +59,21 @@ export function isSgebApplicationError(error: unknown): error is SgebApplication
 
 export function isSgebNetworkError(error: unknown): error is SgebNetworkError {
   return error instanceof SgebNetworkError
+}
+
+/**
+ * `true` for a `SgebApplicationError` carrying `SGEB-1002` (expired token)
+ * — the one `SgebApplicationError` shape a mutation caller may need to
+ * distinguish from every other business/validation failure. For a write
+ * request, `shared/api/sgebClient.ts`'s SGEB-1002 recovery never triggers
+ * its own full-page silent-auth redirect (see `isWriteRequestConfig` there)
+ * precisely so the caller stays mounted and can react to this instead: show
+ * a session-expired message that does not misrepresent the write as having
+ * succeeded, and offer an explicit, user-initiated re-authentication
+ * action (e.g. `beginAuthorization`) rather than one triggered silently out
+ * from under an unsaved form. See `EventCreatePage` for the reference
+ * usage.
+ */
+export function isSessionExpiredError(error: unknown): error is SgebApplicationError {
+  return isSgebApplicationError(error) && error.code === SGEB_CODE.TOKEN_EXPIRED
 }

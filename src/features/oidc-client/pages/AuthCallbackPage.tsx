@@ -64,12 +64,14 @@ export function AuthCallbackPage({ navigate: navigateProp }: AuthCallbackPagePro
       }
 
       if (outcome.kind === 'retry-visible') {
-        // A cold-start silent restore (`prompt=none`) came back
-        // `login_required` — the documented, expected "no live provider
-        // session" answer, not an error. Stay on the processing view (no
-        // error flash) and immediately start a normal, visible
-        // authorization request instead.
-        void beginAuthorization()
+        // A silent restore (`prompt=none`) came back `login_required` —
+        // the documented, expected "no live provider session" answer, not
+        // an error. Stay on the processing view (no error flash) and
+        // immediately start a normal, visible authorization request
+        // instead, preserving the failed silent attempt's own `returnTo`
+        // (e.g. `/eventos/nuevo` for a mutation's own auth-recovery flow)
+        // rather than falling back to the default `/panel`.
+        void beginAuthorization({ returnTo: outcome.returnTo })
         return
       }
 

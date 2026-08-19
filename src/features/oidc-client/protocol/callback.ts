@@ -32,8 +32,15 @@ export type CallbackOutcome =
    * flow's own `login_required` (which should not happen, but is not
    * trusted to never happen) still falls through to a real error, so this
    * can never chain into a second automatic redirect.
+   *
+   * `returnTo` carries the failed silent transaction's own validated
+   * `returnTo` through to the visible retry, so a silent recovery that was
+   * itself triggered from e.g. a mutation's own auth-recovery flow
+   * (`EventCreatePage`) still lands back on the right route after the
+   * visible fallback, instead of silently falling back to
+   * `OIDC_DEFAULT_RETURN_TO` — see `AuthCallbackPage`'s own use.
    */
-  | { kind: 'retry-visible' }
+  | { kind: 'retry-visible'; returnTo: string }
 
 export interface ProcessCallbackDependencies {
   consumeTransaction?: typeof consumeAuthorizationTransaction
@@ -79,7 +86,7 @@ export async function processAuthorizationCallback(
       transaction.silent &&
       params.error === 'login_required'
     ) {
-      return { kind: 'retry-visible' }
+      return { kind: 'retry-visible', returnTo: transaction.returnTo }
     }
 
     return {

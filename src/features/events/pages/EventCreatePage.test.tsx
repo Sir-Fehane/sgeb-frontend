@@ -7,14 +7,37 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { CreateSalonFormValues } from '@/features/events/schemas/salonCreateSchema'
 import { EventCreatePage } from '@/features/events/pages/EventCreatePage'
+import type { EventCreateFormValues } from '@/features/events/schemas/eventCreateSchema'
 import type { EventoApiRecord } from '@/features/events/services/eventsApi'
 import type { SalonApiRecord } from '@/features/events/services/salonesApi'
+import {
+  clearEventCreateDraft,
+  consumeEventCreateDraft,
+  saveEventCreateDraft,
+} from '@/features/events/utils/eventCreateDraft'
+import { beginAuthorization } from '@/features/oidc-client/protocol/authorizationRequest'
 import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
+import { SgebApplicationError } from '@/shared/api/sgebApiError'
 import { requestSgeb, type SgebRequestConfig } from '@/shared/api/sgebClient'
 
 vi.mock('@/shared/api/sgebClient', () => ({
   requestSgeb: vi.fn(),
 }))
+
+vi.mock('@/features/oidc-client/protocol/authorizationRequest', () => ({
+  beginAuthorization: vi.fn(),
+}))
+
+vi.mock('@/features/events/utils/eventCreateDraft', () => ({
+  saveEventCreateDraft: vi.fn(),
+  consumeEventCreateDraft: vi.fn(),
+  clearEventCreateDraft: vi.fn(),
+}))
+
+const mockedBeginAuthorization = vi.mocked(beginAuthorization)
+const mockedSaveDraft = vi.mocked(saveEventCreateDraft)
+const mockedConsumeDraft = vi.mocked(consumeEventCreateDraft)
+const mockedClearDraft = vi.mocked(clearEventCreateDraft)
 
 /**
  * Neither `SalonLocationPicker` (address → geocoding → map → marker) nor
@@ -71,6 +94,13 @@ vi.mock('@/features/events/components/SalonLocationPicker', () => ({
 
 beforeEach(() => {
   vi.mocked(requestSgeb).mockReset()
+  mockedBeginAuthorization.mockReset()
+  mockedBeginAuthorization.mockResolvedValue('https://auth.sgeb.test/authorize')
+  mockedSaveDraft.mockReset()
+  mockedSaveDraft.mockReturnValue(true)
+  mockedConsumeDraft.mockReset()
+  mockedConsumeDraft.mockReturnValue(null)
+  mockedClearDraft.mockReset()
   useOidcSessionStore.getState().reset()
 })
 
@@ -537,5 +567,304 @@ describe('EventCreatePage', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(tituloInput.closest('[inert]')).toBeNull()
     expect(tituloInput).toHaveValue('Borrador de evento')
+  })
+
+  describe('session expiring during submit (hotfix/auth-mutation-replay-after-silent-recovery)', () => {
+    function mockTransportWithExpiredSessionOnCreate() {
+      vi.mocked(requestSgeb).mockImplementation((config: SgebRequestConfig) => {
+        if (config.url === '/salones' && (config.method ?? 'GET') === 'GET') {
+          return Promise.resolve({
+            result: { code: 'SGEB-0000', message: 'ok' },
+            data: [SALON_RECORD],
+          })
+        }
+        if (config.url === '/eventos' && config.method === 'POST') {
+          return Promise.reject(
+            new SgebApplicationError(401, {
+              code: 'SGEB-1002',
+              message: 'Tu sesión ha expirado.',
+            }),
+          )
+        }
+        return Promise.reject(new Error(`Unhandled request in test: ${config.url}`))
+      })
+    }
+
+    it('automatically snapshots the draft and starts a silent OIDC recovery — no button click required, no generic failure, no false success', async () => {
+      authenticate()
+      mockTransportWithExpiredSessionOnCreate()
+      const user = userEvent.setup()
+      renderPage()
+
+      await fillValidForm(user)
+      await user.click(screen.getByRole('button', { name: 'Crear evento' }))
+
+      expect(await screen.findByText('Renovando tu sesión')).toBeInTheDocument()
+      expect(
+        screen.getByText('Tus cambios no se han perdido. Un momento…'),
+      ).toBeInTheDocument()
+      // The draft was snapshotted before ever navigating away.
+      expect(mockedSaveDraft).toHaveBeenCalledWith(
+        expect.objectContaining({
+          titulo: 'Evento válido de prueba',
+          id_salon: 1,
+        }),
+      )
+      // The silent recovery started automatically — no click required — and
+      // returns to this exact route, never the OIDC default `/panel`.
+      expect(mockedBeginAuthorization).toHaveBeenCalledWith({
+        prompt: 'none',
+        returnTo: '/eventos/nuevo',
+      })
+      // Never the generic failure copy for this specific, recoverable case.
+      expect(screen.queryByText('No se pudo crear el evento')).not.toBeInTheDocument()
+      // Never a false success: still on the create form, never navigated.
+      expect(screen.queryByText(/Detalle del evento/)).not.toBeInTheDocument()
+      // No manual-action fallback shown — the automatic path is silent.
+      expect(
+        screen.queryByRole('button', { name: 'Iniciar sesión' }),
+      ).not.toBeInTheDocument()
+    })
+
+    it('never auto-replays POST /eventos after the silent recovery call — exactly one POST attempt happened, and it was the original one', async () => {
+      authenticate()
+      mockTransportWithExpiredSessionOnCreate()
+      const user = userEvent.setup()
+      renderPage()
+
+      await fillValidForm(user)
+      await user.click(screen.getByRole('button', { name: 'Crear evento' }))
+      await screen.findByText('Renovando tu sesión')
+
+      const postCalls = vi
+        .mocked(requestSgeb)
+        .mock.calls.filter(
+          (call) => call[0].url === '/eventos' && call[0].method === 'POST',
+        )
+      expect(postCalls).toHaveLength(1)
+    })
+
+    it('falls back to a manual, explicit re-authenticate action when the silent recovery call itself fails, and keeps the already-saved draft', async () => {
+      authenticate()
+      mockTransportWithExpiredSessionOnCreate()
+      mockedBeginAuthorization.mockRejectedValueOnce(
+        new Error('Invalid OIDC configuration.'),
+      )
+      const user = userEvent.setup()
+      renderPage()
+
+      await fillValidForm(user)
+      await user.click(screen.getByRole('button', { name: 'Crear evento' }))
+
+      expect(await screen.findByText('Tu sesión expiró')).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          'Recuperamos los datos que estabas capturando. Vuelve a iniciar sesión.',
+        ),
+      ).toBeInTheDocument()
+      expect(mockedSaveDraft).toHaveBeenCalledOnce()
+
+      await user.click(screen.getByRole('button', { name: 'Iniciar sesión' }))
+
+      // The fallback click is a normal, VISIBLE authorization request —
+      // never another `prompt: 'none'` attempt, which just failed.
+      expect(mockedBeginAuthorization).toHaveBeenLastCalledWith({
+        returnTo: '/eventos/nuevo',
+      })
+    })
+
+    it('never navigates away or claims the draft was preserved when sessionStorage itself is unavailable', async () => {
+      authenticate()
+      mockTransportWithExpiredSessionOnCreate()
+      mockedSaveDraft.mockReturnValue(false)
+      const user = userEvent.setup()
+      renderPage()
+
+      await fillValidForm(user)
+      await user.click(screen.getByRole('button', { name: 'Crear evento' }))
+
+      expect(await screen.findByText('Tu sesión expiró')).toBeInTheDocument()
+      expect(
+        screen.getByText(
+          /No pudimos conservar automáticamente los datos para renovar la sesión/,
+        ),
+      ).toBeInTheDocument()
+      // No silent redirect was attempted — the draft was never confirmed saved.
+      expect(mockedBeginAuthorization).not.toHaveBeenCalled()
+      // The typed values are still right there, since the page never unmounted.
+      expect(screen.getByLabelText(/^Título/)).toHaveValue('Evento válido de prueba')
+
+      await user.click(screen.getByRole('button', { name: 'Iniciar sesión' }))
+      expect(mockedBeginAuthorization).toHaveBeenCalledWith({
+        returnTo: '/eventos/nuevo',
+      })
+    })
+
+    it('a plain business/validation failure on POST /eventos still shows the generic error, never touches the draft, and never starts OIDC recovery', async () => {
+      authenticate()
+      const user = userEvent.setup()
+      vi.mocked(requestSgeb).mockImplementation((config: SgebRequestConfig) => {
+        if (config.url === '/salones' && (config.method ?? 'GET') === 'GET') {
+          return Promise.resolve({
+            result: { code: 'SGEB-0000', message: 'ok' },
+            data: [SALON_RECORD],
+          })
+        }
+        if (config.url === '/eventos' && config.method === 'POST') {
+          return Promise.reject(
+            new SgebApplicationError(409, {
+              code: 'SGEB-4001',
+              message: 'El salón no está disponible en esa fecha.',
+            }),
+          )
+        }
+        return Promise.reject(new Error(`Unhandled request in test: ${config.url}`))
+      })
+      renderPage()
+
+      await fillValidForm(user)
+      await user.click(screen.getByRole('button', { name: 'Crear evento' }))
+
+      expect(await screen.findByText('No se pudo crear el evento')).toBeInTheDocument()
+      expect(
+        screen.getByText('El salón no está disponible en esa fecha.'),
+      ).toBeInTheDocument()
+      expect(screen.queryByText('Tu sesión expiró')).not.toBeInTheDocument()
+      expect(screen.queryByText('Renovando tu sesión')).not.toBeInTheDocument()
+      expect(mockedBeginAuthorization).not.toHaveBeenCalled()
+      expect(mockedSaveDraft).not.toHaveBeenCalled()
+    })
+
+    it('a normal refresh-succeeds expiry stays fully transparent — the mutation just succeeds, with no recovery UI and no draft ever saved', async () => {
+      // This mocks `requestSgeb` directly (below the real interceptor), so
+      // it stands in for "SGEB-1002 → refresh succeeds → original request
+      // replayed once" already resolving to a plain success by the time it
+      // reaches this page — exactly what the real transport does. See
+      // `sgebClient.test.ts` for the transport-level coverage of the
+      // refresh-succeeds replay itself.
+      authenticate()
+      mockTransport()
+      const user = userEvent.setup()
+      renderPage()
+
+      await fillValidForm(user)
+      await user.click(screen.getByRole('button', { name: 'Crear evento' }))
+
+      await screen.findByText('Detalle del evento — justCreated: true')
+      expect(screen.queryByText('Tu sesión expiró')).not.toBeInTheDocument()
+      expect(screen.queryByText('Renovando tu sesión')).not.toBeInTheDocument()
+      expect(mockedSaveDraft).not.toHaveBeenCalled()
+      expect(mockedBeginAuthorization).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('restoring an auth-recovery draft on mount', () => {
+    const DRAFT_VALUES: EventCreateFormValues = {
+      id_salon: 1,
+      titulo: 'Boda García (recuperado)',
+      tipo: 'social',
+      fecha: '2099-03-15',
+      hora_presentacion: '15:00',
+      hora_inicio: '17:00',
+      cupo_meseros: 8,
+      num_mesas: 12,
+      tarifa_por_mesero: 350,
+      radio_geocerca_m: 200,
+    }
+
+    it('restores every field, shows a recovery notice (never the create-success toast), and never auto-submits', async () => {
+      mockedConsumeDraft.mockReturnValue(DRAFT_VALUES)
+      authenticate()
+      mockTransport()
+      renderPage()
+
+      // Waits for the salones list to resolve and the form to mount —
+      // the recovery notice itself renders immediately (unconditionally),
+      // but the form fields depend on `GET /salones` settling first.
+      await screen.findByLabelText(/^Título/)
+
+      expect(screen.getByText('Sesión renovada')).toBeInTheDocument()
+      expect(
+        screen.getByText(/Recuperamos los datos que estabas capturando/),
+      ).toBeInTheDocument()
+      expect(screen.getByLabelText(/^Título/)).toHaveValue('Boda García (recuperado)')
+      expect(screen.getByLabelText(/^Fecha del evento/)).toHaveValue('2099-03-15')
+      expect(screen.getByLabelText(/^Número de mesas/)).toHaveValue(12)
+      expect(screen.getByLabelText(/^Cupo de meseros/)).toHaveValue(8)
+      expect(screen.getByLabelText(/^Tarifa por mesero/)).toHaveValue(350)
+      expect(
+        screen.getByLabelText(/^Radio permitido para registrar llegada/),
+      ).toHaveValue(200)
+
+      // Never auto-submitted: no POST attempt happened just from mounting.
+      expect(
+        vi.mocked(requestSgeb).mock.calls.some((call) => call[0].method === 'POST'),
+      ).toBe(false)
+      expect(screen.queryByText('Salón creado')).not.toBeInTheDocument()
+    })
+
+    it('selects the restored salón once the live salones list confirms it still exists', async () => {
+      mockedConsumeDraft.mockReturnValue(DRAFT_VALUES)
+      authenticate()
+      mockTransport()
+      renderPage()
+
+      const select = await screen.findByLabelText<HTMLSelectElement>(/^Salón/)
+      await waitFor(() => {
+        expect(select.value).toBe('1')
+      })
+    })
+
+    it('leaves the salón unselected — never a phantom option — when the restored id_salon is no longer among the live salones', async () => {
+      mockedConsumeDraft.mockReturnValue({ ...DRAFT_VALUES, id_salon: 999 })
+      authenticate()
+      mockTransport()
+      renderPage()
+
+      const select = await screen.findByLabelText<HTMLSelectElement>(/^Salón/)
+      // Give any (incorrect) restoration effect a chance to run before asserting.
+      await waitFor(() => {
+        expect(screen.getByLabelText(/^Título/)).toHaveValue('Boda García (recuperado)')
+      })
+      expect(select.value).toBe('')
+    })
+
+    it('lets the user explicitly resubmit the restored form, producing exactly one normal POST /eventos', async () => {
+      mockedConsumeDraft.mockReturnValue(DRAFT_VALUES)
+      authenticate()
+      mockTransport()
+      const user = userEvent.setup()
+      renderPage()
+
+      await screen.findByText('Sesión renovada')
+      await waitFor(() => {
+        expect(screen.getByLabelText<HTMLSelectElement>(/^Salón/).value).toBe('1')
+      })
+
+      await user.click(screen.getByRole('button', { name: 'Crear evento' }))
+
+      await waitFor(() => {
+        const postCalls = vi
+          .mocked(requestSgeb)
+          .mock.calls.filter(
+            (call) => call[0].url === '/eventos' && call[0].method === 'POST',
+          )
+        expect(postCalls).toHaveLength(1)
+      })
+      expect(
+        await screen.findByText('Detalle del evento — justCreated: true'),
+      ).toBeInTheDocument()
+      // The successful creation clears any stale leftover draft copy.
+      expect(mockedClearDraft).toHaveBeenCalled()
+    })
+
+    it('a normal visit with no stored draft behaves exactly as before — no recovery notice', async () => {
+      authenticate()
+      mockTransport()
+      renderPage()
+
+      await screen.findByLabelText(/^Título/)
+      expect(screen.queryByText('Sesión renovada')).not.toBeInTheDocument()
+    })
   })
 })

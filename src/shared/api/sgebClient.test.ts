@@ -614,6 +614,110 @@ describe('sgebClient — SGEB-1002 expired-token recovery', () => {
   })
 })
 
+describe('sgebClient — SGEB-1002 refresh failure on a write never triggers the full-page silent-auth redirect', () => {
+  it.each([
+    ['POST', 'oauth-error'],
+    ['PUT', 'oauth-error'],
+    ['PATCH', 'oauth-error'],
+    ['DELETE', 'oauth-error'],
+    ['POST', 'network-error'],
+  ] as const)(
+    'a %s request whose refresh fails (%s) surfaces SGEB-1002 without navigating away, leaving the caller/form mounted',
+    async (method, outcome) => {
+      const refresh = vi
+        .fn<() => Promise<TokenResult>>()
+        .mockResolvedValue(
+          outcome === 'oauth-error'
+            ? { outcome: 'oauth-error', error: { error: 'invalid_grant' } }
+            : { outcome: 'network-error', message: 'No pudimos renovar tu sesión.' },
+        )
+      const { adapter, deps, request } = createTestClient({ refresh })
+
+      adapter.mockImplementation((config) =>
+        Promise.reject(
+          fakeAxiosError(
+            config,
+            401,
+            envelope(errorResult('SGEB-1002', 'Tu sesión ha expirado.')),
+          ),
+        ),
+      )
+
+      const error = await request({
+        url: '/eventos',
+        method,
+        data: { titulo: 'Boda García' },
+      }).catch((e: unknown) => e)
+
+      expect(refresh).toHaveBeenCalledOnce()
+      // The one behavior this whole test exists to pin down: a failed
+      // write never triggers the full-page navigation that would tear
+      // down whatever in-memory form/mutation state produced this
+      // request — unlike the read case, which does trigger it (see the
+      // "does not retry ... refresh fails" tests above, both implicit GET).
+      expect(deps.beginSilentAuthorization).not.toHaveBeenCalled()
+      expect(adapter).toHaveBeenCalledOnce()
+      expect(isSgebApplicationError(error)).toBe(true)
+      if (isSgebApplicationError(error)) {
+        expect(error.code).toBe('SGEB-1002')
+      }
+    },
+  )
+
+  it('a plain, explicit GET still triggers the silent-auth fallback — the split is method-based, not a write-only regression', async () => {
+    const refresh = vi.fn<() => Promise<TokenResult>>().mockResolvedValue({
+      outcome: 'oauth-error',
+      error: { error: 'invalid_grant' },
+    })
+    const { deps, adapter, request } = createTestClient({ refresh })
+
+    adapter.mockImplementation((config) =>
+      Promise.reject(
+        fakeAxiosError(
+          config,
+          401,
+          envelope(errorResult('SGEB-1002', 'Tu sesión ha expirado.')),
+        ),
+      ),
+    )
+
+    await request({ url: '/eventos', method: 'GET' }).catch(() => undefined)
+
+    expect(deps.beginSilentAuthorization).toHaveBeenCalledOnce()
+  })
+
+  it('proves the invariant is generic transport behavior, not hardcoded to /eventos: a different write endpoint behaves identically', async () => {
+    const refresh = vi.fn<() => Promise<TokenResult>>().mockResolvedValue({
+      outcome: 'oauth-error',
+      error: { error: 'invalid_grant' },
+    })
+    const { adapter, deps, request } = createTestClient({ refresh })
+
+    adapter.mockImplementation((config) =>
+      Promise.reject(
+        fakeAxiosError(
+          config,
+          401,
+          envelope(errorResult('SGEB-1002', 'Tu sesión ha expirado.')),
+        ),
+      ),
+    )
+
+    const error = await request({
+      url: '/pagos/1/fallido',
+      method: 'PATCH',
+      data: { motivo: 'rechazo bancario' },
+    }).catch((e: unknown) => e)
+
+    expect(deps.beginSilentAuthorization).not.toHaveBeenCalled()
+    expect(adapter).toHaveBeenCalledOnce()
+    expect(isSgebApplicationError(error)).toBe(true)
+    if (isSgebApplicationError(error)) {
+      expect(error.code).toBe('SGEB-1002')
+    }
+  })
+})
+
 describe('sgebClient — concurrency', () => {
   it('relies on the injected refresh primitive for concurrent SGEB-1002 requests, without its own dedup layer', async () => {
     let resolveRefresh!: (result: TokenResult) => void

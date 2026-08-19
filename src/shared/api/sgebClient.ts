@@ -30,6 +30,28 @@ interface SgebRetryableConfig extends InternalAxiosRequestConfig {
 }
 
 /**
+ * HTTP methods this transport treats as a mutation. Axios itself normalizes
+ * `config.method` to lowercase before a request is dispatched (and defaults
+ * it to `'get'` when omitted), so a plain lowercase set is enough — no
+ * case-insensitive comparison needed at the call site.
+ */
+const WRITE_METHODS = new Set(['post', 'put', 'patch', 'delete'])
+
+/**
+ * `true` for POST/PUT/PATCH/DELETE, `false` for GET/HEAD/undefined. Drives
+ * the read/write split in the SGEB-1002 refresh-failure branch below: a
+ * failed GET can safely be abandoned in favor of a full-page silent-auth
+ * redirect, since the caller can simply refetch after returning. A failed
+ * POST/PUT/PATCH/DELETE cannot — the request itself is gone, unreplayed,
+ * and the in-memory form/mutation state that produced it would be
+ * destroyed by that same full-page navigation, with no confirmation the
+ * write ever happened.
+ */
+function isWriteRequestConfig(config: SgebRetryableConfig | undefined): boolean {
+  return config?.method !== undefined && WRITE_METHODS.has(config.method)
+}
+
+/**
  * The SGEB-1002 recovery flow's dependencies on the OIDC session
  * architecture, isolated behind this narrow interface so tests can inject
  * fakes instead of mocking modules — mirrors the same DI style already used
@@ -43,11 +65,13 @@ export interface SgebAuthDependencies {
    * The identical silent (`prompt=none`) OIDC recovery primitive already
    * used by cold-start bootstrap (`protocol/bootstrap.ts`) — never a second
    * PKCE/state/nonce implementation. Invoked only when a SGEB-1002 refresh
-   * attempt itself fails (oauth-error/network-error outcome): the broader
-   * SSO session can still be alive even though the refresh-token cookie is
-   * not, exactly the reasoning `bootstrapSession` already relies on to
-   * recover on F5. A full-page navigation, same as bootstrap's own use —
-   * never awaited for its result to decide what this request does next.
+   * attempt itself fails (oauth-error/network-error outcome) AND the
+   * original request was a read: the broader SSO session can still be
+   * alive even though the refresh-token cookie is not, exactly the
+   * reasoning `bootstrapSession` already relies on to recover on F5. A
+   * full-page navigation, same as bootstrap's own use — never awaited for
+   * its result to decide what this request does next. Never invoked for a
+   * write (POST/PUT/PATCH/DELETE) request — see `isWriteRequestConfig`.
    */
   beginSilentAuthorization: typeof defaultBeginAuthorization
 }
@@ -88,17 +112,28 @@ function toSgebNetworkError(error: unknown): SgebNetworkError {
  *   live there — this never reimplements that coordination), applies the
  *   result to the existing session store, and retries the original
  *   request exactly once. If that one refresh attempt itself fails
- *   (oauth-error/network-error — no valid refresh cookie), it triggers the
+ *   (oauth-error/network-error — no valid refresh cookie) AND the original
+ *   request was a read (GET/HEAD/undefined method), it triggers the
  *   identical silent (`prompt=none`) OIDC recovery already used by
  *   cold-start bootstrap (`protocol/bootstrap.ts`) as a last resort, then
  *   still surfaces the original SGEB-1002 — never a second PKCE/state/nonce
- *   implementation, never a retry loop. Any other outcome — a concurrent
- *   logout that rejects an otherwise-successful refresh, a second
- *   SGEB-1002 on an already-retried request, `SGEB-1003`/`SGEB-1004`, any
- *   other HTTP/SGEB error, or a non-envelope/network failure — normalizes
- *   into `SgebApplicationError`/`SgebNetworkError`
- *   (`shared/api/sgebApiError.ts`) without retrying and without invoking
- *   silent auth. Cancellation (`AbortSignal`) propagates unchanged.
+ *   implementation, never a retry loop. If instead the original request was
+ *   a write (POST/PUT/PATCH/DELETE), the silent full-page redirect is never
+ *   triggered — a write has no documented idempotency guarantee across
+ *   this API, so an automatic replay after the OIDC round-trip would risk a
+ *   duplicate, and the redirect itself would destroy whatever in-memory
+ *   form/mutation state produced the request without ever replaying it.
+ *   The SGEB-1002 error is simply surfaced to the caller, which is expected
+ *   to recognize it (`isSessionExpiredError`, `shared/api/sgebApiError.ts`)
+ *   and offer an explicit, user-initiated re-authentication action instead
+ *   — see `EventCreatePage` for the reference implementation. Any other
+ *   outcome — a concurrent logout that rejects an otherwise-successful
+ *   refresh, a second SGEB-1002 on an already-retried request,
+ *   `SGEB-1003`/`SGEB-1004`, any other HTTP/SGEB error, or a
+ *   non-envelope/network failure — normalizes into
+ *   `SgebApplicationError`/`SgebNetworkError` (`shared/api/sgebApiError.ts`)
+ *   without retrying and without invoking silent auth. Cancellation
+ *   (`AbortSignal`) propagates unchanged.
  *
  * Exported (rather than only the bound `sgebClient` below) so tests can
  * attach this to a throwaway instance with fake dependencies and a custom
@@ -155,9 +190,10 @@ export function attachSgebAuthInterceptors(
           // logout) — the refresh attempt itself succeeded, so this is not
           // the "refresh failed" case below; fall through and surface the
           // original SGEB-1002 without retrying further.
-        } else {
+        } else if (!isWriteRequestConfig(config)) {
           // The refresh attempt itself failed (oauth-error/network-error —
-          // no valid refresh cookie). The broader SSO session can still be
+          // no valid refresh cookie), and the original request was a
+          // read (GET/HEAD/undefined). The broader SSO session can still be
           // alive even though this refresh-token cookie is not, exactly
           // like a cold F5 recovers via `bootstrapSession`'s own fallback —
           // so try that identical silent primitive here. Its outcome never
@@ -165,7 +201,9 @@ export function attachSgebAuthInterceptors(
           // navigation may already be under way, and the caller's UI must
           // keep behaving exactly as it does today for a failed SGEB-1002
           // (e.g. `EventDetailPage`'s Retry button) rather than fabricate a
-          // new "redirecting" state.
+          // new "redirecting" state. Safe specifically because a failed
+          // read has nothing irreplaceable to lose — the caller can simply
+          // refetch once the app comes back from the redirect.
           try {
             await deps.beginSilentAuthorization({ prompt: 'none' })
           } catch {
@@ -174,6 +212,18 @@ export function attachSgebAuthInterceptors(
             // error handling.
           }
         }
+        // else: the original request was a write (POST/PUT/PATCH/DELETE).
+        // Deliberately never triggers the full-page silent-auth redirect —
+        // doing so would tear down the React tree (and with it, whatever
+        // in-memory form/mutation state produced this request) without the
+        // write ever being replayed, and POST /eventos and most other
+        // mutations in this API have no documented idempotency guarantee
+        // that would make an automatic replay after the OIDC round-trip
+        // safe. The SGEB-1002 error is surfaced below exactly as any other
+        // failed mutation would be; the caller (e.g. `EventCreatePage`) is
+        // responsible for recognizing it via `isSessionExpiredError`
+        // (`shared/api/sgebApiError.ts`) and offering an explicit,
+        // user-initiated re-authentication action instead.
       }
 
       throw new SgebApplicationError(httpStatus, result)

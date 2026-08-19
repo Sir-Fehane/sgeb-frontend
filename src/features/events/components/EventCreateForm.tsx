@@ -34,12 +34,28 @@ export interface EventCreateFormProps {
   /** Live `GET /salones?activo=true` options — see `EventCreatePage`. */
   salones: readonly EventSalonOption[]
   /**
-   * Auto-selects this salón id once it becomes available — used only by
-   * `EventCreatePage` to select the salón just created through
-   * `EventCreateSalonForm`'s inline fallback, without the caller reaching
-   * into this form's internal RHF state.
+   * Auto-selects this salón id once it becomes available — used by
+   * `EventCreatePage` both to select the salón just created through
+   * `EventCreateSalonForm`'s inline fallback, and to restore a salón from
+   * an auth-recovery draft (`utils/eventCreateDraft.ts`) once the live
+   * `salones` list confirms it's still available, without the caller
+   * reaching into this form's internal RHF state.
    */
   selectedSalonId?: number | undefined
+  /**
+   * Pre-fills every field except `id_salon` — used by `EventCreatePage` to
+   * restore an auth-recovery draft (`utils/eventCreateDraft.ts`) after a
+   * silent/interactive OIDC round-trip. `id_salon` is deliberately stripped
+   * out below even though the type accepts a full `EventCreateFormValues`
+   * (the simplest shape for the caller, which already has one — a full,
+   * already-consumed draft) — that field depends on the async `salones`
+   * list and is handled exclusively through `selectedSalonId` above, so a
+   * stale/no-longer-available salón id can never end up silently applied
+   * here. Applied once, as RHF's own `defaultValues` at first render —
+   * never reactively re-applied on a later prop change, and never triggers
+   * a submit by itself.
+   */
+  initialValues?: Partial<EventCreateFormValues>
 }
 
 /**
@@ -60,8 +76,15 @@ export function EventCreateForm({
   isSubmitting = false,
   salones,
   selectedSalonId,
+  initialValues,
 }: EventCreateFormProps) {
   const schema = useMemo(() => createEventFormSchema(salones), [salones])
+  // `id_salon` is never applied from `initialValues` — see that prop's own
+  // comment. Stripped here, at the single point of consumption, so it's
+  // impossible for a caller's full `EventCreateFormValues` object (e.g. an
+  // already-consumed draft) to leak a stale salón id in regardless of what
+  // the prop's type otherwise allows.
+  const { id_salon: _restoredIdSalon, ...initialValuesWithoutSalon } = initialValues ?? {}
 
   const {
     register,
@@ -76,6 +99,7 @@ export function EventCreateForm({
       fecha: '',
       hora_presentacion: '',
       hora_inicio: '',
+      ...initialValuesWithoutSalon,
     },
   })
 
