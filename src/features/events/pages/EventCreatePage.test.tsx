@@ -1,9 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useController, type Control } from 'react-hook-form'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { CreateSalonFormValues } from '@/features/events/schemas/salonCreateSchema'
 import { EventCreatePage } from '@/features/events/pages/EventCreatePage'
 import type { EventoApiRecord } from '@/features/events/services/eventsApi'
 import type { SalonApiRecord } from '@/features/events/services/salonesApi'
@@ -12,6 +14,45 @@ import { requestSgeb, type SgebRequestConfig } from '@/shared/api/sgebClient'
 
 vi.mock('@/shared/api/sgebClient', () => ({
   requestSgeb: vi.fn(),
+}))
+
+/**
+ * `SalonLocationPicker` (address → geocoding → map → marker) has its own
+ * dedicated coverage (`SalonLocationPicker.test.tsx`) and pulls in real
+ * `mapbox-gl`, which cannot initialize WebGL under jsdom. This page's tests
+ * only care that `latitud`/`longitud` reach the real `POST /salones`
+ * payload — stubbed here as plain labeled number inputs bound via
+ * `useController`, the same RHF wiring the real picker uses.
+ */
+vi.mock('@/features/events/components/SalonLocationPicker', () => ({
+  SalonLocationPicker: ({ control }: { control: Control<CreateSalonFormValues> }) => {
+    const latitud = useController({ control, name: 'latitud' })
+    const longitud = useController({ control, name: 'longitud' })
+    return (
+      <div>
+        <label htmlFor="stub-latitud">Latitud</label>
+        <input
+          id="stub-latitud"
+          type="number"
+          step="any"
+          value={Number.isNaN(latitud.field.value) ? '' : latitud.field.value}
+          onChange={(event) => {
+            latitud.field.onChange(event.target.valueAsNumber)
+          }}
+        />
+        <label htmlFor="stub-longitud">Longitud</label>
+        <input
+          id="stub-longitud"
+          type="number"
+          step="any"
+          value={Number.isNaN(longitud.field.value) ? '' : longitud.field.value}
+          onChange={(event) => {
+            longitud.field.onChange(event.target.valueAsNumber)
+          }}
+        />
+      </div>
+    )
+  },
 }))
 
 beforeEach(() => {
@@ -267,7 +308,7 @@ describe('EventCreatePage', () => {
     await user.type(screen.getByLabelText(/^Código postal/), '06600')
     await user.type(screen.getByLabelText(/^Colonia/), 'Juárez')
     await user.type(screen.getByLabelText(/^Ciudad/), 'CDMX')
-    await user.type(screen.getByLabelText(/^Estado \(dirección\)/), 'CDMX')
+    await user.type(screen.getByLabelText(/^Estado/), 'CDMX')
     await user.type(screen.getByLabelText(/^Latitud/), '19.42')
     await user.type(screen.getByLabelText(/^Longitud/), '-99.16')
     await user.type(screen.getByLabelText(/^Capacidad máxima de mesas/), '30')
@@ -453,5 +494,34 @@ describe('EventCreatePage', () => {
       expect(screen.getByRole('button', { name: 'Crear salón' })).toBeInTheDocument()
     })
     expect(screen.queryByText('Salón creado')).not.toBeInTheDocument()
+  })
+
+  it('opens the Salón form in a focused dialog — not inline — and preserves the Event form while it is open and after canceling', async () => {
+    authenticate()
+    mockTransport()
+    const user = userEvent.setup()
+    renderPage()
+
+    const tituloInput = await screen.findByLabelText(/^Título/)
+    await user.type(tituloInput, 'Borrador de evento')
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    await user.click(
+      screen.getByRole('button', { name: '¿No encuentras tu salón? Crear uno nuevo' }),
+    )
+
+    const dialog = screen.getByRole('dialog', { name: 'Crear salón' })
+    expect(within(dialog).getByLabelText(/^Nombre/)).toBeInTheDocument()
+    // The Salón form no longer renders inline alongside the Event form.
+    expect(within(dialog).queryByLabelText(/^Título/)).not.toBeInTheDocument()
+    // The Event form behind the dialog is inert while it's open.
+    expect(tituloInput.closest('[inert]')).not.toBeNull()
+
+    await user.click(screen.getByRole('button', { name: 'Cerrar' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(tituloInput.closest('[inert]')).toBeNull()
+    expect(tituloInput).toHaveValue('Borrador de evento')
   })
 })

@@ -1,6 +1,7 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 
+import { SalonLocationPicker } from '@/features/events/components/SalonLocationPicker'
 import {
   createSalonFormSchema,
   type CreateSalonFormValues,
@@ -30,6 +31,11 @@ export interface EventCreateSalonFormProps {
  * requires (see `schemas/salonCreateSchema.ts`), nothing more. Not a Salon
  * management screen: no edit, no deactivate, no listing beyond what
  * `EventCreateForm`'s own picker already shows.
+ *
+ * Rendered inside `EventCreateSalonDialog`'s own bordered/padded surface
+ * — this form's root carries no border/padding of its own (unlike most
+ * standalone forms in this feature) so it doesn't nest a second visible
+ * box inside the dialog's.
  */
 export function EventCreateSalonForm({
   onSubmit,
@@ -39,6 +45,7 @@ export function EventCreateSalonForm({
 }: EventCreateSalonFormProps) {
   const {
     register,
+    control,
     handleSubmit,
     formState: { errors },
   } = useForm<CreateSalonFormValues>({
@@ -59,7 +66,7 @@ export function EventCreateSalonForm({
     <form
       noValidate
       onSubmit={(event) => void handleSubmit(submit)(event)}
-      className="border-border flex flex-col gap-4 rounded-lg border p-4"
+      className="flex flex-col gap-4"
     >
       {errorMessage ? (
         <Alert tone="danger" title="No se pudo crear el salón">
@@ -69,54 +76,69 @@ export function EventCreateSalonForm({
 
       <FormField label="Nombre" required error={errors.nombre?.message}>
         {(controlProps) => (
-          <Input {...controlProps} disabled={isSubmitting} {...register('nombre')} />
+          <Input
+            {...controlProps}
+            maxLength={80}
+            autoComplete="off"
+            disabled={isSubmitting}
+            {...register('nombre')}
+          />
         )}
       </FormField>
       <FormField label="Calle" required error={errors.calle?.message}>
         {(controlProps) => (
-          <Input {...controlProps} disabled={isSubmitting} {...register('calle')} />
+          <Input
+            {...controlProps}
+            maxLength={50}
+            autoComplete="address-line1"
+            disabled={isSubmitting}
+            {...register('calle')}
+          />
         )}
       </FormField>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <FormField label="Código postal" required error={errors.cp?.message}>
           {(controlProps) => (
-            <Input {...controlProps} disabled={isSubmitting} {...register('cp')} />
+            <Input
+              {...controlProps}
+              inputMode="numeric"
+              maxLength={5}
+              autoComplete="postal-code"
+              disabled={isSubmitting}
+              {...register('cp')}
+            />
           )}
         </FormField>
         <FormField label="Colonia" required error={errors.colonia?.message}>
           {(controlProps) => (
-            <Input {...controlProps} disabled={isSubmitting} {...register('colonia')} />
+            <Input
+              {...controlProps}
+              maxLength={40}
+              autoComplete="address-line2"
+              disabled={isSubmitting}
+              {...register('colonia')}
+            />
           )}
         </FormField>
         <FormField label="Ciudad" required error={errors.ciudad?.message}>
           {(controlProps) => (
-            <Input {...controlProps} disabled={isSubmitting} {...register('ciudad')} />
-          )}
-        </FormField>
-        <FormField label="Estado (dirección)" required error={errors.estado?.message}>
-          {(controlProps) => (
-            <Input {...controlProps} disabled={isSubmitting} {...register('estado')} />
-          )}
-        </FormField>
-        <FormField label="Latitud" required error={errors.latitud?.message}>
-          {(controlProps) => (
             <Input
               {...controlProps}
-              type="number"
-              step="any"
+              maxLength={40}
+              autoComplete="address-level2"
               disabled={isSubmitting}
-              {...register('latitud', { valueAsNumber: true })}
+              {...register('ciudad')}
             />
           )}
         </FormField>
-        <FormField label="Longitud" required error={errors.longitud?.message}>
+        <FormField label="Estado" required error={errors.estado?.message}>
           {(controlProps) => (
             <Input
               {...controlProps}
-              type="number"
-              step="any"
+              maxLength={25}
+              autoComplete="address-level1"
               disabled={isSubmitting}
-              {...register('longitud', { valueAsNumber: true })}
+              {...register('estado')}
             />
           )}
         </FormField>
@@ -149,6 +171,8 @@ export function EventCreateSalonForm({
           )}
         </FormField>
       </div>
+
+      <SalonLocationPicker control={control} disabled={isSubmitting} />
 
       <div className="flex gap-2">
         <Button type="submit" size="sm" loading={isSubmitting}>

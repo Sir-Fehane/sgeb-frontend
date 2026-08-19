@@ -23,10 +23,10 @@ const CP_PATTERN = /^\d{5}$/
  * comment for why only create + list exist in this branch).
  *
  * Field-name note: `estado` here is the address's Mexican state/province,
- * unrelated to `EVENTO.estado` (the lifecycle status). The form labels it
- * "Estado (dirección)" to avoid confusing the two; the schema key itself
- * must stay exactly `estado` since that is the real `POST /salones` wire
- * field name.
+ * unrelated to `EVENTO.estado` (the lifecycle status) — the two never
+ * appear on the same screen, so the form simply labels it "Estado". The
+ * schema key itself must stay exactly `estado` since that is the real
+ * `POST /salones` wire field name.
  */
 export const createSalonFormSchema = z.object({
   nombre: z

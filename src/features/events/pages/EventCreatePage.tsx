@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
 import { EventCreateForm } from '@/features/events/components/EventCreateForm'
-import { EventCreateSalonForm } from '@/features/events/components/EventCreateSalonForm'
+import { EventCreateSalonDialog } from '@/features/events/components/EventCreateSalonDialog'
 import { useCreateEventoMutation } from '@/features/events/queries/useCreateEventoMutation'
 import { useCreateSalonMutation } from '@/features/events/queries/useCreateSalonMutation'
 import { useSalonesQuery } from '@/features/events/queries/useSalonesQuery'
@@ -171,37 +171,36 @@ export function EventCreatePage() {
         </Alert>
       ) : (
         <>
-          {salonesQuery.data.length === 0 && !showCreateSalon ? (
+          {salonesQuery.data.length === 0 ? (
             <Alert tone="warning" title="No hay salones disponibles">
               <p>Crea un salón para poder registrar el evento.</p>
             </Alert>
           ) : null}
 
-          {showCreateSalon ? (
-            <EventCreateSalonForm
-              onSubmit={handleCreateSalon}
-              onCancel={() => {
-                setShowCreateSalon(false)
-              }}
-              isSubmitting={createSalonMutation.isPending}
-              {...(createSalonMutation.isError
-                ? { errorMessage: toSafeErrorMessage(createSalonMutation.error) }
-                : {})}
-            />
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="w-fit"
-              onClick={() => {
-                setShowCreateSalon(true)
-                setCreatedSalonName(null)
-              }}
-            >
-              ¿No encuentras tu salón? Crear uno nuevo
-            </Button>
-          )}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-fit"
+            onClick={() => {
+              setShowCreateSalon(true)
+              setCreatedSalonName(null)
+            }}
+          >
+            ¿No encuentras tu salón? Crear uno nuevo
+          </Button>
+
+          <EventCreateSalonDialog
+            open={showCreateSalon}
+            onSubmit={handleCreateSalon}
+            onCancel={() => {
+              setShowCreateSalon(false)
+            }}
+            isSubmitting={createSalonMutation.isPending}
+            {...(createSalonMutation.isError
+              ? { errorMessage: toSafeErrorMessage(createSalonMutation.error) }
+              : {})}
+          />
 
           {createEventoMutation.isError ? (
             <Alert tone="danger" title="No se pudo crear el evento">

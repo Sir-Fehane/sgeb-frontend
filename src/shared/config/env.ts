@@ -14,6 +14,17 @@ const envSchema = z.object({
   VITE_SSO_API_URL: z.url({
     error: 'VITE_SSO_API_URL must be a valid absolute URL.',
   }),
+  /**
+   * Public (browser-safe) Mapbox access token for the Salón location
+   * picker's map + forward geocoding (`shared/components/ui/mapbox-map.tsx`,
+   * `shared/api/mapboxGeocodingApi.ts`). Optional at the schema level: an
+   * absent token must never crash the whole app on boot — only the Salón
+   * form's map degrades to a "map unavailable" state (see
+   * `SalonLocationPicker`). Restrict this token to the app's own origins
+   * (URL restrictions) in the Mapbox dashboard; never use a secret token
+   * here.
+   */
+  VITE_MAPBOX_ACCESS_TOKEN: z.string().min(1).optional(),
 })
 
 function loadEnv() {

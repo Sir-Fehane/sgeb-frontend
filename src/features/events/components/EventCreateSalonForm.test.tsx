@@ -1,8 +1,49 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useController, type Control } from 'react-hook-form'
 import { describe, expect, it, vi } from 'vitest'
 
 import { EventCreateSalonForm } from '@/features/events/components/EventCreateSalonForm'
+import type { CreateSalonFormValues } from '@/features/events/schemas/salonCreateSchema'
+
+/**
+ * `SalonLocationPicker` (address → geocoding → map → marker) has its own
+ * dedicated coverage (`SalonLocationPicker.test.tsx`). This form's tests
+ * only care that `latitud`/`longitud` are real, validated fields on the
+ * same `control` — stubbed here as plain labeled number inputs bound via
+ * `useController`, exercising the exact same RHF wiring the real picker
+ * uses, without pulling in `mapbox-gl`.
+ */
+vi.mock('@/features/events/components/SalonLocationPicker', () => ({
+  SalonLocationPicker: ({ control }: { control: Control<CreateSalonFormValues> }) => {
+    const latitud = useController({ control, name: 'latitud' })
+    const longitud = useController({ control, name: 'longitud' })
+    return (
+      <div>
+        <label htmlFor="stub-latitud">Latitud</label>
+        <input
+          id="stub-latitud"
+          type="number"
+          step="any"
+          value={Number.isNaN(latitud.field.value) ? '' : latitud.field.value}
+          onChange={(event) => {
+            latitud.field.onChange(event.target.valueAsNumber)
+          }}
+        />
+        <label htmlFor="stub-longitud">Longitud</label>
+        <input
+          id="stub-longitud"
+          type="number"
+          step="any"
+          value={Number.isNaN(longitud.field.value) ? '' : longitud.field.value}
+          onChange={(event) => {
+            longitud.field.onChange(event.target.valueAsNumber)
+          }}
+        />
+      </div>
+    )
+  },
+}))
 
 async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText(/^Nombre/), 'Salón Nuevo')
@@ -10,7 +51,7 @@ async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText(/^Código postal/), '06600')
   await user.type(screen.getByLabelText(/^Colonia/), 'Juárez')
   await user.type(screen.getByLabelText(/^Ciudad/), 'CDMX')
-  await user.type(screen.getByLabelText(/^Estado \(dirección\)/), 'CDMX')
+  await user.type(screen.getByLabelText(/^Estado/), 'CDMX')
   await user.type(screen.getByLabelText(/^Latitud/), '19.42')
   await user.type(screen.getByLabelText(/^Longitud/), '-99.16')
   await user.type(screen.getByLabelText(/^Capacidad máxima de mesas/), '30')
