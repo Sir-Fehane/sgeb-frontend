@@ -30,7 +30,7 @@ export function EventDetailLogisticsSection({
         </div>
         <div className="flex flex-col gap-1">
           <dt className="font-sans text-caption text-muted-foreground">
-            Número de mesas
+            Mesas planeadas
           </dt>
           <dd className="font-heading text-heading text-foreground font-semibold">
             {evento.numMesas}

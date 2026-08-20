@@ -7,6 +7,7 @@ import { EventGeofenceRadiusField } from '@/features/events/components/EventGeof
 import { EventTimeField } from '@/features/events/components/EventTimeField'
 import {
   createEventFormSchema,
+  DEFAULT_RADIO_GEOCERCA_SUGGESTION_M,
   type EventCreateFormValues,
 } from '@/features/events/schemas/eventCreateSchema'
 import type { EventSalonOption } from '@/features/events/types/event'
@@ -99,6 +100,12 @@ export function EventCreateForm({
       fecha: '',
       hora_presentacion: '',
       hora_inicio: '',
+      // 150m is a frontend-only panel suggestion (openapi-sgeb.yaml v1.12.0's
+      // `EventoCrear.radio_geocerca_m` description: "Obligatorio, sin valor
+      // por defecto... Referencia para el panel: 150 m cubre un salón
+      // típico") — the backend has no default at all. Visible, editable,
+      // never hidden; a restored draft's own value (below) still wins.
+      radio_geocerca_m: DEFAULT_RADIO_GEOCERCA_SUGGESTION_M,
       ...initialValuesWithoutSalon,
     },
   })

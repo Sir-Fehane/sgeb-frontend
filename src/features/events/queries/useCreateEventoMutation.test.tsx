@@ -43,6 +43,13 @@ const REQUEST: CreateEventoRequest = {
 const CREATED_RECORD: EventoApiRecord = {
   id_evento: 5001,
   id_salon: 1,
+  capitan: {
+    uuid_usuario: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    nombre: 'Capitán',
+    apellido_paterno: 'Prueba',
+    apellido_materno: null,
+    correo: 'capitan.prueba@example.com',
+  },
   titulo: 'Evento nuevo',
   tipo: 'social',
   fecha: '2099-01-10',

@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 
 import { EventStatusBadge } from '@/features/events/components/EventStatusBadge'
 import type { EventListItemViewModel } from '@/features/events/types/event'
+import { formatCaptainName } from '@/features/events/utils/eventDetailFormatting'
 import { Badge, Caption } from '@/shared/components'
 import { cn } from '@/shared/utils/cn'
 
@@ -61,7 +62,7 @@ export function EventListItem({ evento }: EventListItemProps) {
         <span className="flex flex-col">
           <Caption>Capitán</Caption>
           <span className="font-sans text-body-sm">
-            {evento.capitanNombre ?? 'Información pendiente de integración'}
+            {formatCaptainName(evento.capitan)}
           </span>
         </span>
 

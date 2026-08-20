@@ -96,15 +96,45 @@ describe('createEventFormSchema', () => {
     expect(result.success).toBe(false)
   })
 
-  it('never introduces a horaPresentacion-vs-hora_inicio ordering rule — hora_presentacion after hora_inicio is still accepted', () => {
-    const schema = createEventFormSchema(SALONES)
-    const result = schema.safeParse({
-      ...validValues(),
-      hora_presentacion: '20:00',
-      hora_inicio: '18:00',
+  describe('hora_presentacion strictly before hora_inicio (SGEB-2008)', () => {
+    it('rejects hora_presentacion after hora_inicio', () => {
+      const schema = createEventFormSchema(SALONES)
+      const result = schema.safeParse({
+        ...validValues(),
+        hora_presentacion: '20:00',
+        hora_inicio: '18:00',
+      })
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        const issue = result.error.issues.find(
+          (current) => current.path[0] === 'hora_presentacion',
+        )
+        expect(issue?.message).toMatch(/anterior a la hora de inicio/)
+      }
     })
 
-    expect(result.success).toBe(true)
+    it('rejects hora_presentacion equal to hora_inicio', () => {
+      const schema = createEventFormSchema(SALONES)
+      const result = schema.safeParse({
+        ...validValues(),
+        hora_presentacion: '18:00',
+        hora_inicio: '18:00',
+      })
+
+      expect(result.success).toBe(false)
+    })
+
+    it('accepts hora_presentacion strictly before hora_inicio', () => {
+      const schema = createEventFormSchema(SALONES)
+      const result = schema.safeParse({
+        ...validValues(),
+        hora_presentacion: '17:59',
+        hora_inicio: '18:00',
+      })
+
+      expect(result.success).toBe(true)
+    })
   })
 
   describe('radio_geocerca_m boundaries (10-1000 m inclusive)', () => {

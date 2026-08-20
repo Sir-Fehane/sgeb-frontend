@@ -1,3 +1,7 @@
+import {
+  CAPITAN_DOS_FIXTURE,
+  CAPITAN_UNO_FIXTURE,
+} from '@/features/events/fixtures/eventFixtures'
 import type { EventDetailViewModel } from '@/features/events/types/event'
 
 /**
@@ -48,6 +52,7 @@ export const EVENT_DETAIL_FIXTURES: readonly EventDetailViewModel[] = [
     tipo: 'social',
     estado: 'publicado',
     salonNombre: 'Salón Roble',
+    capitan: CAPITAN_UNO_FIXTURE,
     fecha: '2026-09-12',
     horaPresentacion: '16:00',
     inicio: '2026-09-12T18:00:00',
@@ -63,6 +68,7 @@ export const EVENT_DETAIL_FIXTURES: readonly EventDetailViewModel[] = [
     tipo: 'empresarial',
     estado: 'en_curso',
     salonNombre: 'Salón Alameda',
+    capitan: CAPITAN_DOS_FIXTURE,
     fecha: '2026-07-25',
     horaPresentacion: '09:00',
     inicio: '2026-07-25T10:00:00',
@@ -78,6 +84,7 @@ export const EVENT_DETAIL_FIXTURES: readonly EventDetailViewModel[] = [
     tipo: 'social',
     estado: 'finalizado',
     salonNombre: 'Salón Roble',
+    capitan: CAPITAN_UNO_FIXTURE,
     fecha: '2026-05-02',
     horaPresentacion: '17:00',
     inicio: '2026-05-02T19:00:00',

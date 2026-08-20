@@ -23,6 +23,15 @@ export interface EventDetailMesasSectionProps {
   /** A real list-read failure (never "no mesas yet" — that is an empty array). */
   errorMessage?: string
   /**
+   * `Evento.numMesas` — a planning/capacity figure, independent of how many
+   * real `Mesa` rows exist (confirmed against the pinned backend:
+   * `agregarMesa` never checks it, and publishing only requires at least
+   * one real `Mesa`, not a count match — see `mesasApi.ts`'s own comment).
+   * Drives the "X registradas de Y planeadas" summary below; omitted
+   * entirely (no summary rendered) while the event itself hasn't loaded.
+   */
+  numMesasPlaneadas?: number
+  /**
    * UX-only visibility gate for the "Agregar mesa" form — never a security
    * boundary. `POST /eventos/{id}/mesas` is `capitan`/`admin`-only
    * server-side; hiding the form for any other role is a genuine UX
@@ -55,11 +64,17 @@ const MESA_ESTADO_LABELS: Record<MesaViewModel['estado'], string> = {
  * design for surfacing it (printing, display, distribution), and
  * fabricating one would be guessing at an unapproved flow, the same
  * reasoning `EventCreateForm` already applies to `uuid_capitan`.
+ *
+ * No `nfc_uid` field in the "Agregar mesa" form: confirmed reserved/unused
+ * (`openapi-sgeb.yaml` v1.12.0's `Mesa.nfc_uid` description — "ningún flujo
+ * la usa: la vinculación se hace por QR"). QR (`codigoQr`, server-generated)
+ * is the only live linking mechanism.
  */
 export function EventDetailMesasSection({
   mesas,
   isLoading,
   errorMessage,
+  numMesasPlaneadas,
   canManage,
   onCreateMesa,
   isCreating,
@@ -72,7 +87,7 @@ export function EventDetailMesasSection({
     formState: { errors },
   } = useForm<CreateMesaFormValues>({
     resolver: zodResolver(createMesaFormSchema),
-    defaultValues: { etiqueta: '', nfc_uid: '' },
+    defaultValues: { etiqueta: '' },
   })
 
   async function submit(values: CreateMesaFormValues) {
@@ -84,12 +99,19 @@ export function EventDetailMesasSection({
       // wrong — this form just leaves the fields as the user left them.
       return
     }
-    reset({ etiqueta: '', nfc_uid: '' })
+    reset({ etiqueta: '' })
   }
 
   return (
     <EventDetailSection title="Mesas">
       <div className="flex flex-col gap-4">
+        {!isLoading && !errorMessage && numMesasPlaneadas !== undefined ? (
+          <Text size="sm" className="text-muted-foreground">
+            {mesas.length} registrada{mesas.length === 1 ? '' : 's'} de{' '}
+            {numMesasPlaneadas} planeada{numMesasPlaneadas === 1 ? '' : 's'}
+          </Text>
+        ) : null}
+
         {isLoading ? (
           <div className="flex items-center gap-2">
             <Spinner size="sm" label="Cargando mesas" />
@@ -137,11 +159,6 @@ export function EventDetailMesasSection({
                   disabled={isCreating}
                   {...register('etiqueta')}
                 />
-              )}
-            </FormField>
-            <FormField label="UID NFC (opcional)" error={errors.nfc_uid?.message}>
-              {(controlProps) => (
-                <Input {...controlProps} disabled={isCreating} {...register('nfc_uid')} />
               )}
             </FormField>
             <Button type="submit" size="sm" loading={isCreating} className="w-fit">

@@ -198,6 +198,13 @@ describe('createMermaReport', () => {
 const FINALIZED_EVENTO_RECORD: EventoApiRecord = {
   id_evento: 1001,
   id_salon: 1,
+  capitan: {
+    uuid_usuario: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    nombre: 'Capitán',
+    apellido_paterno: 'Prueba',
+    apellido_materno: null,
+    correo: 'capitan.prueba@example.com',
+  },
   titulo: 'Boda García',
   tipo: 'social',
   fecha: '2026-09-12',

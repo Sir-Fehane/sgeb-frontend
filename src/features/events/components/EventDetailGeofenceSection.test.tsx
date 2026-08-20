@@ -11,6 +11,13 @@ vi.mock('@/shared/components/ui/mapbox-map', () => ({
 const EVENTO: EventDetailViewModel = {
   idEvento: 1001,
   idSalon: 1,
+  capitan: {
+    uuidUsuario: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    nombre: 'Capitán',
+    apellidoPaterno: 'Prueba',
+    apellidoMaterno: null,
+    correo: 'capitan.prueba@example.com',
+  },
   titulo: 'Boda García',
   tipo: 'social',
   estado: 'publicado',

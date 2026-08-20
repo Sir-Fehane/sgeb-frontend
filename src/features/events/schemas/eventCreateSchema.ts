@@ -3,6 +3,7 @@ import { z } from 'zod'
 import {
   buildInicioDateTime,
   getTodayIsoDate,
+  toMinutesSinceMidnight,
 } from '@/features/events/utils/eventScheduling'
 import type { EventSalonOption } from '@/features/events/types/event'
 
@@ -16,6 +17,17 @@ const TARIFA_MIN = 0
 const TARIFA_MAX = 9999.99
 const RADIO_GEOCERCA_MIN = 10
 const RADIO_GEOCERCA_MAX = 1000
+
+/**
+ * Frontend-only initial suggestion for `radio_geocerca_m`, NOT a backend
+ * default (there isn't one — `EventoCrear.radio_geocerca_m` is required
+ * with no server-side fallback). Sourced from `openapi-sgeb.yaml` v1.12.0's
+ * own field description: "Referencia para el panel: 150 m cubre un salón
+ * típico." Pre-fills `EventCreateForm`'s field so the geofence preview has
+ * something to render immediately; the user sees and can always change it
+ * before submitting.
+ */
+export const DEFAULT_RADIO_GEOCERCA_SUGGESTION_M = 150
 
 const HORA_PATTERN = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/
 const TWO_DECIMALS_PATTERN = /^\d+(\.\d{1,2})?$/
@@ -50,6 +62,13 @@ const TWO_DECIMALS_PATTERN = /^\d+(\.\d{1,2})?$/
  *   `fecha` BY CONSTRUCTION, so only the "not in the past" half is a real
  *   cross-field check here; the "must match `fecha`" half of SGEB-2008 can
  *   no longer fail.
+ * - SGEB-2008 (also) — `hora_presentacion` must be strictly earlier than
+ *   `inicio`'s clock time (confirmed against the pinned backend's
+ *   `EventoService.validarFechas`: `presentacion >= inicio` throws
+ *   SGEB-2008, so equal is invalid, not just later). Compared as plain
+ *   `HH:MM` clock values (`toMinutesSinceMidnight`), never via `Date`
+ *   parsing — both fields share this form's single `fecha` by
+ *   construction, so no timezone conversion can affect the comparison.
  * - SGEB-4007 — `num_mesas` must not exceed the selected salón's
  *   `capacidad_max_mesas`. This one needs the salón options list, so
  *   the schema is built by a factory rather than exported as a static
@@ -149,6 +168,17 @@ export function createEventFormSchema(salones: readonly EventSalonOption[]) {
           code: 'custom',
           path: ['hora_inicio'],
           message: 'La hora de inicio no puede ser anterior a este momento.',
+        })
+      }
+
+      if (
+        toMinutesSinceMidnight(data.hora_presentacion) >=
+        toMinutesSinceMidnight(data.hora_inicio)
+      ) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['hora_presentacion'],
+          message: 'La hora de presentación debe ser anterior a la hora de inicio.',
         })
       }
 

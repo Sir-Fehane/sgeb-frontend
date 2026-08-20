@@ -75,6 +75,19 @@ describe('EventDetailMesasSection', () => {
     expect(screen.queryByText(MESA.codigoQr)).not.toBeInTheDocument()
   })
 
+  it('never exposes an NFC UID field — reserved/unused, QR is the live linking mechanism', () => {
+    render(
+      <EventDetailMesasSection
+        mesas={[]}
+        isLoading={false}
+        canManage
+        onCreateMesa={vi.fn()}
+        isCreating={false}
+      />,
+    )
+    expect(screen.queryByText(/NFC/i)).not.toBeInTheDocument()
+  })
+
   it('hides the "Agregar mesa" form for a non-managing session', () => {
     render(
       <EventDetailMesasSection
@@ -104,7 +117,7 @@ describe('EventDetailMesasSection', () => {
     await user.type(screen.getByLabelText(/^Etiqueta/), 'Mesa 2')
     await user.click(screen.getByRole('button', { name: 'Agregar mesa' }))
 
-    expect(onCreateMesa).toHaveBeenCalledWith({ etiqueta: 'Mesa 2', nfc_uid: '' })
+    expect(onCreateMesa).toHaveBeenCalledWith({ etiqueta: 'Mesa 2' })
   })
 
   it('rejects an empty etiqueta without calling onCreateMesa', async () => {

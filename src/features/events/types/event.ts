@@ -28,6 +28,23 @@ export type EventStatus =
 export type EventType = 'social' | 'empresarial'
 
 /**
+ * `Evento.capitan` — a `UsuarioBreve` embedded on every `Evento` response as
+ * of OpenAPI v1.12.0, confirmed against the pinned backend snapshot
+ * (`EventoService.listar`/`.obtener` `.preload('capitan', ...)`, selecting
+ * exactly `uuid_usuario, nombre, apellido_paterno, apellido_materno,
+ * correo`). No `telefono` — that column is selected for
+ * `Participacion.usuario` but not for this relation. Always present: every
+ * `Evento` has carried a required `uuid_capitan` FK since creation.
+ */
+export interface EventCaptainViewModel {
+  uuidUsuario: string
+  nombre: string
+  apellidoPaterno: string
+  apellidoMaterno: string | null
+  correo: string
+}
+
+/**
  * A salón option as used by the event-creation salón picker. Mirrors the
  * `SalonCrear`/`Salon` fields this feature needs: `nombre`,
  * `capacidad_max_mesas` (the SGEB-4007 "num_mesas must not exceed
@@ -46,17 +63,12 @@ export interface EventSalonOption {
 }
 
 /**
- * Temporary presentation model for the events list/card UI — NOT a
- * confirmed backend response DTO. Neither `openapi-sgeb.yaml` nor the
- * data dictionary defines a literal read/response schema for "Evento";
- * this type is the union of `EventoCrear`'s documented
- * request fields plus the data dictionary's server-generated columns
- * (`idEvento`, `estado`, `fin`, `creadoEn`), built only so fixtures and
- * components have something typed to render. Do not treat its
- * existence as a whole as documented — see each field's own sourcing
- * note below, and treat `salonNombre`/`capitanNombre` as optional,
- * fixture-only display conveniences (no source confirms either is
- * embedded in any real list/detail response).
+ * Presentation model for the events list/card UI. `openapi-sgeb.yaml`
+ * v1.12.0's `Evento` schema is the confirmed response shape (this endpoint
+ * no longer documents only the generic envelope) — see each field's own
+ * sourcing note below, and treat `salonNombre` as the one remaining
+ * fixture-only display convenience (no documented `Evento` field carries a
+ * salón display name; `capitan`, below, IS a confirmed `Evento` field).
  *
  * Field-by-field sourcing:
  * - idEvento: data dictionary (`id_evento`, INT UNSIGNED, server PK).
@@ -65,26 +77,14 @@ export interface EventSalonOption {
  *   would carry this as a URL param must still treat it as an opaque
  *   string, never parse/validate its format (see `EventListItem`).
  * - idSalon: `EventoCrear.id_salon` (required FK, `integer`).
- * - salonNombre/capitanNombre: NOT part of any documented response
- *   schema — a UI-model convenience for display, populated from
- *   fixtures only on this branch.
+ * - salonNombre: NOT part of any documented response schema — a UI-model
+ *   convenience for display, populated from fixtures only.
+ * - capitan: `Evento.capitan` (`UsuarioBreve`), confirmed embedded on
+ *   every list/detail response as of v1.12 — see `EventCaptainViewModel`.
  * - titulo/tipo/fecha/horaPresentacion/inicio/cupoMeseros/numMesas/
  *   tarifaPorMesero/radioGeocercaM: `EventoCrear`.
  * - estado/fin/creadoEn: data dictionary EVENTO table (server-generated,
  *   not part of `EventoCrear`).
- *
- * No captain-identifier field exists here (no `idCapitan`/`uuidCapitan`).
- * `EventoCrear.uuid_capitan` is a real, confirmed, *required* backend
- * field, but this list-presentation model has no genuine use for it:
- * the list neither displays nor filters by captain identity, no
- * event-detail route consumes it (§17 doesn't approve one), and no
- * documented read/response schema for "Evento" exists to confirm it
- * would even be embedded in a list item. `capitanNombre` alone (a
- * display-only convenience, not a mirror of any wire field) is what the
- * list renders. The confirmed `uuid_capitan` requirement is documented
- * where it genuinely belongs instead — see
- * `EventCreateFormValues` and `createEventFormSchema` in
- * `features/events/schemas/eventCreateSchema.ts`.
  *
  * `comandaUrl` is deliberately absent for the same reason: the real
  * contract never declares it at creation at all (`docs/decisions.md`
@@ -95,7 +95,7 @@ export interface EventListItemViewModel {
   idEvento: number
   idSalon: number
   salonNombre?: string
-  capitanNombre?: string
+  capitan: EventCaptainViewModel
   titulo: string
   tipo: EventType
   fecha: string
@@ -157,12 +157,13 @@ export interface EventListItemViewModel {
  *   `undefined` whenever none of those pieces are available. Read only by
  *   `EventDetailGeofenceSection`'s compact read-only context under the map.
  *
- * Deliberately excluded: `uuid_capitan`/any captain identifier (no UX
- * purpose on this page, same reasoning as the list model), any
- * `DashboardEvento` field (resumen/staffing/montaje/piso/barra/comensal/
- * cierre/alertas — that's the separate, explicitly out-of-scope
- * operational dashboard), and any undocumented field (description,
- * guest count, notes, staffing counts, attendance, ...).
+ * `capitan`: `Evento.capitan` (`UsuarioBreve`), confirmed embedded on
+ * `GET /eventos/{id_evento}` as of v1.12 — see `EventCaptainViewModel`.
+ *
+ * Deliberately excluded: any `DashboardEvento` field (resumen/staffing/
+ * montaje/piso/barra/comensal/cierre/alertas — that's the separate,
+ * explicitly out-of-scope operational dashboard), and any undocumented
+ * field (description, guest count, notes, staffing counts, attendance, ...).
  *
  * `comandaUrl` is likewise deliberately absent, and for a different
  * reason than the fields above: `Evento.comanda_url` is a real, always-
@@ -188,6 +189,7 @@ export interface EventDetailViewModel {
   salonLatitud?: number
   salonLongitud?: number
   salonAddress?: string
+  capitan: EventCaptainViewModel
   fecha: string
   horaPresentacion: string
   inicio: string

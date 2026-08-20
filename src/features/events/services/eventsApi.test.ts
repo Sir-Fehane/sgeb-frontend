@@ -25,6 +25,13 @@ beforeEach(() => {
 const RECORD: EventoApiRecord = {
   id_evento: 1001,
   id_salon: 3,
+  capitan: {
+    uuid_usuario: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    nombre: 'Capitán',
+    apellido_paterno: 'Prueba',
+    apellido_materno: null,
+    correo: 'capitan.prueba@example.com',
+  },
   titulo: 'Boda García',
   tipo: 'social',
   fecha: '2026-09-12',
@@ -45,6 +52,13 @@ describe('mapEventoToListItem', () => {
     expect(mapEventoToListItem(RECORD)).toEqual({
       idEvento: 1001,
       idSalon: 3,
+      capitan: {
+        uuidUsuario: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        nombre: 'Capitán',
+        apellidoPaterno: 'Prueba',
+        apellidoMaterno: null,
+        correo: 'capitan.prueba@example.com',
+      },
       titulo: 'Boda García',
       tipo: 'social',
       fecha: '2026-09-12',
@@ -60,10 +74,10 @@ describe('mapEventoToListItem', () => {
     })
   })
 
-  it('never invents salonNombre/capitanNombre — neither is a documented response field', () => {
+  it('never invents salonNombre — not a documented response field; capitan IS mapped', () => {
     const mapped = mapEventoToListItem(RECORD)
     expect(mapped.salonNombre).toBeUndefined()
-    expect(mapped.capitanNombre).toBeUndefined()
+    expect(mapped.capitan.uuidUsuario).toBe(RECORD.capitan.uuid_usuario)
   })
 })
 
@@ -104,6 +118,13 @@ describe('mapEventoToDetail', () => {
     expect(mapEventoToDetail(RECORD)).toEqual({
       idEvento: 1001,
       idSalon: 3,
+      capitan: {
+        uuidUsuario: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        nombre: 'Capitán',
+        apellidoPaterno: 'Prueba',
+        apellidoMaterno: null,
+        correo: 'capitan.prueba@example.com',
+      },
       titulo: 'Boda García',
       tipo: 'social',
       estado: 'publicado',

@@ -37,3 +37,17 @@ export function getTodayIsoDate(): string {
 export function buildInicioDateTime(fecha: string, horaInicio: string): string {
   return `${fecha}T${horaInicio}`
 }
+
+/**
+ * Minutes since midnight for an `HH:MM` (seconds ignored if present) clock
+ * value — used to compare `hora_presentacion` against `hora_inicio` without
+ * ever constructing a `Date` (SGEB-2008: the pinned backend combines both
+ * with the same `fecha` and compares the resulting timestamps directly, so
+ * comparing bare clock values here is equivalent as long as both share one
+ * calendar date, which this form's UI already guarantees — see
+ * `createEventFormSchema`).
+ */
+export function toMinutesSinceMidnight(hora: string): number {
+  const [hours, minutes] = hora.split(':').map(Number)
+  return (hours ?? 0) * 60 + (minutes ?? 0)
+}

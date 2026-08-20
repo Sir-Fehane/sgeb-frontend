@@ -49,7 +49,10 @@ async function fillValidForm(
   await user.selectOptions(screen.getByLabelText(/^Salón/), '1')
   await user.type(screen.getByLabelText(/^Número de mesas/), overrides.numMesas ?? '10')
   await user.type(screen.getByLabelText(/^Cupo de meseros/), '5')
-  await user.type(screen.getByLabelText(/^Radio permitido para registrar llegada/), '150')
+  // `radio_geocerca_m` is left untouched — it already carries the
+  // frontend's 150m initial suggestion (`DEFAULT_RADIO_GEOCERCA_SUGGESTION_M`);
+  // typing into it here would append to that pre-filled value instead of
+  // replacing it.
   await user.type(screen.getByLabelText(/^Tarifa por mesero/), '400')
 }
 
@@ -236,8 +239,7 @@ describe('EventCreateForm', () => {
     expect(payload).not.toHaveProperty('comanda_url')
   })
 
-  it('presents radio_geocerca_m as a real-world arrival radius — helper copy and an "m" unit, same 10-1000 range, no invented default', async () => {
-    const user = userEvent.setup()
+  it('presents radio_geocerca_m as a real-world arrival radius — helper copy, an "m" unit, and the same 10-1000 range', () => {
     renderForm()
 
     expect(
@@ -246,12 +248,38 @@ describe('EventCreateForm', () => {
       ),
     ).toBeInTheDocument()
     expect(screen.getByText('m')).toBeInTheDocument()
+  })
+
+  it('pre-fills radio_geocerca_m with the 150m frontend suggestion (not a backend default) — visible, editable, still submittable unchanged', async () => {
+    const user = userEvent.setup()
+    const { onSubmit } = renderForm()
 
     const radiusInput = screen.getByLabelText(/^Radio permitido para registrar llegada/)
-    expect(radiusInput).toHaveValue(null)
-
-    await user.type(radiusInput, '150')
     expect(radiusInput).toHaveValue(150)
+
+    await fillValidForm(user)
+    await user.click(screen.getByRole('button', { name: 'Crear evento' }))
+
+    expect(onSubmit).toHaveBeenCalledOnce()
+    const [payload] = onSubmit.mock.calls[0] as [Record<string, unknown>]
+    expect(payload).toMatchObject({ radio_geocerca_m: 150 })
+  })
+
+  it('lets the user override the 150m suggestion with any value in range', async () => {
+    const user = userEvent.setup()
+    const { onSubmit } = renderForm()
+
+    const radiusInput = screen.getByLabelText(/^Radio permitido para registrar llegada/)
+    await user.clear(radiusInput)
+    await user.type(radiusInput, '300')
+    expect(radiusInput).toHaveValue(300)
+
+    await fillValidForm(user)
+    await user.click(screen.getByRole('button', { name: 'Crear evento' }))
+
+    expect(onSubmit).toHaveBeenCalledOnce()
+    const [payload] = onSubmit.mock.calls[0] as [Record<string, unknown>]
+    expect(payload).toMatchObject({ radio_geocerca_m: 300 })
   })
 
   it('shows a geofence map empty state until a salón is selected, then the map preview', async () => {

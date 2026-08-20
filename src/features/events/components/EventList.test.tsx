@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 
 import { EventList } from '@/features/events/components/EventList'
 import { EVENTOS_FIXTURE } from '@/features/events/fixtures/eventFixtures'
+import { formatCaptainName } from '@/features/events/utils/eventDetailFormatting'
 
 function renderList(props: Parameters<typeof EventList>[0]) {
   return render(
@@ -29,9 +30,9 @@ describe('EventList', () => {
     if (first.salonNombre) {
       expect(screen.getAllByText(first.salonNombre).length).toBeGreaterThan(0)
     }
-    if (first.capitanNombre) {
-      expect(screen.getAllByText(first.capitanNombre).length).toBeGreaterThan(0)
-    }
+    expect(screen.getAllByText(formatCaptainName(first.capitan)).length).toBeGreaterThan(
+      0,
+    )
   })
 
   it('renders every documented estado as its text label', () => {

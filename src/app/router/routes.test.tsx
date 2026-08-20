@@ -30,6 +30,13 @@ vi.mock('@/shared/api/sgebClient', () => ({
 const DETAIL_RECORD_1001: EventoApiRecord = {
   id_evento: 1001,
   id_salon: 1,
+  capitan: {
+    uuid_usuario: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    nombre: 'Capitán',
+    apellido_paterno: 'Prueba',
+    apellido_materno: null,
+    correo: 'capitan.prueba@example.com',
+  },
   titulo: 'Evento de demostración — boda',
   tipo: 'social',
   fecha: '2026-09-12',

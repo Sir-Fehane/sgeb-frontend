@@ -1,6 +1,7 @@
 import { EventDetailSection } from '@/features/events/components/EventDetailSection'
 import type { EventDetailViewModel } from '@/features/events/types/event'
 import {
+  formatCaptainName,
   formatEventDate,
   formatEventPresentationTime,
   formatEventTime,
@@ -14,7 +15,8 @@ export interface EventDetailScheduleSectionProps {
  * `salonNombre` is a presentation-only convenience (see
  * `EventDetailViewModel`'s comment) — rendered with the same
  * "Información pendiente de integración" fallback `EventListItem` already
- * uses when it's absent, for consistency across the feature.
+ * uses when it's absent, for consistency across the feature. `capitan` is a
+ * confirmed `Evento` field (v1.12) — no fallback needed, it's always present.
  */
 export function EventDetailScheduleSection({ evento }: EventDetailScheduleSectionProps) {
   return (
@@ -24,6 +26,12 @@ export function EventDetailScheduleSection({ evento }: EventDetailScheduleSectio
           <dt className="font-sans text-caption text-muted-foreground">Salón</dt>
           <dd className="font-sans text-body-sm text-foreground font-medium">
             {evento.salonNombre ?? 'Información pendiente de integración'}
+          </dd>
+        </div>
+        <div className="flex flex-col gap-1">
+          <dt className="font-sans text-caption text-muted-foreground">Capitán</dt>
+          <dd className="font-sans text-body-sm text-foreground font-medium">
+            {formatCaptainName(evento.capitan)}
           </dd>
         </div>
         <div className="flex flex-col gap-1">

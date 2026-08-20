@@ -130,6 +130,13 @@ const SALON_RECORD: SalonApiRecord = {
 const CREATED_RECORD: EventoApiRecord = {
   id_evento: 5001,
   id_salon: 1,
+  capitan: {
+    uuid_usuario: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    nombre: 'Capitán',
+    apellido_paterno: 'Prueba',
+    apellido_materno: null,
+    correo: 'capitan.prueba@example.com',
+  },
   titulo: 'Evento válido de prueba',
   tipo: 'social',
   fecha: '2099-01-10',
@@ -197,7 +204,8 @@ async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
   await user.selectOptions(screen.getByLabelText(/^Salón/), '1')
   await user.type(screen.getByLabelText(/^Número de mesas/), '10')
   await user.type(screen.getByLabelText(/^Cupo de meseros/), '5')
-  await user.type(screen.getByLabelText(/^Radio permitido para registrar llegada/), '150')
+  // `radio_geocerca_m` is left untouched — it already carries the
+  // frontend's 150m initial suggestion.
   await user.type(screen.getByLabelText(/^Tarifa por mesero/), '400')
 }
 
@@ -417,10 +425,6 @@ describe('EventCreatePage', () => {
     await user.type(screen.getByLabelText(/^Hora de inicio del evento/), '18:00')
     await user.type(screen.getByLabelText(/^Número de mesas/), '10')
     await user.type(screen.getByLabelText(/^Cupo de meseros/), '5')
-    await user.type(
-      screen.getByLabelText(/^Radio permitido para registrar llegada/),
-      '150',
-    )
     await user.type(screen.getByLabelText(/^Tarifa por mesero/), '400')
     await user.click(screen.getByRole('button', { name: 'Crear evento' }))
 

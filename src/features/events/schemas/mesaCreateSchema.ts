@@ -1,14 +1,17 @@
 import { z } from 'zod'
 
 const ETIQUETA_MAX = 20
-const NFC_UID_PATTERN = /^[0-9A-Fa-f:]{4,50}$/
 
 /**
  * Mirrors the pinned backend's `mesaValidator`
  * (`app/modules/eventos/validators/evento_validator.ts`) field-for-field —
- * the exact minimum needed for `POST /eventos/{id}/mesas`. `nfcUid` stays
- * an optional plain string here (empty means "not provided"); the schema
- * only validates its shape when the user actually types one.
+ * the exact minimum needed for `POST /eventos/{id}/mesas`.
+ *
+ * No `nfc_uid` field: the backend still accepts/returns it (`Mesa.nfc_uid`
+ * is a real, reserved column — see `mesasApi.ts`'s `MesaApiRecord`), but
+ * `openapi-sgeb.yaml` v1.12.0 documents it as unused by any real flow —
+ * linking is done by QR — so this normal-workflow creation form no longer
+ * exposes it as something a captain/admin would fill in.
  */
 export const createMesaFormSchema = z.object({
   etiqueta: z
@@ -19,14 +22,6 @@ export const createMesaFormSchema = z.object({
       ETIQUETA_MAX,
       `La etiqueta no puede superar ${String(ETIQUETA_MAX)} caracteres.`,
     ),
-  nfc_uid: z
-    .string()
-    .trim()
-    .regex(
-      NFC_UID_PATTERN,
-      'El UID NFC debe ser hexadecimal (4-50 caracteres, puede usar ":")',
-    )
-    .or(z.literal('')),
 })
 
 export type CreateMesaFormValues = z.infer<typeof createMesaFormSchema>

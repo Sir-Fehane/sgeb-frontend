@@ -22,6 +22,23 @@ export function formatEventGeofenceRadius(meters: number): string {
 }
 
 /**
+ * `Evento.capitan` — joins the three name parts SGEB actually stores
+ * (`nombre`, `apellido_paterno`, and the nullable `apellido_materno`) into
+ * one display string, omitting `apellido_materno` gracefully when absent
+ * rather than rendering a dangling extra space.
+ */
+export function formatCaptainName(capitan: {
+  nombre: string
+  apellidoPaterno: string
+  apellidoMaterno: string | null
+}): string {
+  return [capitan.nombre, capitan.apellidoPaterno, capitan.apellidoMaterno]
+    .map((part) => part?.trim())
+    .filter((part): part is string => Boolean(part))
+    .join(' ')
+}
+
+/**
  * The address pieces `formatSalonAddress` reads — a subset of
  * `services/salonesApi.ts`'s `SalonDetailViewModel`, kept as its own
  * loose/optional shape here (rather than importing that interface

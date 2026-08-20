@@ -17,6 +17,13 @@ import { formatEventPresentationTime } from '@/features/events/utils/eventDetail
 const EVENTO_CON_COMANDA: EventDetailViewModel = {
   idEvento: 1001,
   idSalon: 1,
+  capitan: {
+    uuidUsuario: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    nombre: 'Capitán',
+    apellidoPaterno: 'Prueba',
+    apellidoMaterno: null,
+    correo: 'capitan.prueba@example.com',
+  },
   titulo: 'Evento de demostración — boda',
   tipo: 'social',
   estado: 'publicado',
@@ -33,6 +40,13 @@ const EVENTO_CON_COMANDA: EventDetailViewModel = {
 const EVENTO_SIN_COMANDA: EventDetailViewModel = {
   idEvento: 1006,
   idSalon: 2,
+  capitan: {
+    uuidUsuario: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    nombre: 'Capitán',
+    apellidoPaterno: 'Prueba',
+    apellidoMaterno: null,
+    correo: 'capitan.prueba@example.com',
+  },
   titulo: 'Evento de demostración — conferencia en curso',
   tipo: 'empresarial',
   estado: 'en_curso',

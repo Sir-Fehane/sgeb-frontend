@@ -262,10 +262,7 @@ export function EventDetailPage() {
     }
     isCreatingMesaRef.current = true
     try {
-      await createMesaMutation.mutateAsync({
-        etiqueta: values.etiqueta,
-        ...(values.nfc_uid ? { nfcUid: values.nfc_uid } : {}),
-      })
+      await createMesaMutation.mutateAsync({ etiqueta: values.etiqueta })
     } finally {
       isCreatingMesaRef.current = false
     }
@@ -310,6 +307,7 @@ export function EventDetailPage() {
   const mesasSectionProps: EventDetailMesasSectionProps = {
     mesas: mesasData,
     isLoading: mesasIsLoading,
+    ...(evento ? { numMesasPlaneadas: evento.numMesas } : {}),
     canManage: canManageActiveEvent,
     onCreateMesa: handleCreateMesa,
     isCreating: createMesaMutation.isPending,

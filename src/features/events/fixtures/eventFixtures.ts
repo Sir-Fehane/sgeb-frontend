@@ -1,4 +1,5 @@
 import type {
+  EventCaptainViewModel,
   EventListItemViewModel,
   EventSalonOption,
 } from '@/features/events/types/event'
@@ -11,15 +12,27 @@ import type {
  * fictional. Remove this whole file once real API integration
  * (a later branch) supplies `GET /salones` and `GET /eventos` responses.
  *
- * No captain-option fixture exists here: the captain-selector control
- * was removed from event creation entirely (`uuid_capitan`'s real
- * source — authenticated session vs. admin picker vs. role-dependent —
- * remains unresolved), so there is nothing left that needs one. Nor does
- * any event below carry a captain identifier field — the list
- * presentation model has no genuine use for it (see
- * `EventListItemViewModel`'s comment); `capitanNombre` is a display-only
- * convenience, not a fabricated `uuid_capitan`.
+ * No captain-option fixture exists for event CREATION: the captain-
+ * selector control was removed from that form entirely (self-service,
+ * resolved from the authenticated session — see `eventCreateSchema.ts`).
+ * The `capitan` fixtures below are for READ-side display only, mirroring
+ * the confirmed `Evento.capitan` field (v1.12).
  */
+export const CAPITAN_UNO_FIXTURE: EventCaptainViewModel = {
+  uuidUsuario: '11111111-1111-4111-8111-111111111111',
+  nombre: 'Capitán',
+  apellidoPaterno: 'Demostración',
+  apellidoMaterno: 'Uno',
+  correo: 'capitan.uno@example.com',
+}
+
+export const CAPITAN_DOS_FIXTURE: EventCaptainViewModel = {
+  uuidUsuario: '22222222-2222-4222-8222-222222222222',
+  nombre: 'Capitán',
+  apellidoPaterno: 'Demostración',
+  apellidoMaterno: 'Dos',
+  correo: 'capitan.dos@example.com',
+}
 
 export const SALON_OPTIONS_FIXTURE: readonly EventSalonOption[] = [
   {
@@ -50,7 +63,7 @@ export const EVENTOS_FIXTURE: readonly EventListItemViewModel[] = [
     idEvento: 1001,
     idSalon: 1,
     salonNombre: 'Salón Roble',
-    capitanNombre: 'Capitán de demostración uno',
+    capitan: CAPITAN_UNO_FIXTURE,
     titulo: 'Evento de demostración — boda',
     tipo: 'social',
     fecha: '2026-09-12',
@@ -68,7 +81,7 @@ export const EVENTOS_FIXTURE: readonly EventListItemViewModel[] = [
     idEvento: 1002,
     idSalon: 3,
     salonNombre: 'Jardín Norte',
-    capitanNombre: 'Capitán de demostración dos',
+    capitan: CAPITAN_DOS_FIXTURE,
     titulo: 'Evento de demostración — conferencia anual',
     tipo: 'empresarial',
     fecha: '2026-08-01',
@@ -86,7 +99,7 @@ export const EVENTOS_FIXTURE: readonly EventListItemViewModel[] = [
     idEvento: 1003,
     idSalon: 2,
     salonNombre: 'Salón Alameda',
-    capitanNombre: 'Capitán de demostración uno',
+    capitan: CAPITAN_UNO_FIXTURE,
     titulo: 'Evento de demostración — en curso',
     tipo: 'social',
     fecha: '2026-07-20',
@@ -104,7 +117,7 @@ export const EVENTOS_FIXTURE: readonly EventListItemViewModel[] = [
     idEvento: 1004,
     idSalon: 1,
     salonNombre: 'Salón Roble',
-    capitanNombre: 'Capitán de demostración dos',
+    capitan: CAPITAN_DOS_FIXTURE,
     titulo: 'Evento de demostración — cancelado',
     tipo: 'empresarial',
     fecha: '2026-07-05',
@@ -122,7 +135,7 @@ export const EVENTOS_FIXTURE: readonly EventListItemViewModel[] = [
     idEvento: 1005,
     idSalon: 2,
     salonNombre: 'Salón Alameda',
-    capitanNombre: 'Capitán de demostración uno',
+    capitan: CAPITAN_UNO_FIXTURE,
     titulo: 'Evento de demostración — borrador',
     tipo: 'social',
     fecha: '2026-10-03',

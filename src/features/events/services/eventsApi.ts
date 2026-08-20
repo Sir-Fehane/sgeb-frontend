@@ -1,6 +1,7 @@
 import { isSgebApplicationError, SgebNetworkError } from '@/shared/api/sgebApiError'
 import { requestSgeb } from '@/shared/api/sgebClient'
 import type {
+  EventCaptainViewModel,
   EventDetailViewModel,
   EventListItemViewModel,
   EventStatus,
@@ -8,20 +9,34 @@ import type {
 } from '@/features/events/types/event'
 
 /**
- * Wire shape of `GET /eventos` (docs/api/openapi-sgeb.yaml v1.11,
+ * Wire shape of `capitan`, embedded on every `Evento` response
+ * (docs/api/openapi-sgeb.yaml v1.12.0, `Evento.capitan` → `UsuarioBreve`).
+ * Confirmed against the pinned backend's `EventoService.listar`/`.obtener`
+ * `.preload('capitan', (u) => u.select('uuid_usuario', 'nombre',
+ * 'apellido_paterno', 'apellido_materno', 'correo'))` — no `telefono`,
+ * unlike the full `UsuarioBreve` documented on `Participacion.usuario`.
+ */
+export interface CapitanApiRecord {
+  uuid_usuario: string
+  nombre: string
+  apellido_paterno: string
+  apellido_materno: string | null
+  correo: string
+}
+
+/**
+ * Wire shape of `GET /eventos` (docs/api/openapi-sgeb.yaml v1.12.0,
  * `components.schemas.Evento`). Snake_case, exactly as the backend
  * serializes it — confirmed against the pinned backend snapshot's
  * `app/modules/eventos/models/evento.ts` (every `@column` there sets a
  * matching `serializeAs`).
  *
- * `uuid_capitan` is intentionally absent from this type: the documented
- * schema lists it, but the pinned backend never actually serializes it —
- * `Evento.idCapitan` is declared `serializeAs: null`, and neither
- * `EventoService.listar` nor `.obtener` attaches a `uuid_capitan` field
- * anywhere. This is a documented CONTRACT/IMPLEMENTATION MISMATCH (see the
- * branch report), not a typo here — reading a field the backend never
- * sends would only ever produce `undefined`, so it is left out rather than
- * declared and silently unused.
+ * A flat `uuid_capitan` field is still absent from this type — `Evento.
+ * idCapitan` stays `serializeAs: null` — but as of v1.12 the backend
+ * embeds the resolved captain as the nested `capitan` object below
+ * instead (confirmed by `EventoService.listar`/`.obtener`'s `.preload`
+ * and by `tests/unit/dominio_reglas.spec.ts` asserting `json.capitan.
+ * uuid_usuario` while asserting `notProperty(json, 'id_capitan')`).
  */
 export interface EventoApiRecord {
   id_evento: number
@@ -38,6 +53,7 @@ export interface EventoApiRecord {
   radio_geocerca_m: number
   estado: EventStatus
   creado_en: string
+  capitan: CapitanApiRecord
   /**
    * Real, always-present wire field on the pinned backend — but an
    * internal object-storage key, never a public URL (`Evento.comanda_url`'s
@@ -74,17 +90,28 @@ export interface EventsListParams {
   fechaHasta?: string
 }
 
+function mapCapitan(record: CapitanApiRecord): EventCaptainViewModel {
+  return {
+    uuidUsuario: record.uuid_usuario,
+    nombre: record.nombre,
+    apellidoPaterno: record.apellido_paterno,
+    apellidoMaterno: record.apellido_materno,
+    correo: record.correo,
+  }
+}
+
 /**
  * Maps one `Evento` wire record to the feature's presentation model.
- * `salonNombre`/`capitanNombre` are left `undefined` — neither is part of
- * the documented `Evento` response schema, and `EventListItem` already
- * renders a "pendiente de integración" fallback for both, so no extra
- * handling is needed here.
+ * `salonNombre` is left `undefined` — not part of the documented `Evento`
+ * response schema, and `EventListItem` already renders a "pendiente de
+ * integración" fallback for it. `capitan` IS part of the documented
+ * response schema (v1.12) and is mapped directly below.
  */
 export function mapEventoToListItem(record: EventoApiRecord): EventListItemViewModel {
   return {
     idEvento: record.id_evento,
     idSalon: record.id_salon,
+    capitan: mapCapitan(record.capitan),
     titulo: record.titulo,
     tipo: record.tipo,
     fecha: record.fecha,
@@ -171,6 +198,10 @@ export function isEventoNotFoundError(error: unknown): boolean {
  * existing "pendiente de integración" text exactly as before when it
  * can't (no permission, no network, still loading).
  *
+ * `capitan` IS mapped, via the shared `mapCapitan` helper — confirmed
+ * embedded on this endpoint's response as of v1.12 (see `EventoApiRecord`'s
+ * own comment).
+ *
  * `record.comanda_url` is likewise real and always present in the wire
  * response, but is deliberately read by NOTHING here — `EventDetailViewModel`
  * has no `comandaUrl` field at all (see that type's own comment). It
@@ -187,6 +218,7 @@ export function mapEventoToDetail(record: EventoApiRecord): EventDetailViewModel
   return {
     idEvento: record.id_evento,
     idSalon: record.id_salon,
+    capitan: mapCapitan(record.capitan),
     titulo: record.titulo,
     tipo: record.tipo,
     estado: record.estado,
