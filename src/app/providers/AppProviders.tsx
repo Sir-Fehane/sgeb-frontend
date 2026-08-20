@@ -10,10 +10,14 @@ interface AppProvidersProps {
 /**
  * Root provider composition for the application.
  *
- * Intentionally minimal: only the TanStack Query provider lives here today.
- * Do not add an AuthProvider or SocketProvider — both depend on contracts
- * (token storage, real-time events) that are still pending team decisions,
- * per docs/FrontendArchitecture.md §10.1 and §7.4.
+ * Only the TanStack Query provider lives here. There is still no
+ * `AuthProvider` — the OIDC session lives in its own Zustand store
+ * (`features/oidc-client/session/sessionStore.ts`), read directly rather
+ * than through a context provider. `SocketProvider`
+ * (feature/panel-realtime-notifications) exists now too, but deliberately
+ * does NOT live here: it needs the resolved, authenticated session
+ * `AppShellLayout` guarantees, so it wraps `AppShell` there instead — see
+ * that file's own comment.
  */
 export function AppProviders({ children }: AppProvidersProps) {
   return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>

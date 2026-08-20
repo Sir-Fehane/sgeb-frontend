@@ -24,6 +24,7 @@ import { deriveMontageAssignments } from '@/features/events/montage/utils/derive
 import { parseEventId } from '@/features/events/utils/parseEventId'
 import { Toast } from '@/shared/components'
 import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
+import { useEventRealtimeRoom } from '@/shared/realtime/useEventRealtimeRoom'
 
 /**
  * Never renders `technical_message` — same helper as `EventDetailPage`/
@@ -64,6 +65,7 @@ interface MontageFeedback {
 export function EventMontagePage() {
   const { id } = useParams<{ id: string }>()
   const idEvento = parseEventId(id)
+  useEventRealtimeRoom(idEvento)
 
   const eventDetailQuery = useEventDetailQuery(idEvento)
   const participantsQuery = useMontageParticipantsQuery(idEvento)

@@ -1,10 +1,31 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { AppShell } from '@/shared/components/layout/AppShell'
 import { NAV_ITEMS } from '@/shared/components/layout/nav-items'
+
+/**
+ * `AppShell` renders `Topbar`, which now renders the real `NotificationBell`
+ * (feature/panel-realtime-notifications) — that calls `useSocket()`, which
+ * throws outside a `SocketProvider`. This file renders `AppShell` directly
+ * (no `AppShellLayout`/`SocketProvider` in the tree, unlike
+ * `AppShellLayout.test.tsx`), so the whole realtime hook is stubbed to a
+ * minimal, disconnected context instead. Notification-bell-specific
+ * behavior (badge, dropdown, mark-read) is covered by
+ * `NotificationBell.test.tsx`, not here — this file stays scoped to layout
+ * chrome/navigation, as it already was.
+ */
+vi.mock('@/shared/realtime/useSocket', () => ({
+  useSocket: () => ({
+    connected: true,
+    reconnecting: false,
+    lastError: null,
+    joinEventRoom: vi.fn(),
+    leaveEventRoom: vi.fn(),
+  }),
+}))
 
 const AVAILABLE_ITEMS = NAV_ITEMS.filter((item) => item.status === 'available')
 const PENDING_ITEMS = NAV_ITEMS.filter((item) => item.status === 'route-pending')

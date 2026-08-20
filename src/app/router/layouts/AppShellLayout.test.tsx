@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -22,6 +23,21 @@ vi.mock('@/features/oidc-client/protocol/authorizationRequest', () => ({
   beginAuthorization: vi.fn(),
 }))
 
+/**
+ * `AppShellLayout` mounts `SocketProvider` (feature/panel-realtime-
+ * notifications) once authenticated, which would otherwise call the real
+ * `socket.connect()` under jsdom and attempt a genuine WebSocket handshake.
+ * A dynamic import inside the factory (rather than a top-level import of
+ * `createFakeSocket`) is required here — `vi.mock` factories run before
+ * this file's own imports are guaranteed initialized. Full connection/
+ * reconnection/room behavior is covered by `SocketProvider.test.tsx`; this
+ * file only needs the socket to be inert.
+ */
+vi.mock('@/shared/realtime/socketClient', async () => {
+  const { createFakeSocket } = await import('@/shared/realtime/socketClientTestUtils')
+  return { socket: createFakeSocket() }
+})
+
 const mockedBeginAuthorization = vi.mocked(beginAuthorization)
 
 const FIXTURE_USER = { sub: 'uuid-test-user', rol: 'capitan' as const }
@@ -36,9 +52,11 @@ function authenticate() {
 
 function renderAt(pathname: string) {
   return render(
-    <MemoryRouter initialEntries={[pathname]}>
-      <AppShellLayout />
-    </MemoryRouter>,
+    <QueryClientProvider client={new QueryClient()}>
+      <MemoryRouter initialEntries={[pathname]}>
+        <AppShellLayout />
+      </MemoryRouter>
+    </QueryClientProvider>,
   )
 }
 
@@ -183,19 +201,24 @@ describe('AppShellLayout — private authentication route boundary', () => {
     useOidcSessionStore.getState().setAnonymous()
     mockedBeginAuthorization.mockResolvedValue('https://auth.sgeb.mediocres.mx/authorize')
 
+    const queryClient = new QueryClient()
     const { rerender } = render(
-      <MemoryRouter initialEntries={['/panel']}>
-        <AppShellLayout />
-      </MemoryRouter>,
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/panel']}>
+          <AppShellLayout />
+        </MemoryRouter>
+      </QueryClientProvider>,
     )
     await waitFor(() => {
       expect(mockedBeginAuthorization).toHaveBeenCalledOnce()
     })
 
     rerender(
-      <MemoryRouter initialEntries={['/eventos']}>
-        <AppShellLayout />
-      </MemoryRouter>,
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/eventos']}>
+          <AppShellLayout />
+        </MemoryRouter>
+      </QueryClientProvider>,
     )
 
     expect(mockedBeginAuthorization).toHaveBeenCalledOnce()
@@ -205,16 +228,27 @@ describe('AppShellLayout — private authentication route boundary', () => {
     useOidcSessionStore.getState().setAnonymous()
     mockedBeginAuthorization.mockResolvedValue('https://auth.sgeb.mediocres.mx/authorize')
 
-    const { rerender } = renderAt('/panel')
-    rerender(
-      <MemoryRouter initialEntries={['/panel']}>
-        <AppShellLayout />
-      </MemoryRouter>,
+    const queryClient = new QueryClient()
+    const { rerender } = render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/panel']}>
+          <AppShellLayout />
+        </MemoryRouter>
+      </QueryClientProvider>,
     )
     rerender(
-      <MemoryRouter initialEntries={['/panel']}>
-        <AppShellLayout />
-      </MemoryRouter>,
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/panel']}>
+          <AppShellLayout />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    rerender(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/panel']}>
+          <AppShellLayout />
+        </MemoryRouter>
+      </QueryClientProvider>,
     )
 
     await waitFor(() => {

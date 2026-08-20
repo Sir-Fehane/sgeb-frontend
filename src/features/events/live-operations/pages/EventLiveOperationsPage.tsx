@@ -12,6 +12,7 @@ import { isEventoNotFoundError } from '@/features/events/services/eventsApi'
 import { useTeamSelectionParticipantsQuery } from '@/features/events/team-selection/queries/useTeamSelectionParticipantsQuery'
 import { parseEventId } from '@/features/events/utils/parseEventId'
 import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
+import { useEventRealtimeRoom } from '@/shared/realtime/useEventRealtimeRoom'
 
 /**
  * Never renders `technical_message` — same helper as `TeamSelectionPage`/
@@ -64,6 +65,7 @@ function toSafeErrorMessage(error: unknown): string {
 export function EventLiveOperationsPage() {
   const { id } = useParams<{ id: string }>()
   const idEvento = parseEventId(id)
+  useEventRealtimeRoom(idEvento)
 
   const eventDetailQuery = useEventDetailQuery(idEvento)
   const participantsQuery = useTeamSelectionParticipantsQuery(idEvento)

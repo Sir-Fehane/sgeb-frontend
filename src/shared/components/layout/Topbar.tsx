@@ -1,9 +1,8 @@
-import { IconBell } from '@tabler/icons-react'
 import type { ReactNode } from 'react'
 
 import { AccountMenuPlaceholder } from '@/shared/components/layout/AccountMenuPlaceholder'
 import { NavTrigger } from '@/shared/components/layout/NavTrigger'
-import { cn } from '@/shared/utils/cn'
+import { NotificationBell } from '@/shared/realtime/components/NotificationBell'
 
 export interface TopbarProps {
   /**
@@ -30,18 +29,7 @@ export function Topbar({ title, breadcrumb, onOpenNav }: TopbarProps) {
         ) : null}
       </div>
 
-      <button
-        type="button"
-        disabled
-        aria-label="Notificaciones — pendiente de implementar"
-        title="Notificaciones (pendiente)"
-        className={cn(
-          'text-muted-foreground flex size-10 shrink-0 items-center justify-center rounded-lg',
-          'disabled:cursor-not-allowed disabled:opacity-60',
-        )}
-      >
-        <IconBell aria-hidden="true" className="size-5" />
-      </button>
+      <NotificationBell />
 
       <AccountMenuPlaceholder />
     </header>

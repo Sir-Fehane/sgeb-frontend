@@ -6,6 +6,7 @@ import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore
 import { useOidcSessionBootstrap } from '@/features/oidc-client/session/useOidcSessionBootstrap'
 import { Spinner } from '@/shared/components'
 import { AppShell, NAV_ITEMS } from '@/shared/components/layout'
+import { SocketProvider } from '@/shared/realtime/SocketProvider'
 
 /**
  * Route-level layout wrapping every authenticated page in `AppShell` — and,
@@ -35,6 +36,13 @@ import { AppShell, NAV_ITEMS } from '@/shared/components/layout'
  * ${location.search}` as its own `returnTo`, so its step-2 silent
  * redirect returns here instead of defaulting to `/panel` (regression
  * fix — see that hook's own comment).
+ *
+ * `SocketProvider` (feature/panel-realtime-notifications) wraps `AppShell`
+ * for the same reason: this is the single boundary that only ever renders
+ * while `status === 'authenticated'`, so the Socket.IO connection opens on
+ * mount and closes for free on unmount — never for `/login`,
+ * `/auth/callback`, or the public diner routes, none of which are children
+ * of this layout.
  */
 export function AppShellLayout() {
   const location = useLocation()
@@ -71,8 +79,10 @@ export function AppShellLayout() {
   }
 
   return (
-    <AppShell title={activeItem?.label ?? 'SGEB'}>
-      <Outlet />
-    </AppShell>
+    <SocketProvider>
+      <AppShell title={activeItem?.label ?? 'SGEB'}>
+        <Outlet />
+      </AppShell>
+    </SocketProvider>
   )
 }

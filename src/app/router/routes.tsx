@@ -196,11 +196,14 @@ export const router = createBrowserRouter([
          * (`EventDetailRoadmapSection`), not from the global sidebar — the
          * global "Operación en vivo" `NAV_ITEMS` entry deliberately stays
          * `route-pending`, same as "Pagos" — see that file's comment. No
-         * Socket.IO, no event-finalization action, no payment/montage/
-         * comanda mutation lives here — REST + targeted query invalidation
-         * only. Same positive integer SGEB event id as the other
-         * `eventos/:id/*` routes, parsed/validated inside
-         * `EventLiveOperationsPage`, not here.
+         * event-finalization action, no payment/montage/comanda mutation
+         * lives here — REST + targeted query invalidation only, PLUS (as of
+         * feature/panel-realtime-notifications) a joined `evento:{id}`
+         * Socket.IO room for live `participacion:cambio` push updates
+         * (`useEventRealtimeRoom`, called from `EventLiveOperationsPage`).
+         * Same positive integer SGEB event id as the other `eventos/:id/*`
+         * routes, parsed/validated inside `EventLiveOperationsPage`, not
+         * here.
          */
         path: 'eventos/:id/operacion-en-vivo',
         lazy: async () => {

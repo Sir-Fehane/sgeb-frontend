@@ -32,6 +32,7 @@ import { parseEventId } from '@/features/events/utils/parseEventId'
 import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
 import { Toast } from '@/shared/components'
+import { useEventRealtimeRoom } from '@/shared/realtime/useEventRealtimeRoom'
 
 /**
  * Never renders `technical_message` — mirrors `EventsPage`'s own
@@ -86,6 +87,7 @@ interface PageFeedback {
 export function EventDetailPage() {
   const { id } = useParams<{ id: string }>()
   const idEvento = parseEventId(id)
+  useEventRealtimeRoom(idEvento)
   const detailQuery = useEventDetailQuery(idEvento)
   const location = useLocation()
   const navigate = useNavigate()

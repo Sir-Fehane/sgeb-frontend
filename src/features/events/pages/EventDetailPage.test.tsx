@@ -31,6 +31,16 @@ vi.mock('@/shared/components/ui/mapbox-map', () => ({
   MapboxMap: () => <div data-testid="mapbox-map-stub" />,
 }))
 
+/**
+ * This page's own tests render outside `SocketProvider` (no `AppShellLayout`
+ * in the tree), so `useEventRealtimeRoom` — which calls `useSocket()`, which
+ * throws outside that provider — is stubbed to a no-op. Room-join behavior
+ * itself is covered by `SocketProvider.test.tsx`/`useEventRealtimeRoom.test.tsx`.
+ */
+vi.mock('@/shared/realtime/useEventRealtimeRoom', () => ({
+  useEventRealtimeRoom: vi.fn(),
+}))
+
 beforeEach(() => {
   vi.mocked(requestSgeb).mockReset()
   useOidcSessionStore.getState().reset()

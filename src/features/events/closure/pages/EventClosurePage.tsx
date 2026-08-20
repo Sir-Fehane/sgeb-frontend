@@ -14,6 +14,7 @@ import { EVENT_STATUS_TRANSITION_TOAST_TITLES } from '@/features/events/utils/ev
 import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
 import { Toast } from '@/shared/components'
+import { useEventRealtimeRoom } from '@/shared/realtime/useEventRealtimeRoom'
 
 /**
  * Never renders `technical_message` — same helper as `EventDetailPage`/
@@ -35,12 +36,19 @@ function toSafeErrorMessage(error: unknown): string {
  * (`PATCH /eventos/{id}/estado` → `finalizado`) — product ownership for
  * finalization was confirmed to belong here (see this branch's report),
  * so that stale exclusion no longer applies. No payment calculation, no
- * Comanda, no Socket.IO, no participant-salida mutation: all still out of
- * scope, same as before this branch.
+ * Comanda, no participant-salida mutation: still out of scope, same as
+ * before this branch. Socket.IO IS wired now (feature/panel-realtime-
+ * notifications): `useEventRealtimeRoom` joins this event's room so a
+ * `participacion:cambio` push (readiness is computed live from
+ * `Participacion.estado`, no cached aggregate) refetches
+ * `useEventClosureReadinessQuery` without a manual reload — no new
+ * mutation or write path, purely an invalidation signal on top of the
+ * REST reads already here.
  */
 export function EventClosurePage() {
   const { id } = useParams<{ id: string }>()
   const idEvento = parseEventId(id)
+  useEventRealtimeRoom(idEvento)
 
   const eventDetailQuery = useEventDetailQuery(idEvento)
   const readinessQuery = useEventClosureReadinessQuery(idEvento)

@@ -16,6 +16,11 @@ vi.mock('@/shared/api/sgebClient', () => ({
   requestSgeb: vi.fn(),
 }))
 
+/** Renders outside `SocketProvider` — see `EventDetailPage.test.tsx`'s identical stub for why. */
+vi.mock('@/shared/realtime/useEventRealtimeRoom', () => ({
+  useEventRealtimeRoom: vi.fn(),
+}))
+
 beforeEach(() => {
   vi.mocked(requestSgeb).mockReset()
 })
