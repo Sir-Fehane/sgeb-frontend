@@ -159,3 +159,44 @@ export async function fetchAsignaciones(
   })
   return (envelope.data ?? []).map(mapAsignacionToViewModel)
 }
+
+/**
+ * `POST /participaciones/{id_participacion}/asignaciones` (capitan/admin,
+ * RF-21) — request body confirmed against the pinned backend's
+ * `asignarMesaValidator` (`vine.object({ idMesa: ... })`, camelCase). The
+ * only server guard is `Participacion.checklist_ok` (`SGEB-4005`); there is
+ * no participation-state or event-state check in this endpoint (confirmed
+ * by direct read of `ParticipacionService.asignarMesa`) — this screen's own
+ * eligibility copy is a UI-level safeguard on top of a more permissive
+ * backend, not a mirror of a server rule (see the branch report). The
+ * response is a bare `AsignacionMesa` (no joined `mesa`/`participacion`,
+ * unlike the readback endpoint) — never read here, since every caller
+ * reconciles through `fetchAsignaciones` after invalidating instead of
+ * trusting this response as local truth.
+ */
+export async function assignTable(
+  idParticipacion: number,
+  idMesa: number,
+): Promise<void> {
+  await requestSgeb<unknown>({
+    url: `/participaciones/${String(idParticipacion)}/asignaciones`,
+    method: 'POST',
+    data: { idMesa },
+  })
+}
+
+/**
+ * `DELETE /asignaciones/{id_asignacion}` (capitan/admin) — a logical
+ * release: the `AsignacionMesa` row is never deleted server-side, only
+ * `vinculada` flips back to `false` and `Mesa.estado` returns to `libre`
+ * (confirmed by direct read of `ParticipacionService.liberarMesa`). Blocks
+ * only on active orders for that mesa (`SGEB-4018`). `data` is always
+ * `null` on success per the documented contract — not a defensive guard
+ * like `assignTable`'s, an expected response shape.
+ */
+export async function releaseAssignment(idAsignacion: number): Promise<void> {
+  await requestSgeb<null>({
+    url: `/asignaciones/${String(idAsignacion)}`,
+    method: 'DELETE',
+  })
+}

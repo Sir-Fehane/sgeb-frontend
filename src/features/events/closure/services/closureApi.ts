@@ -178,12 +178,12 @@ export async function createMermaReport(
  * function's own behavior, mutation, or tests: same URL, same method, same
  * body, same null-data guard, same error propagation.
  *
- * The response echoes the updated `Evento`, but the caller does not read
- * it — Closure readiness / Event Detail / the events list only ever learn
- * the new state through their own authoritative refetch after cache
- * invalidation (`useFinalizeEventoMutation`), never from this response
- * body — so this function keeps its existing `Promise<void>` signature
- * rather than exposing `changeEventoEstado`'s return value.
+ * `changeEventoEstado` itself resolves to `void` (see its own comment for
+ * why — a confirmed backend gap: `cambiarEstado`'s response never
+ * preloads `capitan`, unlike `obtener`/`listar`). Closure readiness /
+ * Event Detail / the events list only ever learn the new state through
+ * their own authoritative refetch after cache invalidation
+ * (`useFinalizeEventoMutation`), never from this response body.
  */
 export async function finalizeEvento(idEvento: number): Promise<void> {
   await changeEventoEstado(idEvento, 'finalizado')

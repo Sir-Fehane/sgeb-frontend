@@ -10,11 +10,9 @@ import { isSgebNetworkError } from '@/shared/api/sgebApiError'
 const MAX_NETWORK_RETRIES = 2
 
 /**
- * Foundation-only: the typed query for `GET /eventos/{id}/asignaciones`,
- * following the same shape as `useMesasQuery`. Not yet wired into any
- * screen — `EventMontagePage`'s table-assignment section still runs on
- * local demo state (see that page's own comment); replacing it with this
- * hook is deferred to `feature/table-assignment-integration`.
+ * Live query for `GET /eventos/{id}/asignaciones`, following the same
+ * shape as `useMesasQuery`. Wired into `EventMontagePage`'s table
+ * overview/assignment section.
  */
 export function useAsignacionesQuery(
   idEvento: number | null,

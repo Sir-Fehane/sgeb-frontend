@@ -392,11 +392,32 @@ export async function updateEvento(
  * pre-validate that table client-side; callers (each lifecycle action
  * component) only ever offer the transitions valid for the event's current
  * `estado`, and the server remains the authoritative enforcer regardless.
+ *
+ * **Deliberately returns `void`, not the mapped `Evento` — a confirmed
+ * backend response-shape gap, not a frontend choice.** Unlike
+ * `EventoService.obtener`/`.listar`, `.cambiarEstado`
+ * (`evento_service.ts`) fetches its row for the transition with no
+ * `.preload('capitan')`/`.preload('salon')` — so this endpoint's response
+ * `data` is a real, successfully-updated `Evento`, but with `capitan`
+ * absent from the JSON entirely. `mapEventoToDetail`/`mapCapitan` assume
+ * `capitan` is always present (true for every other endpoint that embeds
+ * it) and previously threw a `TypeError` reading into it — which
+ * `useChangeEventoEstadoMutation` surfaced as a failed mutation even
+ * though the transition had already committed server-side (confirmed:
+ * `EventoService.cambiarEstado` saves inside its transaction before the
+ * response is even serialized). No caller ever actually consumed the
+ * mapped detail — `useChangeEventoEstadoMutation` never reads
+ * `mutation.data`, and `finalizeEvento` already discarded it — so the fix
+ * is to stop mapping it here and let the existing
+ * `eventsQueryKeys.detail`/`.lists()` invalidation pull correct, fully
+ * -preloaded data through `fetchEventoDetalle`/the events list instead.
+ * Reported backend follow-up: preload `capitan`/`salon` in
+ * `EventoService.cambiarEstado` to match `obtener`/`listar`.
  */
 export async function changeEventoEstado(
   idEvento: number,
   estado: EventStatus,
-): Promise<EventDetailViewModel> {
+): Promise<void> {
   const envelope = await requestSgeb<EventoApiRecord>({
     url: `/eventos/${String(idEvento)}/estado`,
     method: 'PATCH',
@@ -404,8 +425,9 @@ export async function changeEventoEstado(
   })
   if (envelope.data === null) {
     // Never observed against the pinned backend — guarded defensively
-    // rather than assumed, same as `createEvento`.
+    // rather than assumed, same as `createEvento`. Confirms the write
+    // actually returned a record at all; it deliberately does NOT map
+    // that record any further — see this function's own comment.
     throw new SgebNetworkError('No pudimos interpretar la respuesta del servidor.')
   }
-  return mapEventoToDetail(envelope.data)
 }

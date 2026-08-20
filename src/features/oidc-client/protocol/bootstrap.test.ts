@@ -104,6 +104,41 @@ describe('bootstrapSession — fallback to prompt=none', () => {
     expect(outcome).toEqual({ kind: 'silent-redirect' })
   })
 
+  it('forwards a supplied returnTo to the silent authorization request — regression for the F5-lands-on-/panel bug', async () => {
+    const refresh = vi.fn().mockResolvedValue({
+      outcome: 'network-error',
+      message: 'No pudimos renovar tu sesión.',
+    })
+    const beginSilentAuthorization = vi
+      .fn()
+      .mockResolvedValue('https://auth.example/authorize')
+
+    const outcome = await bootstrapSession(
+      { refresh, beginSilentAuthorization },
+      '/eventos/1001/montaje',
+    )
+
+    expect(beginSilentAuthorization).toHaveBeenCalledWith({
+      prompt: 'none',
+      returnTo: '/eventos/1001/montaje',
+    })
+    expect(outcome).toEqual({ kind: 'silent-redirect' })
+  })
+
+  it('omits returnTo entirely when the caller does not supply one — unchanged default behavior', async () => {
+    const refresh = vi.fn().mockResolvedValue({
+      outcome: 'network-error',
+      message: 'No pudimos renovar tu sesión.',
+    })
+    const beginSilentAuthorization = vi
+      .fn()
+      .mockResolvedValue('https://auth.example/authorize')
+
+    await bootstrapSession({ refresh, beginSilentAuthorization })
+
+    expect(beginSilentAuthorization).toHaveBeenCalledWith({ prompt: 'none' })
+  })
+
   it('degrades toward the safe provider-session strategy — not a retry loop — after a local cross-tab coordination failure', async () => {
     // Mirrors exactly what `client/tokenClient.ts` resolves to when
     // `session/refreshLock.ts` cannot establish cross-tab coordination

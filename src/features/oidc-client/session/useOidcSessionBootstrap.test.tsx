@@ -5,8 +5,8 @@ import * as bootstrapModule from '@/features/oidc-client/protocol/bootstrap'
 import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { useOidcSessionBootstrap } from '@/features/oidc-client/session/useOidcSessionBootstrap'
 
-function TestHost() {
-  useOidcSessionBootstrap()
+function TestHost({ returnTo = '/panel' }: { returnTo?: string } = {}) {
+  useOidcSessionBootstrap(returnTo)
   return null
 }
 
@@ -76,6 +76,18 @@ describe('useOidcSessionBootstrap', () => {
       expect(useOidcSessionStore.getState().session.status).toBe('anonymous')
     })
     expect(bootstrapModule.bootstrapSession).toHaveBeenCalledOnce()
+  })
+
+  it('forwards the caller-supplied returnTo to bootstrapSession — regression for the F5-lands-on-/panel bug', async () => {
+    const spy = vi
+      .spyOn(bootstrapModule, 'bootstrapSession')
+      .mockResolvedValue({ kind: 'anonymous' })
+
+    render(<TestHost returnTo="/eventos/1001/montaje" />)
+
+    await waitFor(() => {
+      expect(spy).toHaveBeenCalledWith({}, '/eventos/1001/montaje')
+    })
   })
 
   it('does not run again on a later mount once the session already settled to anonymous', () => {

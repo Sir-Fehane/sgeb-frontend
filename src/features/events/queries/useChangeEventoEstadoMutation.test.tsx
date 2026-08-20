@@ -68,6 +68,31 @@ describe('useChangeEventoEstadoMutation', () => {
     })
   })
 
+  it('borrador → publicado succeeds and reconciles via invalidation, even when the response omits capitan (regression: false publish-failure bug)', async () => {
+    // Confirmed real shape of `PATCH /eventos/{id}/estado`'s response:
+    // `EventoService.cambiarEstado` never preloads `capitan`, unlike
+    // `obtener`/`listar`. This used to throw inside the mutationFn
+    // (`mapEventoToDetail` dereferencing a missing `capitan`), reporting a
+    // successful backend transition as a failed mutation.
+    const { capitan: _capitan, ...withoutCapitan } = RECORD
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0000', message: 'ok' },
+      data: { ...withoutCapitan, estado: 'publicado' },
+    })
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    const { result } = renderHook(() => useChangeEventoEstadoMutation(1001), {
+      wrapper: createWrapper(queryClient),
+    })
+    result.current.mutate('publicado')
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(result.current.isError).toBe(false)
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: eventsQueryKeys.detail(1001) })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: eventsQueryKeys.lists() })
+  })
+
   it('invalidates event detail and the events list on success', async () => {
     vi.mocked(requestSgeb).mockResolvedValue({
       result: { code: 'SGEB-0000', message: 'ok' },

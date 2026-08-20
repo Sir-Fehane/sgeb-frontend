@@ -817,6 +817,72 @@ describe('EventDetailPage — lifecycle (PATCH /eventos/{id}/estado)', () => {
     })
   })
 
+  it('shows the "Evento publicado" success toast only after the PATCH actually resolves', async () => {
+    authenticate('capitan')
+    const user = userEvent.setup()
+    vi.mocked(requestSgeb).mockImplementation((config: SgebRequestConfig) => {
+      if (config.url === '/eventos/1001/estado' && config.method === 'PATCH') {
+        return Promise.resolve(successEnvelope({ ...RECORD, estado: 'publicado' }))
+      }
+      if (config.url.includes('/comanda')) return Promise.reject(COMANDA_NOT_FOUND)
+      if (config.url.includes('/mesas')) return Promise.resolve(successEnvelope([]))
+      return Promise.resolve(successEnvelope({ ...RECORD, estado: 'borrador' }))
+    })
+
+    renderAt('/eventos/1001')
+
+    expect(screen.queryByText('Evento publicado')).not.toBeInTheDocument()
+    await user.click(await screen.findByRole('button', { name: 'Publicar evento' }))
+
+    expect(await screen.findByText('Evento publicado')).toBeInTheDocument()
+  })
+
+  it('shows the "Evento cancelado" success toast after confirming cancellation', async () => {
+    authenticate('capitan')
+    const user = userEvent.setup()
+    vi.mocked(requestSgeb).mockImplementation((config: SgebRequestConfig) => {
+      if (config.url === '/eventos/1001/estado' && config.method === 'PATCH') {
+        return Promise.resolve(successEnvelope({ ...RECORD, estado: 'cancelado' }))
+      }
+      if (config.url.includes('/comanda')) return Promise.reject(COMANDA_NOT_FOUND)
+      if (config.url.includes('/mesas')) return Promise.resolve(successEnvelope([]))
+      return Promise.resolve(successEnvelope(RECORD))
+    })
+
+    renderAt('/eventos/1001')
+
+    await user.click(await screen.findByRole('button', { name: 'Cancelar evento' }))
+    await user.click(screen.getByRole('button', { name: 'Confirmar cancelación' }))
+
+    expect(await screen.findByText('Evento cancelado')).toBeInTheDocument()
+  })
+
+  it('never shows a success toast when the transition fails — only the real backend error', async () => {
+    authenticate('capitan')
+    const user = userEvent.setup()
+    const error = new SgebApplicationError(409, {
+      code: 'SGEB-4013',
+      message: 'Este evento no tiene mesas registradas.',
+    })
+    vi.mocked(requestSgeb).mockImplementation((config: SgebRequestConfig) => {
+      if (config.url === '/eventos/1001/estado' && config.method === 'PATCH') {
+        return Promise.reject(error)
+      }
+      if (config.url.includes('/comanda')) return Promise.reject(COMANDA_NOT_FOUND)
+      if (config.url.includes('/mesas')) return Promise.resolve(successEnvelope([]))
+      return Promise.resolve(successEnvelope({ ...RECORD, estado: 'borrador' }))
+    })
+
+    renderAt('/eventos/1001')
+
+    await user.click(await screen.findByRole('button', { name: 'Publicar evento' }))
+
+    expect(
+      await screen.findByText('Este evento no tiene mesas registradas.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Evento publicado')).not.toBeInTheDocument()
+  })
+
   it('a rapid double-click only PATCHes once (duplicate-submit guard)', async () => {
     authenticate('capitan')
     const user = userEvent.setup()

@@ -133,6 +133,17 @@ describe('AppShellLayout — private authentication route boundary', () => {
     resolveBootstrap({ kind: 'anonymous' })
   })
 
+  it('starts bootstrap with the current path as returnTo — regression for hard-refresh-lands-on-/panel', () => {
+    useOidcSessionStore.getState().reset()
+    const bootstrapSpy = vi
+      .spyOn(bootstrapModule, 'bootstrapSession')
+      .mockReturnValue(new Promise(() => undefined))
+
+    renderAt('/eventos/1001/montaje')
+
+    expect(bootstrapSpy).toHaveBeenCalledWith({}, '/eventos/1001/montaje')
+  })
+
   it('renders the real AppShell/Outlet chrome once the session is authenticated', () => {
     renderAt('/panel')
 

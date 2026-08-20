@@ -30,11 +30,16 @@ import { AppShell, NAV_ITEMS } from '@/shared/components/layout'
  * `AuthCallbackPage`'s retry-visible/restart) already calls
  * `beginAuthorization` directly, so this guard follows that same
  * established mechanism rather than inventing a second one.
+ *
+ * `useOidcSessionBootstrap` receives this same `${location.pathname}
+ * ${location.search}` as its own `returnTo`, so its step-2 silent
+ * redirect returns here instead of defaulting to `/panel` (regression
+ * fix — see that hook's own comment).
  */
 export function AppShellLayout() {
-  useOidcSessionBootstrap()
-  const status = useOidcSessionStore((store) => store.session.status)
   const location = useLocation()
+  useOidcSessionBootstrap(`${location.pathname}${location.search}`)
+  const status = useOidcSessionStore((store) => store.session.status)
   const hasRequestedAuthorization = useRef(false)
 
   useEffect(() => {

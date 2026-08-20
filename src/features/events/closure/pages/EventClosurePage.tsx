@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 
 import { EventClosureContent } from '@/features/events/closure/components/EventClosureContent'
@@ -10,8 +10,10 @@ import type { CreateWasteReportFormValues } from '@/features/events/closure/sche
 import { useEventDetailQuery } from '@/features/events/queries/useEventDetailQuery'
 import { isEventoNotFoundError } from '@/features/events/services/eventsApi'
 import { parseEventId } from '@/features/events/utils/parseEventId'
+import { EVENT_STATUS_TRANSITION_TOAST_TITLES } from '@/features/events/utils/eventStatusPresentation'
 import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
+import { Toast } from '@/shared/components'
 
 /**
  * Never renders `technical_message` — same helper as `EventDetailPage`/
@@ -55,6 +57,9 @@ export function EventClosurePage() {
   // Same reasoning and same fix as `isSubmittingRef` above, applied to the
   // one other real mutation this page owns.
   const isFinalizingRef = useRef(false)
+
+  /** "Evento finalizado" success feedback — mirrors `EventDetailPage`'s own `pageFeedback` slot for the other `PATCH /eventos/{id}/estado` transitions, same shared copy source (`EVENT_STATUS_TRANSITION_TOAST_TITLES`). */
+  const [finalizeFeedbackTitle, setFinalizeFeedbackTitle] = useState<string | null>(null)
 
   /**
    * UX-only role gate — sourced from the real, already-authenticated OIDC
@@ -115,6 +120,9 @@ export function EventClosurePage() {
     }
     isFinalizingRef.current = true
     finalizeEventoMutation.mutate(undefined, {
+      onSuccess: () => {
+        setFinalizeFeedbackTitle(EVENT_STATUS_TRANSITION_TOAST_TITLES.finalizado)
+      },
       onSettled: () => {
         isFinalizingRef.current = false
       },
@@ -123,6 +131,15 @@ export function EventClosurePage() {
 
   return (
     <div className="flex flex-col gap-6">
+      {finalizeFeedbackTitle ? (
+        <Toast
+          title={finalizeFeedbackTitle}
+          onDismiss={() => {
+            setFinalizeFeedbackTitle(null)
+          }}
+        />
+      ) : null}
+
       <EventClosureContent
         evento={evento}
         isLoading={isLoading}

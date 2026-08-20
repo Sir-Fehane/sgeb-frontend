@@ -575,6 +575,56 @@ describe('EventClosurePage — event finalization, confirmation and submit flow'
     ).not.toBeInTheDocument()
   })
 
+  it('shows the "Evento finalizado" success toast only after the PATCH actually resolves', async () => {
+    // `{ selector: 'p' }` — the readiness section already renders a
+    // pre-existing `<dt>Evento finalizado</dt>` label regardless of
+    // outcome (`EventClosureReadinessSection`); the toast's own title
+    // renders as a `<p>` (`Alert`'s title slot), so this disambiguates
+    // the two identical strings rather than colliding with the
+    // always-present readiness label.
+    authenticate('capitan')
+    fakeTransport(1001, { readiness: READINESS_BLOCKED })
+    const user = userEvent.setup()
+
+    renderAt('/eventos/1001/cierre')
+    await screen.findByRole('button', { name: 'Finalizar evento' })
+    expect(
+      screen.queryByText('Evento finalizado', { selector: 'p' }),
+    ).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Finalizar evento' }))
+    await user.click(screen.getByRole('button', { name: 'Confirmar finalización' }))
+
+    expect(
+      await screen.findByText('Evento finalizado', { selector: 'p' }),
+    ).toBeInTheDocument()
+  })
+
+  it('never shows a success toast when finalizing fails — only the real backend error', async () => {
+    authenticate('capitan')
+    fakeTransport(1001, {
+      finalizeError: new SgebApplicationError(409, {
+        code: 'SGEB-4011',
+        message:
+          'Esta acción no está permitida en el estado actual. Actualiza la pantalla.',
+      }),
+    })
+    const user = userEvent.setup()
+
+    renderAt('/eventos/1001/cierre')
+    await user.click(await screen.findByRole('button', { name: 'Finalizar evento' }))
+    await user.click(screen.getByRole('button', { name: 'Confirmar finalización' }))
+
+    expect(
+      await screen.findByText(
+        'Esta acción no está permitida en el estado actual. Actualiza la pantalla.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('Evento finalizado', { selector: 'p' }),
+    ).not.toBeInTheDocument()
+  })
+
   it('shows the safe backend message for a repeated/invalid transition (SGEB-4011), never technical_message, and does not mark the event finalized', async () => {
     authenticate('capitan')
     fakeTransport(1001, {

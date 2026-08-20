@@ -9,6 +9,7 @@ import {
 } from '@/features/events/montage/components/EventMontageContent'
 import type {
   EventTableViewModel,
+  MontageAssignmentViewModel,
   MontageParticipantViewModel,
 } from '@/features/events/montage/types/montage'
 import type { EventDetailViewModel } from '@/features/events/types/event'
@@ -36,6 +37,15 @@ const EVENTO: EventDetailViewModel = {
   radioGeocercaM: 150,
 }
 
+const ASSIGNMENT_MESA_3: MontageAssignmentViewModel = {
+  idAsignacion: 1,
+  idParticipacion: 7002,
+  idMesa: 3,
+  nombreMesero: 'Mesero de demostración trece',
+  etiquetaMesa: 'Mesa 3 VIP',
+  vinculada: true,
+}
+
 const MESA_1_LIBRE: EventTableViewModel = {
   idMesa: 1,
   etiqueta: 'Mesa 1',
@@ -50,6 +60,7 @@ const MESA_3_OCUPADA: EventTableViewModel = {
   idMesa: 3,
   etiqueta: 'Mesa 3 VIP',
   estado: 'ocupada',
+  currentAssignment: ASSIGNMENT_MESA_3,
 }
 const ALL_TABLES = [MESA_1_LIBRE, MESA_2_LIBRE, MESA_3_OCUPADA]
 
@@ -70,17 +81,25 @@ const CHECKLIST_ITEMS_COMPLETOS = [
   },
 ]
 
+const PENDIENTE_DE_LLEGADA: MontageParticipantViewModel = {
+  idParticipacion: 4001,
+  nombre: 'Mesero de demostración cero',
+  puesto: 'mesero',
+  estado: 'confirmo_asistencia',
+}
+
 const SIN_CHECKLIST: MontageParticipantViewModel = {
   idParticipacion: 5003,
   nombre: 'Mesero de demostración tres',
   puesto: 'mesero',
-  assignedTables: [],
+  estado: 'confirmo_llegada',
 }
 
 const CHECKLIST_PENDIENTE: MontageParticipantViewModel = {
   idParticipacion: 6001,
   nombre: 'Mesero de demostración cinco',
   puesto: 'mesero',
+  estado: 'confirmo_llegada',
   checklist: {
     idChecklistInstancia: 9001,
     nombre: 'Montaje de estación',
@@ -102,49 +121,50 @@ const CHECKLIST_PENDIENTE: MontageParticipantViewModel = {
       },
     ],
   },
-  assignedTables: [],
 }
 
 const CHECKLIST_COMPLETO_SIN_APROBAR: MontageParticipantViewModel = {
   idParticipacion: 6002,
   nombre: 'Mesero de demostración seis',
   puesto: 'barra',
+  estado: 'confirmo_llegada',
   checklist: {
     idChecklistInstancia: 9002,
     nombre: 'Montaje de estación',
     status: 'completed',
     items: CHECKLIST_ITEMS_COMPLETOS,
   },
-  assignedTables: [],
 }
 
 const CHECKLIST_APROBADO_SIN_MESA: MontageParticipantViewModel = {
   idParticipacion: 7001,
   nombre: 'Mesero de demostración doce',
   puesto: 'mesero',
+  estado: 'confirmo_llegada',
   checklist: {
     idChecklistInstancia: 9003,
     nombre: 'Montaje de estación',
     status: 'approved',
     items: CHECKLIST_ITEMS_COMPLETOS,
   },
-  assignedTables: [],
 }
 
 const CHECKLIST_APROBADO_CON_MESA: MontageParticipantViewModel = {
   idParticipacion: 7002,
   nombre: 'Mesero de demostración trece',
   puesto: 'barra',
+  estado: 'vinculo',
   checklist: {
     idChecklistInstancia: 9004,
     nombre: 'Montaje de estación',
     status: 'approved',
     items: CHECKLIST_ITEMS_COMPLETOS,
   },
-  assignedTables: [{ idAsignacion: 1, mesa: MESA_3_OCUPADA }],
+  currentAssignment: ASSIGNMENT_MESA_3,
 }
 
 const ALL_PARTICIPANTS = [
+  PENDIENTE_DE_LLEGADA,
   SIN_CHECKLIST,
   CHECKLIST_PENDIENTE,
   CHECKLIST_COMPLETO_SIN_APROBAR,
@@ -161,6 +181,8 @@ function renderContent(props: Partial<EventMontageContentProps> = {}) {
         participants={ALL_PARTICIPANTS}
         tables={ALL_TABLES}
         checklistApprovalStatuses={{}}
+        assignStatuses={{}}
+        releaseStatuses={{}}
         onApproveChecklist={vi.fn()}
         onAssignTable={vi.fn()}
         onReleaseAssignment={vi.fn()}
@@ -168,6 +190,16 @@ function renderContent(props: Partial<EventMontageContentProps> = {}) {
       />
     </MemoryRouter>,
   )
+}
+
+/**
+ * A participant's name can now legitimately appear twice — once in their
+ * own row, once as the resolved occupant of their table in "Disponibilidad
+ * de mesas" — so participant-row lookups must be scoped to this list,
+ * never a bare `screen.getByText(name)`.
+ */
+function participantList() {
+  return screen.getByRole('list', { name: 'Montaje y asignación por mesero' })
 }
 
 describe('EventMontageContent — header', () => {
@@ -200,6 +232,21 @@ describe('EventMontageContent — table availability', () => {
     expect(tablesSection).toHaveTextContent('Ocupada')
   })
 
+  it('shows the resolved occupant and vinculada state for an occupied table', () => {
+    renderContent()
+
+    const tablesSection = screen.getByText('Disponibilidad de mesas').closest('section')
+    expect(tablesSection).toHaveTextContent('Mesero de demostración trece')
+    expect(tablesSection).toHaveTextContent('Vinculada')
+  })
+
+  it('shows the "registradas de planeadas" line from Evento.numMesas', () => {
+    renderContent()
+
+    const tablesSection = screen.getByText('Disponibilidad de mesas').closest('section')
+    expect(tablesSection).toHaveTextContent('3 registradas de 20 planeadas')
+  })
+
   it('never renders codigo_qr or token_comensal anywhere', () => {
     renderContent()
 
@@ -211,11 +258,43 @@ describe('EventMontageContent — table availability', () => {
     )
   })
 
-  it('offers no QR regeneration action', () => {
+  it('offers no QR regeneration action, and no vincular action (mesero/QR-device-only)', () => {
     renderContent()
 
     expect(screen.queryByRole('button', { name: /QR/i })).not.toBeInTheDocument()
     expect(screen.queryByText(/regenerar/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Vincular/i })).not.toBeInTheDocument()
+  })
+
+  it('never mentions NFC anywhere', () => {
+    renderContent()
+
+    expect(document.body.textContent ?? '').not.toMatch(/NFC/i)
+  })
+
+  it('shows a section-scoped loading state for the tables/assignments query', () => {
+    renderContent({ tablesLoading: true })
+
+    expect(screen.getByText('Cargando mesas…')).toBeInTheDocument()
+    // The rest of the page still renders — a tables-only loading state
+    // never blocks the checklist/roster half.
+    expect(screen.getByText('Resumen')).toBeInTheDocument()
+  })
+
+  it('shows a section-scoped error with retry for the tables/assignments query, without blocking the rest of the page', async () => {
+    const user = userEvent.setup()
+    const onRetryTables = vi.fn()
+    renderContent({
+      tablesErrorMessage: 'No pudimos cargar las mesas de este evento.',
+      onRetryTables,
+    })
+
+    const tablesSection = screen.getByText('Disponibilidad de mesas').closest('section')
+    expect(tablesSection).toHaveTextContent('No pudimos cargar las mesas de este evento.')
+    await user.click(within(tablesSection!).getByRole('button', { name: 'Reintentar' }))
+    expect(onRetryTables).toHaveBeenCalledTimes(1)
+    expect(screen.getByText('Resumen')).toBeInTheDocument()
+    expect(within(participantList()).getByText(SIN_CHECKLIST.nombre)).toBeInTheDocument()
   })
 })
 
@@ -223,14 +302,16 @@ describe('EventMontageContent — checklist states', () => {
   it('shows a participant with no checklist instance safely', () => {
     renderContent()
 
-    const row = screen.getByText(SIN_CHECKLIST.nombre).closest('li')
+    const row = within(participantList()).getByText(SIN_CHECKLIST.nombre).closest('li')
     expect(row).toHaveTextContent('checklist de montaje instanciado')
   })
 
   it('shows the pending state with correct item progress, no fake captain override', () => {
     renderContent()
 
-    const row = screen.getByText(CHECKLIST_PENDIENTE.nombre).closest('li')
+    const row = within(participantList())
+      .getByText(CHECKLIST_PENDIENTE.nombre)
+      .closest('li')
     expect(row).toHaveTextContent('Checklist pendiente')
     expect(row).toHaveTextContent('1 de 2 ítems completos')
     expect(row).toHaveTextContent('Colocar mantelería')
@@ -243,7 +324,9 @@ describe('EventMontageContent — checklist states', () => {
   it('shows the completed-but-not-approved state with an enabled approve action', () => {
     renderContent()
 
-    const row = screen.getByText(CHECKLIST_COMPLETO_SIN_APROBAR.nombre).closest('li')
+    const row = within(participantList())
+      .getByText(CHECKLIST_COMPLETO_SIN_APROBAR.nombre)
+      .closest('li')
     expect(row).toHaveTextContent('Checklist completo')
     expect(row).toHaveTextContent('2 de 2 ítems completos')
     const approveButton = within(row as HTMLElement).getByRole('button', {
@@ -255,7 +338,9 @@ describe('EventMontageContent — checklist states', () => {
   it('shows the approved state with no approve button (already approved)', () => {
     renderContent()
 
-    const row = screen.getByText(CHECKLIST_APROBADO_SIN_MESA.nombre).closest('li')
+    const row = within(participantList())
+      .getByText(CHECKLIST_APROBADO_SIN_MESA.nombre)
+      .closest('li')
     expect(row).toHaveTextContent('Checklist aprobado')
     expect(
       within(row as HTMLElement).queryByRole('button', { name: /Aprobar checklist/ }),
@@ -267,7 +352,9 @@ describe('EventMontageContent — checklist states', () => {
     const onApproveChecklist = vi.fn()
     renderContent({ onApproveChecklist })
 
-    const row = screen.getByText(CHECKLIST_COMPLETO_SIN_APROBAR.nombre).closest('li')
+    const row = within(participantList())
+      .getByText(CHECKLIST_COMPLETO_SIN_APROBAR.nombre)
+      .closest('li')
     await user.click(
       within(row as HTMLElement).getByRole('button', { name: /Aprobar checklist/ }),
     )
@@ -285,7 +372,9 @@ describe('EventMontageContent — checklist states', () => {
       },
     })
 
-    const row = screen.getByText(CHECKLIST_COMPLETO_SIN_APROBAR.nombre).closest('li')
+    const row = within(participantList())
+      .getByText(CHECKLIST_COMPLETO_SIN_APROBAR.nombre)
+      .closest('li')
     expect(
       within(row as HTMLElement).getByRole('button', { name: /Aprobar checklist/ }),
     ).toBeDisabled()
@@ -302,55 +391,76 @@ describe('EventMontageContent — checklist states', () => {
       },
     })
 
-    const row = screen.getByText(CHECKLIST_COMPLETO_SIN_APROBAR.nombre).closest('li')
+    const row = within(participantList())
+      .getByText(CHECKLIST_COMPLETO_SIN_APROBAR.nombre)
+      .closest('li')
     expect(row).toHaveTextContent('Este checklist ya no está disponible para aprobar.')
   })
 })
 
-describe('EventMontageContent — assignment prerequisite', () => {
+describe('EventMontageContent — assignment eligibility', () => {
+  it('is unavailable with "Pendiente de llegada" before confirmo_llegada, even with an approved checklist', () => {
+    renderContent()
+
+    const row = within(participantList())
+      .getByText(PENDIENTE_DE_LLEGADA.nombre)
+      .closest('li')
+    expect(row).toHaveTextContent('Pendiente de llegada.')
+    expect(within(row as HTMLElement).queryByRole('combobox')).not.toBeInTheDocument()
+  })
+
   it('is unavailable with a clear reason when checklist is not approved (no checklist)', () => {
     renderContent()
 
-    const row = screen.getByText(SIN_CHECKLIST.nombre).closest('li')
-    expect(row).toHaveTextContent(
-      'Requiere aprobar el checklist de montaje de este mesero antes de asignar una mesa.',
-    )
+    const row = within(participantList()).getByText(SIN_CHECKLIST.nombre).closest('li')
+    expect(row).toHaveTextContent('Checklist pendiente de aprobación.')
     expect(within(row as HTMLElement).queryByRole('combobox')).not.toBeInTheDocument()
   })
 
   it('is unavailable with a clear reason when checklist is pending', () => {
     renderContent()
 
-    const row = screen.getByText(CHECKLIST_PENDIENTE.nombre).closest('li')
-    expect(row).toHaveTextContent(
-      'Requiere aprobar el checklist de montaje de este mesero',
-    )
+    const row = within(participantList())
+      .getByText(CHECKLIST_PENDIENTE.nombre)
+      .closest('li')
+    expect(row).toHaveTextContent('Checklist pendiente de aprobación.')
     expect(within(row as HTMLElement).queryByRole('combobox')).not.toBeInTheDocument()
   })
 
   it('is unavailable with a clear reason when checklist is completed but not approved', () => {
     renderContent()
 
-    const row = screen.getByText(CHECKLIST_COMPLETO_SIN_APROBAR.nombre).closest('li')
-    expect(row).toHaveTextContent(
-      'Requiere aprobar el checklist de montaje de este mesero',
-    )
+    const row = within(participantList())
+      .getByText(CHECKLIST_COMPLETO_SIN_APROBAR.nombre)
+      .closest('li')
+    expect(row).toHaveTextContent('Checklist pendiente de aprobación.')
     expect(within(row as HTMLElement).queryByRole('combobox')).not.toBeInTheDocument()
   })
 
-  it('is available only once the checklist is approved', () => {
+  it('is available once the checklist is approved and the participant has arrived', () => {
     renderContent()
 
-    const row = screen.getByText(CHECKLIST_APROBADO_SIN_MESA.nombre).closest('li')
+    const row = within(participantList())
+      .getByText(CHECKLIST_APROBADO_SIN_MESA.nombre)
+      .closest('li')
     expect(within(row as HTMLElement).getByRole('combobox')).toBeInTheDocument()
     expect(
       within(row as HTMLElement).getByRole('button', { name: /Asignar mesa/ }),
     ).toBeInTheDocument()
   })
+
+  it('hides the assign action entirely for a terminal "salida" participation', () => {
+    renderContent({
+      participants: [{ ...CHECKLIST_APROBADO_SIN_MESA, estado: 'salida' }],
+    })
+
+    expect(screen.getByText('Participación finalizada.')).toBeInTheDocument()
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
+  })
 })
 
 describe('EventMontageContent — table assignment action', () => {
-  it('only lists free tables in the select — the occupied table is not an option', () => {
+  it('only lists free tables with no current assignment in the select', () => {
     renderContent()
 
     const row = screen
@@ -375,7 +485,7 @@ describe('EventMontageContent — table assignment action', () => {
     expect(within(row).getByRole('button', { name: /Asignar mesa/ })).toBeDisabled()
   })
 
-  it('invokes onAssignTable with the exact idParticipacion and id_mesa once a table is chosen', async () => {
+  it('invokes onAssignTable with the exact idParticipacion and idMesa once a table is chosen', async () => {
     const user = userEvent.setup()
     const onAssignTable = vi.fn()
     renderContent({ onAssignTable })
@@ -389,41 +499,98 @@ describe('EventMontageContent — table assignment action', () => {
     expect(onAssignTable).toHaveBeenCalledWith({ idParticipacion: 7001, idMesa: 1 })
   })
 
-  it('shows "no free tables" text when every table is occupied', () => {
+  it('shows "no free tables" text when every table is occupied or already assigned', () => {
     renderContent({ tables: [MESA_3_OCUPADA] })
 
-    const row = screen.getByText(CHECKLIST_APROBADO_SIN_MESA.nombre).closest('li')
+    const row = within(participantList())
+      .getByText(CHECKLIST_APROBADO_SIN_MESA.nombre)
+      .closest('li')
     expect(row).toHaveTextContent('No hay mesas libres disponibles.')
     expect(within(row as HTMLElement).queryByRole('combobox')).not.toBeInTheDocument()
+  })
+
+  it('shows the assign button as loading/disabled while this participant is being assigned, even with a table already chosen', async () => {
+    const user = userEvent.setup()
+    renderContent({
+      assignStatuses: { [CHECKLIST_APROBADO_SIN_MESA.idParticipacion]: 'assigning' },
+    })
+
+    const row = screen
+      .getByText(CHECKLIST_APROBADO_SIN_MESA.nombre)
+      .closest('li') as HTMLElement
+    await user.selectOptions(within(row).getByRole('combobox'), '1')
+    expect(within(row).getByRole('button', { name: /Asignar mesa/ })).toBeDisabled()
+  })
+
+  it('shows the backend-approved assign error message inline, never technical_message', () => {
+    renderContent({
+      assignStatuses: { [CHECKLIST_APROBADO_SIN_MESA.idParticipacion]: 'error' },
+      assignErrorMessages: {
+        [CHECKLIST_APROBADO_SIN_MESA.idParticipacion]:
+          'Esa mesa ya está asignada a otro mesero.',
+      },
+    })
+
+    const row = within(participantList())
+      .getByText(CHECKLIST_APROBADO_SIN_MESA.nombre)
+      .closest('li')
+    expect(row).toHaveTextContent('Esa mesa ya está asignada a otro mesero.')
   })
 })
 
 describe('EventMontageContent — assigned table / release action', () => {
-  it('shows the assigned table for a participant who already has one', () => {
+  it('shows the assigned table and vinculada state for a participant who already has one', () => {
     renderContent()
 
-    const row = screen.getByText(CHECKLIST_APROBADO_CON_MESA.nombre).closest('li')
+    const row = within(participantList())
+      .getByText(CHECKLIST_APROBADO_CON_MESA.nombre)
+      .closest('li')
     expect(row).toHaveTextContent('Mesa 3 VIP')
+    expect(row).toHaveTextContent('Vinculada')
   })
 
   it('shows "sin mesa asignada" safely for an unassigned participant', () => {
     renderContent()
 
-    const row = screen.getByText(CHECKLIST_APROBADO_SIN_MESA.nombre).closest('li')
+    const row = within(participantList())
+      .getByText(CHECKLIST_APROBADO_SIN_MESA.nombre)
+      .closest('li')
     expect(row).toHaveTextContent('Sin mesa asignada.')
   })
 
-  it('invokes onReleaseAssignment with the exact idAsignacion', async () => {
+  it('requires a confirmation step before invoking onReleaseAssignment', async () => {
     const user = userEvent.setup()
     const onReleaseAssignment = vi.fn()
     renderContent({ onReleaseAssignment })
 
-    const row = screen
+    const row = within(participantList())
       .getByText(CHECKLIST_APROBADO_CON_MESA.nombre)
       .closest('li') as HTMLElement
     await user.click(within(row).getByRole('button', { name: /Liberar/ }))
+    expect(onReleaseAssignment).not.toHaveBeenCalled()
+    expect(row).toHaveTextContent('¿Liberar Mesa 3 VIP?')
 
-    expect(onReleaseAssignment).toHaveBeenCalledWith({ idAsignacion: 1 })
+    await user.click(within(row).getByRole('button', { name: 'Confirmar liberación' }))
+
+    expect(onReleaseAssignment).toHaveBeenCalledWith({
+      idAsignacion: 1,
+      idParticipacion: 7002,
+    })
+  })
+
+  it('cancels the confirmation without invoking onReleaseAssignment', async () => {
+    const user = userEvent.setup()
+    const onReleaseAssignment = vi.fn()
+    renderContent({ onReleaseAssignment })
+
+    const row = within(participantList())
+      .getByText(CHECKLIST_APROBADO_CON_MESA.nombre)
+      .closest('li') as HTMLElement
+    await user.click(within(row).getByRole('button', { name: /Liberar/ }))
+    await user.click(within(row).getByRole('button', { name: 'Cancelar' }))
+
+    expect(onReleaseAssignment).not.toHaveBeenCalled()
+    expect(row).not.toHaveTextContent('¿Liberar Mesa 3 VIP?')
   })
 
   it('offers no single-step "change/reassign table" action — only release and assign exist', () => {
@@ -441,7 +608,7 @@ describe('EventMontageContent — participants', () => {
     renderContent()
 
     for (const participant of ALL_PARTICIPANTS) {
-      const row = screen.getByText(participant.nombre).closest('li')
+      const row = within(participantList()).getByText(participant.nombre).closest('li')
       expect(row).toHaveTextContent(participant.puesto === 'mesero' ? 'Mesero' : 'Barra')
     }
   })
@@ -452,10 +619,10 @@ describe('EventMontageContent — summary', () => {
     renderContent()
 
     const summarySection = screen.getByText('Resumen').closest('section')
-    expect(summarySection).toHaveTextContent('5') // meseros total
-    expect(summarySection).toHaveTextContent('2 de 5') // checklist aprobado
+    expect(summarySection).toHaveTextContent('6') // meseros total
+    expect(summarySection).toHaveTextContent('2 de 6') // checklist aprobado
     expect(summarySection).toHaveTextContent('2 de 3') // mesas libres
-    expect(summarySection).toHaveTextContent('1 de 5') // con mesa asignada
+    expect(summarySection).toHaveTextContent('1 de 6') // con mesa asignada
   })
 })
 
@@ -544,5 +711,13 @@ describe('EventMontageContent — scope negatives', () => {
     expect(
       screen.queryByRole('button', { name: /Forzar aprobación/i }),
     ).not.toBeInTheDocument()
+  })
+
+  it('never exposes any stale demo/foundation-only disclosure copy', () => {
+    renderContent()
+
+    expect(screen.queryByText(/panel de demostración/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/pendiente de integración/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/foundation.only/i)).not.toBeInTheDocument()
   })
 })

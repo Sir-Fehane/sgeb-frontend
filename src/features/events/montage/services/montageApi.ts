@@ -3,6 +3,7 @@ import type {
   MontageChecklistViewModel,
   MontagePuesto,
   MontageRosterParticipant,
+  ParticipacionEstado,
 } from '@/features/events/montage/types/montage'
 import { SgebNetworkError } from '@/shared/api/sgebApiError'
 import { requestSgeb } from '@/shared/api/sgebClient'
@@ -19,14 +20,7 @@ import { requestSgeb } from '@/shared/api/sgebClient'
 export interface ParticipacionApiRecord {
   id_participacion: number
   puesto: MontagePuesto
-  estado:
-    | 'aparto'
-    | 'seleccionado'
-    | 'confirmo_asistencia'
-    | 'confirmo_llegada'
-    | 'asignado'
-    | 'vinculo'
-    | 'salida'
+  estado: ParticipacionEstado
   checklist_ok: boolean
   usuario: UsuarioBreveApiRecord
 }
@@ -110,7 +104,10 @@ function nombreCompleto(usuario: UsuarioBreveApiRecord): string {
  * a not-yet-selected candidate belongs to Team Selection, not Montage.
  * Mirrors `attendanceApi.ts`'s `fetchAttendanceParticipants` narrowing
  * reasoning. No `estado` query filter is sent to the server, matching the
- * existing live Team Selection/Attendance convention.
+ * existing live Team Selection/Attendance convention. `estado` itself is
+ * surfaced on the returned view model — needed both for assign-eligibility
+ * copy and `deriveMontageAssignments` (see `types/montage.ts`'s module
+ * comment).
  */
 export async function fetchMontageParticipants(
   idEvento: number,
@@ -126,6 +123,7 @@ export async function fetchMontageParticipants(
       idParticipacion: record.id_participacion,
       nombre: nombreCompleto(record.usuario),
       puesto: record.puesto,
+      estado: record.estado,
       checklistOk: record.checklist_ok,
     }))
 }

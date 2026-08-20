@@ -20,6 +20,21 @@ export interface BootstrapSessionDependencies {
  * beyond what its dependencies touch, mirroring `protocol/callback.ts`'s
  * own architecture. Never throws for an expected failure mode.
  *
+ * `returnTo` — the app path this call was made from (e.g.
+ * `AppShellLayout`'s `${location.pathname}${location.search}` at the
+ * moment of a hard reload) — is forwarded to the step-2 silent
+ * authorization request below when the caller supplies one. **Regression
+ * fix**: this used to be omitted, so `beginAuthorization`'s own default
+ * (`OIDC_DEFAULT_RETURN_TO`, `/panel`) silently won every time the silent
+ * round trip was needed — e.g. a hard refresh on `/eventos` or
+ * `/eventos/:id/montaje` landed back on `/panel` instead of the page the
+ * user actually reloaded, even though the provider's own SSO session was
+ * still alive and the round trip itself succeeded. `AppShellLayout`'s
+ * OWN `anonymous`/`error` fallback already built this same
+ * `returnTo` correctly — but that code never got a chance to run, because
+ * this earlier, silent redirect (fired while status is still
+ * `authenticating`) had already navigated the page away.
+ *
  * Strategy, per `docs/api/RESPUESTAS-frontend-FINAL.md` §1's confirmed
  * "renovación silenciosa" table:
  *
@@ -51,6 +66,7 @@ export interface BootstrapSessionDependencies {
  */
 export async function bootstrapSession(
   deps: BootstrapSessionDependencies = {},
+  returnTo?: string,
 ): Promise<BootstrapOutcome> {
   const refresh = deps.refresh ?? refreshAccessToken
   const loadUserInfo = deps.loadUserInfo ?? fetchUserInfo
@@ -84,7 +100,7 @@ export async function bootstrapSession(
   }
 
   try {
-    await beginSilent({ prompt: 'none' })
+    await beginSilent({ prompt: 'none', ...(returnTo ? { returnTo } : {}) })
   } catch {
     return { kind: 'anonymous' }
   }

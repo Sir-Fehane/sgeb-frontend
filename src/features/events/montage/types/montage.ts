@@ -2,8 +2,8 @@
  * UI domain types for W-07 "Verificar montaje + asignar mesas" — the
  * CAPTAIN'S WEB VIEW of montage checklists and table assignment.
  *
- * `feature/montage-live-integration` status (verified against the pinned
- * backend, `sgeb-backend@2b99e89`, not just `docs/api/openapi-sgeb.yaml`):
+ * `feature/event-operations-live` status (verified against the pinned
+ * backend, `sgeb-backend@cf1c316d`):
  *
  *   LIVE:
  *     - `GET /eventos/{id_evento}/participaciones` — roster.
@@ -11,38 +11,34 @@
  *     - `GET /participaciones/{id_participacion}/checklist-instancias` —
  *       per-participant checklist read.
  *     - `PATCH /checklist-instancias/{id}/aprobar` — captain approval.
- *   FOUNDATION-ONLY (deliberately NOT live in this branch — see below):
- *     - Table availability + assignment/release. `tables` and
- *       `assignedTables` are local, in-memory demo state only, exactly as
- *       before this branch; `POST /participaciones/{id}/asignaciones` and
- *       `DELETE /asignaciones/{id_asignacion}` are never called from this
- *       screen.
+ *     - `GET /eventos/{id_evento}/asignaciones` — table assignment readback.
+ *     - `POST /participaciones/{id_participacion}/asignaciones` — assign a
+ *       table (`useAssignTableMutation`).
+ *     - `DELETE /asignaciones/{id_asignacion}` — release a table
+ *       (`useReleaseAssignmentMutation`).
+ *   READ-ONLY BY DESIGN — a confirmed role boundary, not a gap:
+ *     - `PATCH /asignaciones/{id_asignacion}/vincular`. Route middleware
+ *       restricts this to role `mesero` only (`start/routes.ts`); a
+ *       captain/admin token gets `SGEB-1004`. It is also how the mesero's
+ *       device proves physical presence (`codigo_qr` must match the
+ *       scanned table). This screen only ever displays `vinculada` state —
+ *       it never triggers this transition.
  *
- * **Why table assignment stays foundation-only — a confirmed backend gap,
- * not a frontend choice:**
- * There is no backend endpoint anywhere (checked `start/routes.ts` and
- * every controller/service in `app/modules/participaciones/`) that lists
- * existing `AsignacionMesa` rows — not per event, not per participation.
- * `ParticipacionEvento` has no relation to it, `GET
- * /participaciones/{id_participacion}` only ever preloads `usuario`, and
- * `GET /eventos/{id_evento}/mesas` cannot substitute for it either:
- * `ParticipacionService.asignarMesa` (`participacion_service.ts:292-343`)
- * creates the `AsignacionMesa` row with `vinculada: false` and **never
- * touches `mesa.estado`** — only the mesero's own
- * `PATCH /asignaciones/{id}/vincular` (physically scanning the table's QR,
- * a mobile-only action never called from this web screen) sets
- * `mesa.estado = 'ocupada'`. `SGEB-4006` ("mesa ya asignada") only fires
- * against an existing `vinculada: true` row, so the backend itself allows
- * assigning the same not-yet-scanned mesa to two different meseros. This
- * means `mesa.estado` cannot be used as a proxy for "already
- * captain-assigned" either — there is no honest live signal for that at
- * all. Building live assign/release against this would risk silently
- * double-assigning a table or showing stale/wrong "assigned to" state on
- * every page reload. Confirmed, reported gap (not filed here as
- * speculation): a captain-facing read endpoint for current `AsignacionMesa`
- * state, scoped by event and/or participation, is needed before this half
- * of the screen can go live. Tracked as a backend follow-up ask — see this
- * feature's README section / the branch's final report.
+ * **Deriving "who currently has which table" — a documented backend
+ * ambiguity, not an invented rule:**
+ * `AsignacionMesa` rows are never deleted — `liberarMesa` only flips
+ * `vinculada` back to `false` — and releasing a table never reverts
+ * `Participacion.estado` (confirmed: `liberarMesa` never touches
+ * `ParticipacionEvento` at all). So a `vinculada: false` row alone cannot
+ * say whether it means "just assigned, not yet linked" or "was linked,
+ * then released." `utils/deriveMontageAssignments.ts` resolves this using
+ * `Participacion.estado` (real, authoritative) instead of raw row history:
+ * `estado === 'asignado'` → their newest `vinculada: false` row is current;
+ * `estado === 'vinculo'` → their newest `vinculada: true` row is current,
+ * and if none exists (the release-doesn't-revert-estado gap above) they
+ * are treated as having no current table, letting mesa-side truth win over
+ * the stale participation state. Any other `estado` → no current table
+ * regardless of old rows. See this branch's report for the full writeup.
  *
  * Critical correction to a naive "one checklist per event" reading:
  * `GET/POST /participaciones/{id_participacion}/checklist-instancias` is
@@ -88,6 +84,16 @@
  * or rejection code.
  */
 
+/** `Participacion.estado` — the confirmed linear state machine (`participacion_service.ts`'s `TRANSICIONES`). The enumerated order IS the valid sequence; `salida` is terminal. */
+export type ParticipacionEstado =
+  | 'aparto'
+  | 'seleccionado'
+  | 'confirmo_asistencia'
+  | 'confirmo_llegada'
+  | 'asignado'
+  | 'vinculo'
+  | 'salida'
+
 export type MontageChecklistStatus = 'pending' | 'completed' | 'approved'
 
 export interface MontageChecklistItemViewModel {
@@ -105,29 +111,31 @@ export interface MontageChecklistViewModel {
   items: readonly MontageChecklistItemViewModel[]
 }
 
-/**
- * `GET /eventos/{id_evento}/mesas`'s documented status enum — no other
- * value is authoritative. Read live only for the (foundation-only) table
- * section's initial demo seed; see the module comment for why per-mesero
- * assignment stays local/demo state regardless.
- */
+/** `GET /eventos/{id_evento}/mesas`'s documented status enum — no other value is authoritative. */
 export type MesaEstado = 'libre' | 'ocupada'
+
+/**
+ * A resolved current table assignment — the output of
+ * `deriveMontageAssignments`, shared by both the participant-keyed and
+ * mesa-keyed views so there is exactly one shape for "who has which
+ * table," never two independently-drifting projections of the same fact.
+ */
+export interface MontageAssignmentViewModel {
+  idAsignacion: number
+  idParticipacion: number
+  idMesa: number
+  nombreMesero: string
+  etiquetaMesa: string
+  /** `true` once the mesero has scanned the mesa's real QR (`PATCH /asignaciones/{id}/vincular`) — read-only here, see the module comment. */
+  vinculada: boolean
+}
 
 export interface EventTableViewModel {
   idMesa: number
   etiqueta: string
   estado: MesaEstado
-}
-
-/**
- * One active table assignment for a participant, in this screen's local
- * FOUNDATION-ONLY demo state — never persisted, never read from the
- * server. `idAsignacion` is a local demo id only (see the module comment's
- * "Why table assignment stays foundation-only" section).
- */
-export interface MontageAssignmentViewModel {
-  idAsignacion: number
-  mesa: EventTableViewModel
+  /** Absent when no participant currently has this table (see the module comment's derivation rule). */
+  currentAssignment?: MontageAssignmentViewModel
 }
 
 /** `puesto` — `Participacion.puesto`, the documented `mesero | barra` enum. */
@@ -135,15 +143,17 @@ export type MontagePuesto = 'mesero' | 'barra'
 
 /**
  * The live roster projection this screen needs, before per-participant
- * checklist data is joined in — `services/montageApi.ts`'s
+ * checklist/assignment data is joined in — `services/montageApi.ts`'s
  * `fetchMontageParticipants` return shape. `checklistOk` is
  * `Participacion.checklist_ok`, needed to resolve `status: 'approved'` (see
- * the module comment).
+ * the module comment). `estado` is `Participacion.estado`, needed both for
+ * the assign-eligibility copy and for `deriveMontageAssignments`.
  */
 export interface MontageRosterParticipant {
   idParticipacion: number
   nombre: string
   puesto: MontagePuesto
+  estado: ParticipacionEstado
   checklistOk: boolean
 }
 
@@ -151,10 +161,11 @@ export interface MontageParticipantViewModel {
   idParticipacion: number
   nombre: string
   puesto: MontagePuesto
+  estado: ParticipacionEstado
   /** Absent when no checklist instance has been created for this participation yet. */
   checklist?: MontageChecklistViewModel
-  /** FOUNDATION-ONLY local demo state — see the module comment. */
-  assignedTables: readonly MontageAssignmentViewModel[]
+  /** Absent when this participant has no current table (see the module comment's derivation rule). */
+  currentAssignment?: MontageAssignmentViewModel
 }
 
 /**
@@ -172,19 +183,21 @@ export interface ApproveChecklistRequest {
 /** Per-participant UI state for the live approve-checklist action. */
 export type ChecklistApprovalStatus = 'idle' | 'approving' | 'error'
 
-/**
- * `POST /participaciones/{id_participacion}/asignaciones`'s exact
- * documented request body — `id_mesa` only. Never actually sent in this
- * branch (see the module comment); kept because the foundation-only
- * handler in `EventMontagePage` still models the same request shape
- * locally, exactly as before this branch.
- */
+/** `POST /participaciones/{id_participacion}/asignaciones`'s exact documented request body — `id_mesa` only. */
 export interface AssignTableRequest {
   idParticipacion: number
   idMesa: number
 }
 
-/** `DELETE /asignaciones/{id_asignacion}`'s documented shape. Never actually sent in this branch — see the module comment. */
+/**
+ * `DELETE /asignaciones/{id_asignacion}`'s documented shape, plus
+ * `idParticipacion` — not sent to the server, only carried alongside so
+ * `EventMontagePage` can key its per-row pending/error state by
+ * participant the same way `handleAssignTable`/`handleApproveChecklist`
+ * already do (the caller always knows it, from the same
+ * `currentAssignment` the release button is rendered from).
+ */
 export interface ReleaseAssignmentRequest {
   idAsignacion: number
+  idParticipacion: number
 }

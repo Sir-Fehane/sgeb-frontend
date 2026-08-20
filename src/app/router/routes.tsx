@@ -158,13 +158,17 @@ export const router = createBrowserRouter([
       {
         /*
          * Event Montage — W-07 "Verificar montaje + asignar mesas"
-         * (feature/event-montage-ui-foundation). Presentation-only:
-         * checklist approval (`PATCH /checklist-instancias/{id}/aprobar`)
-         * and table assignment (`POST /participaciones/{id}/asignaciones`,
-         * `DELETE /asignaciones/{id_asignacion}`) are modeled as local,
-         * fixture-backed captain actions only — no network call. Same
-         * positive integer SGEB event id as the other `eventos/:id/*`
-         * routes, parsed/validated inside `EventMontagePage`, not here.
+         * (feature/event-operations-live). Fully live: roster, checklist
+         * approval (`PATCH /checklist-instancias/{id}/aprobar`), table
+         * overview (`GET /eventos/{id}/mesas`,
+         * `GET /eventos/{id}/asignaciones`), and table assignment
+         * (`POST /participaciones/{id}/asignaciones`,
+         * `DELETE /asignaciones/{id_asignacion}`) all call the real
+         * backend. Linking a table (`PATCH /asignaciones/{id}/vincular`)
+         * stays read-only here — confirmed `mesero`-role/QR-device-only,
+         * see `montage/types/montage.ts`'s module comment. Same positive
+         * integer SGEB event id as the other `eventos/:id/*` routes,
+         * parsed/validated inside `EventMontagePage`, not here.
          * `/cubaitor`, `/cierre`, `/pagos` remain unregistered.
          */
         path: 'eventos/:id/montaje',

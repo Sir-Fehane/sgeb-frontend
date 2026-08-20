@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  assignTable,
   fetchAsignaciones,
+  releaseAssignment,
   type AsignacionMesaApiRecord,
 } from '@/features/events/services/asignacionesApi'
 import { requestSgeb } from '@/shared/api/sgebClient'
@@ -104,5 +106,45 @@ describe('fetchAsignaciones', () => {
     })
 
     expect(await fetchAsignaciones(999999)).toEqual([])
+  })
+})
+
+describe('assignTable', () => {
+  it('POSTs /participaciones/{id}/asignaciones with { idMesa } camelCase body', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0001', message: 'ok' },
+      data: {
+        id_asignacion: 900,
+        id_participacion: 42,
+        id_mesa: 7,
+        vinculada: false,
+        fecha_asignacion: '2026-08-19T10:00:00.000Z',
+        fecha_vinculacion: null,
+      },
+    })
+
+    await assignTable(42, 7)
+
+    expect(requestSgeb).toHaveBeenCalledWith({
+      url: '/participaciones/42/asignaciones',
+      method: 'POST',
+      data: { idMesa: 7 },
+    })
+  })
+})
+
+describe('releaseAssignment', () => {
+  it('DELETEs /asignaciones/{id}', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0001', message: 'ok' },
+      data: null,
+    })
+
+    await releaseAssignment(900)
+
+    expect(requestSgeb).toHaveBeenCalledWith({
+      url: '/asignaciones/900',
+      method: 'DELETE',
+    })
   })
 })

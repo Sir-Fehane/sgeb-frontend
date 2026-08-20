@@ -17,15 +17,23 @@ import type {
 } from '@/features/events/montage/types/montage'
 
 export interface EventMontageContentProps {
-  /** `null` means "not found" — a fixture-lookup miss or a malformed route id, not a loading gap. Reuses `EventDetailUnavailableState`: same concern as Event Detail's own unavailable event. */
+  /** `null` means "not found" — a malformed route id or a real `GET /eventos/{id}` 404, not a loading gap. Reuses `EventDetailUnavailableState`: same concern as Event Detail's own unavailable event. */
   evento: EventDetailViewModel | null
   isLoading?: boolean
   errorMessage?: string
   onRetry?: (() => void) | undefined
   participants: readonly MontageParticipantViewModel[]
   tables: readonly EventTableViewModel[]
+  /** Section-scoped: a mesas/asignaciones failure never blocks the checklist/roster half of the page — see `EventMontagePage`'s own comment. */
+  tablesLoading?: boolean
+  tablesErrorMessage?: string
+  onRetryTables?: (() => void) | undefined
   checklistApprovalStatuses: Readonly<Record<number, ChecklistApprovalStatus>>
   checklistApprovalErrorMessages?: Readonly<Record<number, string>>
+  assignStatuses: Readonly<Record<number, 'assigning' | 'error'>>
+  assignErrorMessages?: Readonly<Record<number, string>>
+  releaseStatuses: Readonly<Record<number, 'releasing' | 'error'>>
+  releaseErrorMessages?: Readonly<Record<number, string>>
   onApproveChecklist: (request: ApproveChecklistRequest) => void
   onAssignTable: (request: AssignTableRequest) => void
   onReleaseAssignment: (request: ReleaseAssignmentRequest) => void
@@ -33,7 +41,7 @@ export interface EventMontageContentProps {
 
 /**
  * The reusable presentational composition — header + summary + table
- * availability + per-mesero checklist/assignment list, or exactly one of
+ * overview + per-mesero checklist/assignment list, or exactly one of
  * loading / error / unavailable, selected purely from props. All summary
  * counts are plain derivations of `participants`/`tables` — never a
  * second, independently-maintained source (see `EventMontageSummary`),
@@ -46,8 +54,15 @@ export function EventMontageContent({
   onRetry,
   participants,
   tables,
+  tablesLoading = false,
+  tablesErrorMessage,
+  onRetryTables,
   checklistApprovalStatuses,
   checklistApprovalErrorMessages,
+  assignStatuses,
+  assignErrorMessages,
+  releaseStatuses,
+  releaseErrorMessages,
   onApproveChecklist,
   onAssignTable,
   onReleaseAssignment,
@@ -69,7 +84,7 @@ export function EventMontageContent({
   ).length
   const mesasLibresTotal = tables.filter((mesa) => mesa.estado === 'libre').length
   const conMesaAsignadaTotal = participants.filter(
-    (participant) => participant.assignedTables.length > 0,
+    (participant) => participant.currentAssignment !== undefined,
   ).length
 
   return (
@@ -84,7 +99,13 @@ export function EventMontageContent({
         conMesaAsignadaTotal={conMesaAsignadaTotal}
       />
 
-      <EventMontageTablesSection tables={tables} />
+      <EventMontageTablesSection
+        tables={tables}
+        isLoading={tablesLoading}
+        {...(tablesErrorMessage ? { errorMessage: tablesErrorMessage } : {})}
+        onRetry={onRetryTables}
+        numMesasPlaneadas={evento.numMesas}
+      />
 
       <EventDetailSection title="Meseros seleccionados">
         <EventMontageParticipantList
@@ -92,6 +113,10 @@ export function EventMontageContent({
           tables={tables}
           checklistApprovalStatuses={checklistApprovalStatuses}
           {...(checklistApprovalErrorMessages ? { checklistApprovalErrorMessages } : {})}
+          assignStatuses={assignStatuses}
+          {...(assignErrorMessages ? { assignErrorMessages } : {})}
+          releaseStatuses={releaseStatuses}
+          {...(releaseErrorMessages ? { releaseErrorMessages } : {})}
           onApproveChecklist={onApproveChecklist}
           onAssignTable={onAssignTable}
           onReleaseAssignment={onReleaseAssignment}

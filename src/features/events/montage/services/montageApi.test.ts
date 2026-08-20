@@ -67,6 +67,7 @@ describe('fetchMontageParticipants', () => {
         idParticipacion: 5002,
         nombre: 'Ana García López',
         puesto: 'barra',
+        estado: 'seleccionado',
         checklistOk: true,
       },
     ])

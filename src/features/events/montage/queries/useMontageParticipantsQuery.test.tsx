@@ -61,6 +61,7 @@ describe('useMontageParticipantsQuery', () => {
       idParticipacion: 5002,
       nombre: 'Juan Pérez',
       puesto: 'mesero',
+      estado: 'seleccionado',
       checklistOk: false,
     })
   })

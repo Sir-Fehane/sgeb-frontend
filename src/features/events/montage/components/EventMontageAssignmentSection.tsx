@@ -5,80 +5,152 @@ import type {
   EventTableViewModel,
   MontageAssignmentViewModel,
   MontageChecklistStatus,
+  ParticipacionEstado,
   ReleaseAssignmentRequest,
 } from '@/features/events/montage/types/montage'
-import { Badge, Button, Label, Select, Text } from '@/shared/components'
+import { Alert, Badge, Button, Label, Select, Text } from '@/shared/components'
 
 export interface EventMontageAssignmentSectionProps {
   idParticipacion: number
   nombreParticipante: string
+  estado: ParticipacionEstado
   checklistStatus?: MontageChecklistStatus | undefined
-  assignedTables: readonly MontageAssignmentViewModel[]
+  currentAssignment?: MontageAssignmentViewModel
   freeTables: readonly EventTableViewModel[]
+  isAssigning?: boolean
+  assignErrorMessage?: string
+  isReleasing?: boolean
+  releaseErrorMessage?: string
   onAssignTable: (request: AssignTableRequest) => void
   onReleaseAssignment: (request: ReleaseAssignmentRequest) => void
 }
 
 /**
- * The business rule this whole section exists to enforce: table
- * assignment requires `checklistStatus === 'approved'`
- * (`POST /participaciones/{id}/asignaciones` → SGEB-4005 otherwise). This
- * is never presented as currently executable when the prerequisite is
- * false — no enabled select, no enabled button, just explanatory text.
- * "Liberar mesa" maps to the documented `DELETE /asignaciones/{id_asignacion}`
- * and is always available for an existing assignment (releasing is not
- * gated by checklist status). No "change table" action exists — moving a
- * mesero is only ever release-then-assign, matching the two separate
- * documented endpoints (no single "change" operation is documented).
+ * Server-enforced: assigning a table requires `checklist_ok`
+ * (`POST /participaciones/{id}/asignaciones` → `SGEB-4005` otherwise) —
+ * mirrored here as `checklistStatus !== 'approved'`. Everything else below
+ * is a UI-level safeguard on top of a more permissive backend (confirmed:
+ * no participation-state or event-state guard exists on that endpoint),
+ * added specifically to protect against a confirmed backend gap —
+ * `SGEB-4006` only blocks a second assign against an already-*linked*
+ * mesa, not merely a pending one — see `types/montage.ts`'s module
+ * comment and this branch's report. No "change table" action exists —
+ * moving a mesero is only ever release-then-assign, matching the two
+ * separate documented endpoints (no single "change" operation exists).
  */
+function ineligibilityReason(
+  estado: ParticipacionEstado,
+  checklistStatus: MontageChecklistStatus | undefined,
+): string | undefined {
+  if (
+    estado === 'aparto' ||
+    estado === 'seleccionado' ||
+    estado === 'confirmo_asistencia'
+  ) {
+    return 'Pendiente de llegada.'
+  }
+  if (checklistStatus !== 'approved') {
+    return 'Checklist pendiente de aprobación.'
+  }
+  return undefined
+}
+
 export function EventMontageAssignmentSection({
   idParticipacion,
   nombreParticipante,
+  estado,
   checklistStatus,
-  assignedTables,
+  currentAssignment,
   freeTables,
+  isAssigning = false,
+  assignErrorMessage,
+  isReleasing = false,
+  releaseErrorMessage,
   onAssignTable,
   onReleaseAssignment,
 }: EventMontageAssignmentSectionProps) {
   const [selectedMesaId, setSelectedMesaId] = useState('')
+  const [confirmingRelease, setConfirmingRelease] = useState(false)
   const selectId = useId()
 
-  const isApproved = checklistStatus === 'approved'
+  if (estado === 'salida') {
+    return (
+      <Text size="sm" className="text-muted-foreground">
+        Participación finalizada.
+      </Text>
+    )
+  }
 
-  return (
-    <div className="flex flex-col gap-2">
-      {assignedTables.length > 0 ? (
-        <ul className="flex flex-wrap gap-2">
-          {assignedTables.map((assignment) => (
-            <li
-              key={assignment.idAsignacion}
-              className="border-border bg-card flex items-center gap-2 rounded-lg border px-3 py-1.5"
-            >
-              <Badge tone="success">{assignment.mesa.etiqueta}</Badge>
+  if (currentAssignment) {
+    return (
+      <div className="flex flex-col gap-2">
+        <div className="border-border bg-card flex flex-wrap items-center gap-2 rounded-lg border px-3 py-1.5">
+          <Badge tone={currentAssignment.vinculada ? 'success' : 'neutral'}>
+            {currentAssignment.etiquetaMesa}
+          </Badge>
+          <Text size="sm" className="text-muted-foreground">
+            {currentAssignment.vinculada ? 'Vinculada' : 'Pendiente de vincular'}
+          </Text>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={isReleasing}
+            aria-label={`Liberar ${currentAssignment.etiquetaMesa} de ${nombreParticipante}`}
+            onClick={() => setConfirmingRelease(true)}
+          >
+            Liberar mesa
+          </Button>
+        </div>
+
+        {confirmingRelease ? (
+          <Alert tone="warning" title={`¿Liberar ${currentAssignment.etiquetaMesa}?`}>
+            <p>La mesa quedará disponible para reasignarla a otro mesero.</p>
+            {releaseErrorMessage ? (
+              <p className="text-destructive mt-1">{releaseErrorMessage}</p>
+            ) : null}
+            <div className="mt-2 flex gap-2">
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                loading={isReleasing}
+                onClick={() =>
+                  onReleaseAssignment({
+                    idAsignacion: currentAssignment.idAsignacion,
+                    idParticipacion,
+                  })
+                }
+              >
+                Confirmar liberación
+              </Button>
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                aria-label={`Liberar ${assignment.mesa.etiqueta} de ${nombreParticipante}`}
-                onClick={() =>
-                  onReleaseAssignment({ idAsignacion: assignment.idAsignacion })
-                }
+                disabled={isReleasing}
+                onClick={() => setConfirmingRelease(false)}
               >
-                Liberar mesa
+                Cancelar
               </Button>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <Text size="sm" className="text-muted-foreground">
-          Sin mesa asignada.
-        </Text>
-      )}
+            </div>
+          </Alert>
+        ) : null}
+      </div>
+    )
+  }
 
-      {!isApproved ? (
+  const reason = ineligibilityReason(estado, checklistStatus)
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Text size="sm" className="text-muted-foreground">
+        Sin mesa asignada.
+      </Text>
+
+      {reason ? (
         <Text size="sm" className="text-muted-foreground">
-          Requiere aprobar el checklist de montaje de este mesero antes de asignar una
-          mesa.
+          {reason}
         </Text>
       ) : freeTables.length === 0 ? (
         <Text size="sm" className="text-muted-foreground">
@@ -105,6 +177,7 @@ export function EventMontageAssignmentSection({
             type="button"
             variant="outline"
             size="sm"
+            loading={isAssigning}
             aria-label={`Asignar mesa a ${nombreParticipante}`}
             disabled={selectedMesaId === ''}
             onClick={() => {
@@ -116,6 +189,12 @@ export function EventMontageAssignmentSection({
           </Button>
         </div>
       )}
+
+      {assignErrorMessage ? (
+        <Text size="sm" className="text-destructive">
+          {assignErrorMessage}
+        </Text>
+      ) : null}
     </div>
   )
 }

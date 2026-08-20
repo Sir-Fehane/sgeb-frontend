@@ -1,12 +1,14 @@
-import { IconInfoCircle } from '@tabler/icons-react'
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 
 import { isEventoNotFoundError } from '@/features/events/services/eventsApi'
 import { useEventDetailQuery } from '@/features/events/queries/useEventDetailQuery'
+import { useMesasQuery } from '@/features/events/queries/useMesasQuery'
+import { useAsignacionesQuery } from '@/features/events/queries/useAsignacionesQuery'
 import { EventMontageContent } from '@/features/events/montage/components/EventMontageContent'
-import { findMontageTables } from '@/features/events/montage/fixtures/montageFixtures'
 import { useApproveChecklistMutation } from '@/features/events/montage/queries/useApproveChecklistMutation'
+import { useAssignTableMutation } from '@/features/events/montage/queries/useAssignTableMutation'
+import { useReleaseAssignmentMutation } from '@/features/events/montage/queries/useReleaseAssignmentMutation'
 import { useMontageChecklistInstanciaQueries } from '@/features/events/montage/queries/useMontageChecklistInstanciaQueries'
 import { useMontageChecklistTemplatesQuery } from '@/features/events/montage/queries/useMontageChecklistTemplatesQuery'
 import { useMontageParticipantsQuery } from '@/features/events/montage/queries/useMontageParticipantsQuery'
@@ -15,13 +17,12 @@ import type {
   ApproveChecklistRequest,
   AssignTableRequest,
   ChecklistApprovalStatus,
-  EventTableViewModel,
-  MontageAssignmentViewModel,
   MontageParticipantViewModel,
   ReleaseAssignmentRequest,
 } from '@/features/events/montage/types/montage'
+import { deriveMontageAssignments } from '@/features/events/montage/utils/deriveMontageAssignments'
 import { parseEventId } from '@/features/events/utils/parseEventId'
-import { Alert, Text } from '@/shared/components'
+import { Toast } from '@/shared/components'
 import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
 
 /**
@@ -37,17 +38,28 @@ function toSafeErrorMessage(error: unknown): string {
   return 'Ocurrió un error inesperado al cargar el montaje.'
 }
 
+/** One floating `Toast`'s worth of copy for whichever assign/release mutation most recently succeeded — mirrors `EventDetailComandaSection`'s `ComandaFeedback`. */
+interface MontageFeedback {
+  title: string
+  body: string
+}
+
 /**
  * Routed at /eventos/:id/montaje (W-07 "Verificar montaje + asignar
- * mesas"). LIVE wiring for the roster + checklist read/approve; the table
- * availability/assignment section stays FOUNDATION-ONLY, local component
- * state — see `types/montage.ts`'s module comment for the confirmed
- * backend gap this is working around (no endpoint exists to read existing
- * table assignments, and `mesa.estado` never reflects a captain's
- * assignment, only the mesero's later physical QR scan). `handleAssignTable`/
- * `handleReleaseAssignment` below never call the network — same local logic
- * as before this branch, just re-keyed onto the live roster's real
- * `idParticipacion` values.
+ * mesas"). Fully live: roster + checklist read/approve
+ * (`feature/montage-live-integration`), plus real table assignment —
+ * `GET /eventos/{id}/asignaciones`, `GET /eventos/{id}/mesas`,
+ * `POST /participaciones/{id}/asignaciones`, `DELETE /asignaciones/{id}`
+ * (`feature/event-operations-live`). See `types/montage.ts`'s module
+ * comment for the exact endpoint list and the one deliberately read-only
+ * boundary (`vincular`, mesero/QR-device-only).
+ *
+ * The mesas/asignaciones queries are handled as a section-scoped
+ * loading/error concern (`EventMontageTablesSection`'s own props), not
+ * folded into this page's top-level gate — a failure reading table state
+ * should not take down the checklist/roster half of the screen, which is
+ * independently useful to a captain even if the tables section is
+ * temporarily broken.
  */
 export function EventMontagePage() {
   const { id } = useParams<{ id: string }>()
@@ -60,13 +72,10 @@ export function EventMontagePage() {
   const checklistInstanciaQueries = useMontageChecklistInstanciaQueries(participationIds)
   const approveChecklistMutation = useApproveChecklistMutation(idEvento ?? -1)
 
-  const [tables, setTables] = useState<EventTableViewModel[]>(() =>
-    idEvento === null ? [] : findMontageTables(idEvento).map((mesa) => ({ ...mesa })),
-  )
-  const [assignedTablesByParticipation, setAssignedTablesByParticipation] = useState<
-    Record<number, MontageAssignmentViewModel[]>
-  >({})
-  const nextAssignmentId = useRef(1000)
+  const mesasQuery = useMesasQuery(idEvento)
+  const asignacionesQuery = useAsignacionesQuery(idEvento)
+  const assignTableMutation = useAssignTableMutation(idEvento ?? -1)
+  const releaseAssignmentMutation = useReleaseAssignmentMutation(idEvento ?? -1)
 
   const [checklistApprovalStatuses, setChecklistApprovalStatuses] = useState<
     Record<number, ChecklistApprovalStatus>
@@ -74,6 +83,17 @@ export function EventMontagePage() {
   const [checklistApprovalErrors, setChecklistApprovalErrors] = useState<
     Record<number, string>
   >({})
+
+  const [assignStatuses, setAssignStatuses] = useState<
+    Record<number, 'assigning' | 'error'>
+  >({})
+  const [assignErrors, setAssignErrors] = useState<Record<number, string>>({})
+  const [releaseStatuses, setReleaseStatuses] = useState<
+    Record<number, 'releasing' | 'error'>
+  >({})
+  const [releaseErrors, setReleaseErrors] = useState<Record<number, string>>({})
+
+  const [montageFeedback, setMontageFeedback] = useState<MontageFeedback | null>(null)
 
   const notFound = idEvento === null || isEventoNotFoundError(eventDetailQuery.error)
   const evento = notFound ? null : (eventDetailQuery.data ?? null)
@@ -102,8 +122,20 @@ export function EventMontagePage() {
       )
     : undefined
 
+  const tablesLoading = mesasQuery.isPending || asignacionesQuery.isPending
+  const tablesErrorMessage =
+    mesasQuery.isError || asignacionesQuery.isError
+      ? toSafeErrorMessage(mesasQuery.error ?? asignacionesQuery.error)
+      : undefined
+
   const templatesById = new Map(
     (templatesQuery.data ?? []).map((template) => [template.idChecklist, template]),
+  )
+
+  const { tables, currentAssignmentByParticipation } = deriveMontageAssignments(
+    participantsQuery.data ?? [],
+    mesasQuery.data ?? [],
+    asignacionesQuery.data ?? [],
   )
 
   const participants: MontageParticipantViewModel[] = (participantsQuery.data ?? []).map(
@@ -113,12 +145,16 @@ export function EventMontagePage() {
         templatesById,
         participant.checklistOk,
       )
+      const currentAssignment = currentAssignmentByParticipation.get(
+        participant.idParticipacion,
+      )
       return {
         idParticipacion: participant.idParticipacion,
         nombre: participant.nombre,
         puesto: participant.puesto,
+        estado: participant.estado,
         ...(checklist ? { checklist } : {}),
-        assignedTables: assignedTablesByParticipation[participant.idParticipacion] ?? [],
+        ...(currentAssignment ? { currentAssignment } : {}),
       }
     },
   )
@@ -128,6 +164,11 @@ export function EventMontagePage() {
     void participantsQuery.refetch()
     void templatesQuery.refetch()
     checklistInstanciaQueries.forEach((query) => void query.refetch())
+  }
+
+  function handleRetryTables() {
+    void mesasQuery.refetch()
+    void asignacionesQuery.refetch()
   }
 
   function handleApproveChecklist({
@@ -171,79 +212,91 @@ export function EventMontagePage() {
     })
   }
 
-  /**
-   * FOUNDATION-ONLY — never calls the network. Same local logic as before
-   * this branch (see `types/montage.ts`'s module comment for why). Local
-   * assignment ids are minted from a counter starting well above any
-   * fixture-seeded id, standing in for the real server/DB-generated
-   * `id_asignacion` this screen never receives, since there is no live
-   * mutation call to receive one from.
-   */
-  function handleAssignTable({ idParticipacion, idMesa }: AssignTableRequest) {
-    const participant = participants.find((p) => p.idParticipacion === idParticipacion)
-    const mesa = tables.find((m) => m.idMesa === idMesa)
-    if (!participant || participant.checklist?.status !== 'approved') {
-      return
-    }
-    if (mesa?.estado !== 'libre') {
+  function handleAssignTable(request: AssignTableRequest) {
+    const { idParticipacion } = request
+    if (assignStatuses[idParticipacion] === 'assigning') {
       return
     }
 
-    const idAsignacion = nextAssignmentId.current
-    nextAssignmentId.current += 1
-    const mesaAsignada: EventTableViewModel = { ...mesa, estado: 'ocupada' }
+    setAssignStatuses((previous) => ({ ...previous, [idParticipacion]: 'assigning' }))
+    setAssignErrors((previous) => {
+      if (!(idParticipacion in previous)) {
+        return previous
+      }
+      const next = { ...previous }
+      delete next[idParticipacion]
+      return next
+    })
+    setMontageFeedback(null)
 
-    setTables((previous) => previous.map((m) => (m.idMesa === idMesa ? mesaAsignada : m)))
-    setAssignedTablesByParticipation((previous) => ({
-      ...previous,
-      [idParticipacion]: [
-        ...(previous[idParticipacion] ?? []),
-        { idAsignacion, mesa: mesaAsignada },
-      ],
-    }))
+    assignTableMutation.mutate(request, {
+      onSuccess: () => {
+        setAssignStatuses((previous) => {
+          const next = { ...previous }
+          delete next[idParticipacion]
+          return next
+        })
+        setMontageFeedback({
+          title: 'Mesa asignada',
+          body: 'La mesa se asignó correctamente.',
+        })
+      },
+      onError: (error) => {
+        setAssignStatuses((previous) => ({ ...previous, [idParticipacion]: 'error' }))
+        setAssignErrors((previous) => ({
+          ...previous,
+          [idParticipacion]: toSafeErrorMessage(error),
+        }))
+      },
+    })
   }
 
-  /** FOUNDATION-ONLY — never calls the network. See `handleAssignTable` above. */
-  function handleReleaseAssignment({ idAsignacion }: ReleaseAssignmentRequest) {
-    const ownerEntry = Object.entries(assignedTablesByParticipation).find(([, list]) =>
-      list.some((a) => a.idAsignacion === idAsignacion),
-    )
-    if (!ownerEntry) {
+  function handleReleaseAssignment(request: ReleaseAssignmentRequest) {
+    const { idParticipacion } = request
+    if (releaseStatuses[idParticipacion] === 'releasing') {
       return
     }
-    const [ownerIdRaw, list] = ownerEntry
-    const ownerId = Number(ownerIdRaw)
-    const assignment = list.find((a) => a.idAsignacion === idAsignacion)
-    if (!assignment) {
-      return
-    }
-    const idMesa = assignment.mesa.idMesa
 
-    setTables((previous) =>
-      previous.map((m) => (m.idMesa === idMesa ? { ...m, estado: 'libre' } : m)),
-    )
-    setAssignedTablesByParticipation((previous) => ({
-      ...previous,
-      [ownerId]: (previous[ownerId] ?? []).filter((a) => a.idAsignacion !== idAsignacion),
-    }))
+    setReleaseStatuses((previous) => ({ ...previous, [idParticipacion]: 'releasing' }))
+    setReleaseErrors((previous) => {
+      if (!(idParticipacion in previous)) {
+        return previous
+      }
+      const next = { ...previous }
+      delete next[idParticipacion]
+      return next
+    })
+    setMontageFeedback(null)
+
+    releaseAssignmentMutation.mutate(request, {
+      onSuccess: () => {
+        setReleaseStatuses((previous) => {
+          const next = { ...previous }
+          delete next[idParticipacion]
+          return next
+        })
+        setMontageFeedback({
+          title: 'Mesa liberada',
+          body: 'La mesa quedó disponible para reasignarla.',
+        })
+      },
+      onError: (error) => {
+        setReleaseStatuses((previous) => ({ ...previous, [idParticipacion]: 'error' }))
+        setReleaseErrors((previous) => ({
+          ...previous,
+          [idParticipacion]: toSafeErrorMessage(error),
+        }))
+      },
+    })
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <Alert
-        tone="info"
-        icon={<IconInfoCircle aria-hidden="true" />}
-        title="Asignación de mesas: panel de demostración"
-      >
-        <Text size="sm">
-          El checklist de montaje y los meseros mostrados arriba son datos reales de este
-          evento. La asignación y liberación de mesas, en cambio, sigue usando datos de
-          desarrollo (<code>features/events/montage/fixtures</code>): no envía ninguna
-          solicitud al servidor ni se conserva al recargar la página. El backend todavía
-          no expone una forma de consultar qué mesas ya asignó el capitán, así que esta
-          sección se mantiene como fundación hasta que ese endpoint exista.
-        </Text>
-      </Alert>
+      {montageFeedback ? (
+        <Toast title={montageFeedback.title} onDismiss={() => setMontageFeedback(null)}>
+          <p>{montageFeedback.body}</p>
+        </Toast>
+      ) : null}
 
       <EventMontageContent
         evento={evento}
@@ -252,8 +305,15 @@ export function EventMontagePage() {
         onRetry={handleRetry}
         participants={participants}
         tables={tables}
+        tablesLoading={tablesLoading}
+        {...(tablesErrorMessage ? { tablesErrorMessage } : {})}
+        onRetryTables={handleRetryTables}
         checklistApprovalStatuses={checklistApprovalStatuses}
         checklistApprovalErrorMessages={checklistApprovalErrors}
+        assignStatuses={assignStatuses}
+        assignErrorMessages={assignErrors}
+        releaseStatuses={releaseStatuses}
+        releaseErrorMessages={releaseErrors}
         onApproveChecklist={handleApproveChecklist}
         onAssignTable={handleAssignTable}
         onReleaseAssignment={handleReleaseAssignment}

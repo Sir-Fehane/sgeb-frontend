@@ -27,6 +27,7 @@ import {
 } from '@/features/events/services/eventsApi'
 import type { EventStatus } from '@/features/events/types/event'
 import { formatSalonAddress } from '@/features/events/utils/eventDetailFormatting'
+import { EVENT_STATUS_TRANSITION_TOAST_TITLES } from '@/features/events/utils/eventStatusPresentation'
 import { parseEventId } from '@/features/events/utils/parseEventId'
 import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
@@ -76,6 +77,12 @@ interface EventDetailLocationState {
   justCreated?: boolean
 }
 
+/** One floating `Toast`'s worth of copy — a single slot for whichever page-owned action most recently succeeded, mirroring `EventDetailComandaSection`'s own `ComandaFeedback` (`Toast`'s own doc: "the caller owns showing/hiding exactly one of these at a time"). */
+interface PageFeedback {
+  title: string
+  body?: string
+}
+
 export function EventDetailPage() {
   const { id } = useParams<{ id: string }>()
   const idEvento = parseEventId(id)
@@ -111,14 +118,21 @@ export function EventDetailPage() {
   const [isEditing, setIsEditing] = useState(false)
 
   /**
-   * One-time "Evento creado" toast — driven by React Router `state`
+   * One-time "Evento creado" feedback — driven by React Router `state`
    * (`EventCreatePage`'s `navigate(..., { state: { justCreated: true } })`),
    * never a global store: the lazy initializer reads it exactly once, on
    * this component's first render, so it survives even though the effect
-   * below clears the underlying router state on mount.
+   * below clears the underlying router state on mount. Shares the same
+   * `pageFeedback` slot as the lifecycle-transition toast below — never
+   * two `Toast`s stacked at once.
    */
-  const [showCreatedFeedback, setShowCreatedFeedback] = useState(() =>
-    Boolean((location.state as EventDetailLocationState | null)?.justCreated),
+  const [pageFeedback, setPageFeedback] = useState<PageFeedback | null>(() =>
+    (location.state as EventDetailLocationState | null)?.justCreated
+      ? {
+          title: 'Evento creado',
+          body: 'El evento se creó correctamente. Ya puedes continuar con su configuración.',
+        }
+      : null,
   )
 
   useEffect(() => {
@@ -250,6 +264,9 @@ export function EventDetailPage() {
     }
     isTransitioningRef.current = true
     changeEstadoMutation.mutate(estado, {
+      onSuccess: () => {
+        setPageFeedback({ title: EVENT_STATUS_TRANSITION_TOAST_TITLES[estado] })
+      },
       onSettled: () => {
         isTransitioningRef.current = false
       },
@@ -319,16 +336,14 @@ export function EventDetailPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {showCreatedFeedback ? (
+      {pageFeedback ? (
         <Toast
-          title="Evento creado"
+          title={pageFeedback.title}
           onDismiss={() => {
-            setShowCreatedFeedback(false)
+            setPageFeedback(null)
           }}
         >
-          <p>
-            El evento se creó correctamente. Ya puedes continuar con su configuración.
-          </p>
+          {pageFeedback.body ? <p>{pageFeedback.body}</p> : null}
         </Toast>
       ) : null}
 

@@ -365,6 +365,21 @@ describe('changeEventoEstado', () => {
     )
   })
 
+  it('resolves successfully even when the response omits capitan (confirmed backend gap: cambiarEstado never preloads it) — regression for the false publish-failure bug', async () => {
+    // The pinned backend's `EventoService.cambiarEstado` genuinely responds
+    // like this — a real, successfully-updated Evento, but without the
+    // `capitan` key at all (unlike `obtener`/`listar`, which preload it).
+    // `changeEventoEstado` must never attempt to map that shape (it used
+    // to, and threw here).
+    const { capitan: _capitan, ...withoutCapitan } = RECORD
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0000', message: 'ok' },
+      data: { ...withoutCapitan, estado: 'publicado' },
+    })
+
+    await expect(changeEventoEstado(1001, 'publicado')).resolves.toBeUndefined()
+  })
+
   it('lets a SgebApplicationError (e.g. SGEB-4013 sin mesas) propagate unchanged', async () => {
     const error = new SgebApplicationError(409, {
       code: 'SGEB-4013',

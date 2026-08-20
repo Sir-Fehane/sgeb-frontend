@@ -19,8 +19,17 @@ import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore
  * `docs/FrontendArchitecture.md` §2.2) or the frozen `/login`-family
  * screens. It is wired only into `AppShellLayout`, the boundary that
  * already represents "every authenticated page."
+ *
+ * `returnTo` — the caller's current `${location.pathname}${location.search}`
+ * — is forwarded to `bootstrapSession`'s own step-2 silent redirect, so a
+ * hard reload on a private route (`/eventos`, `/eventos/:id/montaje`, …)
+ * returns to that same route once the round trip completes, instead of
+ * silently defaulting to `/panel`. Read once, at the moment this effect
+ * actually starts a bootstrap attempt — never re-read on a later
+ * re-render, so a route change that happens to occur while a bootstrap is
+ * already in flight can never retarget it.
  */
-export function useOidcSessionBootstrap(): void {
+export function useOidcSessionBootstrap(returnTo: string): void {
   const status = useOidcSessionStore((store) => store.session.status)
   const setAuthenticating = useOidcSessionStore((store) => store.setAuthenticating)
   const setAuthenticated = useOidcSessionStore((store) => store.setAuthenticated)
@@ -34,7 +43,7 @@ export function useOidcSessionBootstrap(): void {
     hasStarted.current = true
     setAuthenticating()
 
-    void bootstrapSession().then((outcome) => {
+    void bootstrapSession({}, returnTo).then((outcome) => {
       if (outcome.kind === 'restored') {
         setAuthenticated(outcome.session)
         return
@@ -47,5 +56,5 @@ export function useOidcSessionBootstrap(): void {
       // way (or was attempted and failed closed to anonymous inside
       // bootstrapSession itself) — nothing further to do from here.
     })
-  }, [status, setAuthenticating, setAuthenticated, setAnonymous])
+  }, [status, setAuthenticating, setAuthenticated, setAnonymous, returnTo])
 }

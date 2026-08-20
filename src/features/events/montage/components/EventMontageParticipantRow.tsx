@@ -14,6 +14,10 @@ export interface EventMontageParticipantRowProps {
   freeTables: readonly EventTableViewModel[]
   isApprovingChecklist?: boolean
   approveChecklistErrorMessage?: string
+  isAssigning?: boolean
+  assignErrorMessage?: string
+  isReleasing?: boolean
+  releaseErrorMessage?: string
   onApproveChecklist: (request: ApproveChecklistRequest) => void
   onAssignTable: (request: AssignTableRequest) => void
   onReleaseAssignment: (request: ReleaseAssignmentRequest) => void
@@ -27,8 +31,8 @@ const PUESTO_LABELS: Record<MontageParticipantViewModel['puesto'], string> = {
 /**
  * Both `mesero` and `barra` participants render identically here — the
  * assignment endpoint's summary text ("Asignar mesa a un mesero") is
- * suggestive but not a documented validation rule, so this foundation
- * does not invent a puesto-based eligibility block (see the README's
+ * suggestive but not a documented validation rule, so this screen does not
+ * invent a puesto-based eligibility block (see the branch report's
  * contract-gap note).
  */
 export function EventMontageParticipantRow({
@@ -36,6 +40,10 @@ export function EventMontageParticipantRow({
   freeTables,
   isApprovingChecklist,
   approveChecklistErrorMessage,
+  isAssigning,
+  assignErrorMessage,
+  isReleasing,
+  releaseErrorMessage,
   onApproveChecklist,
   onAssignTable,
   onReleaseAssignment,
@@ -61,9 +69,16 @@ export function EventMontageParticipantRow({
       <EventMontageAssignmentSection
         idParticipacion={participant.idParticipacion}
         nombreParticipante={participant.nombre}
+        estado={participant.estado}
         checklistStatus={participant.checklist?.status}
-        assignedTables={participant.assignedTables}
+        {...(participant.currentAssignment
+          ? { currentAssignment: participant.currentAssignment }
+          : {})}
         freeTables={freeTables}
+        isAssigning={isAssigning ?? false}
+        {...(assignErrorMessage ? { assignErrorMessage } : {})}
+        isReleasing={isReleasing ?? false}
+        {...(releaseErrorMessage ? { releaseErrorMessage } : {})}
         onAssignTable={onAssignTable}
         onReleaseAssignment={onReleaseAssignment}
       />
