@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-import { AccountMenuPlaceholder } from '@/shared/components/layout/AccountMenuPlaceholder'
+import { AccountMenu } from '@/shared/components/layout/AccountMenu'
 import { NavTrigger } from '@/shared/components/layout/NavTrigger'
 import { NotificationBell } from '@/shared/realtime/components/NotificationBell'
 
@@ -31,7 +31,7 @@ export function Topbar({ title, breadcrumb, onOpenNav }: TopbarProps) {
 
       <NotificationBell />
 
-      <AccountMenuPlaceholder />
+      <AccountMenu />
     </header>
   )
 }

@@ -1,4 +1,4 @@
-export * from '@/shared/components/layout/AccountMenuPlaceholder'
+export * from '@/shared/components/layout/AccountMenu'
 export * from '@/shared/components/layout/AppShell'
 export * from '@/shared/components/layout/AuthLayout'
 export * from '@/shared/components/layout/AppShellMain'

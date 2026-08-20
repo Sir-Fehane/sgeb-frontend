@@ -1,6 +1,6 @@
 import { Skeleton } from '@/shared/components'
 
-const PLACEHOLDER_SECTIONS = 6
+const PLACEHOLDER_SECTIONS = 4
 
 /**
  * `role="status"` on the wrapper (not the individual `Skeleton`s, which

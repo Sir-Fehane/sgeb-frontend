@@ -85,6 +85,14 @@ const DETAIL_RECORD_3001: EventoApiRecord = {
  * resolves to one active salón, so `/eventos/nuevo`
  * (`EventCreatePage`) reaches its real, populated form rather than its
  * own error state.
+ *
+ * `/dashboard/capitan` (`feature/panel-live-consolidation`) resolves to a
+ * genuinely empty-but-successful portfolio (every real field present, all
+ * zero/empty) — this file's `/panel` assertions only need
+ * `CaptainDashboardPage` to reach its populated, non-loading, non-error
+ * state so its real "Próximos eventos" section heading renders as the
+ * private-content marker; no test in this file asserts on specific
+ * dashboard event content.
  */
 function configureDefaultRequestSgebMock() {
   vi.mocked(requestSgeb).mockImplementation(
@@ -150,6 +158,18 @@ function configureDefaultRequestSgebMock() {
         return Promise.resolve({
           result: { code: 'SGEB-0002', message: 'Sin resultados.' },
           data: [],
+        })
+      }
+      if (config.url === '/dashboard/capitan') {
+        return Promise.resolve({
+          result: { code: 'SGEB-0000', message: 'ok' },
+          data: {
+            en_curso: [],
+            proximos: [],
+            borradores: 0,
+            por_cerrar: [],
+            totales: { en_curso: 0, proximos: 0, por_cerrar: 0 },
+          },
         })
       }
       if (config.url === '/checklists') {
@@ -376,7 +396,7 @@ describe('/panel renders the captain dashboard UI inside AppShell', () => {
       screen.getByRole('navigation', { name: 'Navegación principal' }),
     ).toBeInTheDocument()
     expect(screen.getByRole('banner')).toBeInTheDocument()
-    expect(screen.getByText('Resumen de eventos')).toBeInTheDocument()
+    expect(await screen.findByText('Próximos eventos')).toBeInTheDocument()
   })
 
   it('does not register an /panel/:id event-detail or live-operation route', async () => {
@@ -1059,7 +1079,7 @@ describe('/auth/callback renders the OIDC callback page outside AppShell and Aut
  * actual routing/layout composition (`AppShellLayout` as the parent
  * element of every private child route), not merely that an isolated
  * component can conditionally render children. Real feature-page content
- * (`CaptainDashboardPage`'s "Resumen de eventos", the events list copy) is
+ * (`CaptainDashboardPage`'s "Próximos eventos" section heading, the events list copy) is
  * used as the private-content marker, exactly as the rest of this file
  * already does.
  */
@@ -1072,7 +1092,7 @@ describe('Private route boundary — authentication guard', () => {
 
     await renderAt('/panel')
 
-    expect(screen.queryByText('Resumen de eventos')).not.toBeInTheDocument()
+    expect(screen.queryByText('Próximos eventos')).not.toBeInTheDocument()
     expect(
       screen.queryByRole('navigation', { name: 'Navegación principal' }),
     ).not.toBeInTheDocument()
@@ -1085,7 +1105,7 @@ describe('Private route boundary — authentication guard', () => {
     expect(
       screen.getByRole('navigation', { name: 'Navegación principal' }),
     ).toBeInTheDocument()
-    expect(screen.getByText('Resumen de eventos')).toBeInTheDocument()
+    expect(await screen.findByText('Próximos eventos')).toBeInTheDocument()
   })
 
   it('on a definitively anonymous session, never renders private content and starts visible authorization exactly once', async () => {
@@ -1135,13 +1155,13 @@ describe('Private route boundary — authentication guard', () => {
     mockedBeginAuthorization.mockResolvedValue('https://auth.sgeb.mediocres.mx/authorize')
 
     await renderAt('/panel')
-    expect(screen.getByText('Resumen de eventos')).toBeInTheDocument()
+    expect(await screen.findByText('Próximos eventos')).toBeInTheDocument()
 
     act(() => {
       useOidcSessionStore.getState().setAnonymous()
     })
 
-    expect(screen.queryByText('Resumen de eventos')).not.toBeInTheDocument()
+    expect(screen.queryByText('Próximos eventos')).not.toBeInTheDocument()
     expect(
       screen.queryByRole('navigation', { name: 'Navegación principal' }),
     ).not.toBeInTheDocument()

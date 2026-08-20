@@ -16,20 +16,20 @@ export interface WaitersContentProps {
   onRetry?: () => void
   filters: WaitersFilterState
   onFilterChange: (filters: WaitersFilterState) => void
-  /** Omit to render every waiter as a non-interactive item — see `WaiterListItem`. */
+  /** Omit to render every waiter as a non-interactive item — no waiter-detail route exists yet. */
   onSelectWaiter?: (id: string) => void
-  /** Omit to render a genuinely disabled invite button — see `WaitersPageHeader`. */
-  onInvite?: () => void
+  onInvite: () => void
+  isInviteDisabled?: boolean
 }
 
 /**
- * The presentational waiters-page composition: header + filters +
+ * The presentational waiters-roster composition: header + filters +
  * exactly one of the four states (loading / error / empty / populated
- * list), selected purely from props — mirrors `EventsContent`'s
- * architecture. `WaitersPage` is a thin, fixture-backed wiring layer
- * around it (`isLoading={false}`, no `errorMessage`); real API
- * integration wires TanStack Query state into those same two props
- * without needing to change this component.
+ * list). `WaitersPage` wires `useWaitersQuery` into these props; the
+ * invitations roster (`InvitationsSection`) is a deliberately separate
+ * component rendered alongside this one, not nested inside it — an
+ * invited person has no `Usuario` row yet, so it is never one of these
+ * `waiters`.
  */
 export function WaitersContent({
   waiters,
@@ -40,10 +40,11 @@ export function WaitersContent({
   onFilterChange,
   onSelectWaiter,
   onInvite,
+  isInviteDisabled = false,
 }: WaitersContentProps) {
   return (
     <div className="flex flex-col gap-6">
-      <WaitersPageHeader onInvite={onInvite} />
+      <WaitersPageHeader onInvite={onInvite} isInviteDisabled={isInviteDisabled} />
       <WaitersFilters filters={filters} onFilterChange={onFilterChange} />
 
       {isLoading ? (

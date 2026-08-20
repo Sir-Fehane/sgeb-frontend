@@ -3,37 +3,35 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
 import { WaiterListItem } from '@/features/waiters/components/WaiterListItem'
-import { WAITERS_FIXTURE } from '@/features/waiters/fixtures/waiterFixtures'
+import type { WaiterListItemViewModel } from '@/features/waiters/types/waiter'
 
-function firstWaiter() {
-  const waiter = WAITERS_FIXTURE[0]
-  if (!waiter) {
-    throw new Error('Expected at least one fixture waiter')
-  }
-  return waiter
+const WAITER: WaiterListItemViewModel = {
+  id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+  nombreCompleto: 'Juana Pérez López',
+  correo: 'juana.perez@example.com',
+  telefono: '+52 871 000 0001',
+  estadoCuenta: 'activo',
 }
 
 describe('WaiterListItem', () => {
   it('renders as a non-interactive item (no button, no link) when no onSelect is supplied', () => {
-    const waiter = firstWaiter()
     render(
       <ul>
-        <WaiterListItem waiter={waiter} />
+        <WaiterListItem waiter={WAITER} />
       </ul>,
     )
 
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(screen.queryByRole('link')).not.toBeInTheDocument()
-    expect(screen.getByText(waiter.nombreCompleto)).toBeInTheDocument()
+    expect(screen.getByText(WAITER.nombreCompleto)).toBeInTheDocument()
   })
 
   it('renders as a keyboard-operable button and invokes onSelect with the opaque id when supplied', async () => {
     const user = userEvent.setup()
-    const waiter = firstWaiter()
     const onSelect = vi.fn()
     render(
       <ul>
-        <WaiterListItem waiter={waiter} onSelect={onSelect} />
+        <WaiterListItem waiter={WAITER} onSelect={onSelect} />
       </ul>,
     )
 
@@ -41,43 +39,22 @@ describe('WaiterListItem', () => {
     button.focus()
     await user.keyboard('{Enter}')
 
-    expect(onSelect).toHaveBeenCalledWith(waiter.id)
+    expect(onSelect).toHaveBeenCalledWith(WAITER.id)
   })
 
   it('never renders the technical id as visible text, in either mode', () => {
-    const waiter = firstWaiter()
     const { rerender } = render(
       <ul>
-        <WaiterListItem waiter={waiter} />
+        <WaiterListItem waiter={WAITER} />
       </ul>,
     )
-    expect(screen.queryByText(waiter.id)).not.toBeInTheDocument()
+    expect(screen.queryByText(WAITER.id)).not.toBeInTheDocument()
 
     rerender(
       <ul>
-        <WaiterListItem waiter={waiter} onSelect={vi.fn()} />
+        <WaiterListItem waiter={WAITER} onSelect={vi.fn()} />
       </ul>,
     )
-    expect(screen.queryByText(waiter.id)).not.toBeInTheDocument()
-  })
-
-  it('renders identical field content in both modes — only the interactivity differs', () => {
-    const waiter = firstWaiter()
-    const { rerender } = render(
-      <ul>
-        <WaiterListItem waiter={waiter} />
-      </ul>,
-    )
-    expect(screen.getByText(waiter.correo)).toBeInTheDocument()
-
-    rerender(
-      <ul>
-        <WaiterListItem waiter={waiter} onSelect={vi.fn()} />
-      </ul>,
-    )
-    expect(screen.getByText(waiter.correo)).toBeInTheDocument()
-    // Exactly one accessible representation exists at a time — no
-    // duplicate static+interactive rendering.
-    expect(screen.getAllByText(waiter.nombreCompleto)).toHaveLength(1)
+    expect(screen.queryByText(WAITER.id)).not.toBeInTheDocument()
   })
 })

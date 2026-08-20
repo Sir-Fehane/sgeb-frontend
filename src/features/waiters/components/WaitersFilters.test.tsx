@@ -1,25 +1,59 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 
 import { WaitersFilters } from '@/features/waiters/components/WaitersFilters'
-import { DEFAULT_WAITERS_FILTER_STATE } from '@/features/waiters/types/waiter'
+import {
+  DEFAULT_WAITERS_FILTER_STATE,
+  type WaitersFilterState,
+} from '@/features/waiters/types/waiter'
+
+/**
+ * `WaitersFilters` is a controlled component — typing into "Buscar" only
+ * shows more than one real character if the caller actually re-renders
+ * with the updated `filters.search` between keystrokes, exactly like the
+ * real `WaitersPage` does. A static `filters` prop would make every
+ * keystroke reset the field back to its original value.
+ */
+function ControlledWaitersFilters({
+  onFilterChange,
+}: {
+  onFilterChange: (filters: WaitersFilterState) => void
+}) {
+  const [filters, setFilters] = useState(DEFAULT_WAITERS_FILTER_STATE)
+  return (
+    <WaitersFilters
+      filters={filters}
+      onFilterChange={(next) => {
+        setFilters(next)
+        onFilterChange(next)
+      }}
+    />
+  )
+}
 
 describe('WaitersFilters', () => {
-  it('renders exactly the one documented filter (estado de cuenta) and no others', () => {
+  it('renders the two real, server-backed filters: search (q) and estado de cuenta (activo)', () => {
     render(
       <WaitersFilters filters={DEFAULT_WAITERS_FILTER_STATE} onFilterChange={vi.fn()} />,
     )
 
+    expect(screen.getByLabelText('Buscar')).toBeInTheDocument()
     expect(screen.getByLabelText('Estado de cuenta')).toBeInTheDocument()
+  })
 
-    // No undocumented filter — no text search, invitation status,
-    // availability, or event-assignment filter is documented.
-    expect(screen.queryByRole('searchbox')).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(/buscar/i)).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(/invitaci[oó]n/i)).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(/disponibilidad/i)).not.toBeInTheDocument()
-    expect(screen.queryByLabelText(/evento/i)).not.toBeInTheDocument()
+  it('invokes onFilterChange with the updated search text', async () => {
+    const user = userEvent.setup()
+    const onFilterChange = vi.fn()
+    render(<ControlledWaitersFilters onFilterChange={onFilterChange} />)
+
+    await user.type(screen.getByLabelText('Buscar'), 'Juana')
+
+    expect(onFilterChange).toHaveBeenLastCalledWith({
+      ...DEFAULT_WAITERS_FILTER_STATE,
+      search: 'Juana',
+    })
   })
 
   it('invokes onFilterChange with the updated estadoCuenta when changed', async () => {
@@ -45,7 +79,7 @@ describe('WaitersFilters', () => {
     const onFilterChange = vi.fn()
     render(
       <WaitersFilters
-        filters={{ estadoCuenta: 'inactivo' }}
+        filters={{ estadoCuenta: 'inactivo', search: 'algo' }}
         onFilterChange={onFilterChange}
       />,
     )

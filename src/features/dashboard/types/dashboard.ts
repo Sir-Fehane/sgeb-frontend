@@ -1,155 +1,73 @@
+import type { EventStatus, EventType } from '@/features/events/types/event'
+
 /**
- * UI domain types for the SGEB captain dashboard, derived directly from
- * docs/api/openapi-sgeb.yaml v1.6.0's `DashboardCapitan` and
- * `AlertaOperativa` schemas (`GET /dashboard/capitan`). Every type below
- * states whether it mirrors the OpenAPI schema field-for-field
- * (camelCase renaming only) or is a presentation-only construct.
+ * UI domain types for the SGEB captain dashboard (`GET /dashboard/capitan`).
  *
- * Every event/alert identifier here is an opaque presentation value —
- * never parsed, validated, or used to construct a route (no
- * event-detail or live-operation route is approved this branch).
+ * Confirmed directly against the pinned backend's `DashboardService.capitan`
+ * (`app/modules/dashboard/services/dashboard_service.ts`) and
+ * `DashboardController.capitan` — not against `docs/api/openapi-sgeb.yaml`,
+ * whose `DashboardCapitan` schema (query params `fecha_desde`/`fecha_hasta`/
+ * `secciones`, sections `resumen`/`staffing_riesgo`/`operacion`/`cierre`/
+ * `alertas`, `SGEB-0004` partial success) does not match the live
+ * controller/service code at all: the real endpoint takes no query
+ * parameters, never returns partial success (`responder.ok`, never
+ * `responder.parcial`), and has none of those sections. See this branch's
+ * report for the full mismatch writeup. This type mirrors the ACTUAL
+ * response — a portfolio-level events overview, nothing else. The richer
+ * per-event operational concepts the yaml describes (staffing, montaje,
+ * piso, barra, servicio/comensal, cierre, alertas) do exist, but one level
+ * down, on `GET /eventos/{id}/dashboard` — out of scope for this page.
  */
 
 /**
- * `EVENTO.estado` — the same enum openapi-sgeb.yaml documents for
- * `proximos_eventos[].estado`. Defined locally (not imported from
- * `features/events`) so this feature stays decoupled — see
- * `features/events/types/event.ts` for the events feature's own copy.
+ * One event row as embedded in `en_curso`/`proximos`/`por_cerrar` — the
+ * `Evento` model's own `@column` fields, always serialized regardless of
+ * which relations were preloaded (`app/modules/eventos/models/evento.ts`).
+ * `capitan` is deliberately absent from this type: `DashboardService.capitan`
+ * queries the captain's own events without `.preload('capitan')`, so that
+ * relation never appears in this endpoint's response (Lucid only serializes
+ * a preloaded relation) — unlike `features/events/types/event.ts`'s
+ * `EventListItemViewModel`, which comes from `GET /eventos` and does
+ * preload it.
  */
-export type DashboardEventStatus =
-  'borrador' | 'publicado' | 'en_curso' | 'finalizado' | 'cancelado'
-
-/** `AlertaOperativa.tipo` — exact enum, no other values documented. */
-export type AlertType =
-  | 'botella_vacia'
-  | 'insumo_agotado'
-  | 'cubaitor_sin_conexion'
-  | 'dispensado_error'
-  | 'checklist_pendiente'
-  | 'llegada_fallida'
-  | 'calificacion_baja'
-
-/** `AlertaOperativa.severidad` — exact enum. */
-export type AlertSeverity = 'informativa' | 'atencion' | 'critica'
-
-/** `AlertaOperativa.estado` — exact enum. */
-export type AlertState = 'abierta' | 'atendida'
-
-/** Mirrors `DashboardCapitan.rango` exactly. */
-export interface DashboardRange {
-  fechaDesde: string
-  fechaHasta: string
-}
-
-/**
- * Mirrors `DashboardCapitan.resumen` exactly (a count object, not a
- * presentation model) — `null` when excluded via `secciones` or
- * unavailable per SGEB-0004.
- */
-export interface DashboardResumen {
-  total: number
-  borrador: number
-  publicados: number
-  enCurso: number
-  finalizados: number
-  cancelados: number
-}
-
-/**
- * Mirrors one item of `DashboardCapitan.proximos_eventos` exactly.
- */
-export interface UpcomingEventViewModel {
-  idEvento: string
+export interface DashboardEventViewModel {
+  idEvento: number
+  idSalon: number
   titulo: string
+  tipo: EventType
   fecha: string
   horaPresentacion: string
-  salon: string
-  estado: DashboardEventStatus
+  inicio: string
+  fin: string | null
   cupoMeseros: number
-  confirmados: number
-  porcentajeCobertura: number
+  numMesas: number
+  tarifaPorMesero: number
+  estado: EventStatus
+  /**
+   * Present only for `enCurso`/`proximos` rows: `DashboardService.capitan`
+   * preloads `salon` for the query those two come from, but NOT for
+   * `por_cerrar` (a separate, unrelated query with no `.preload` at all) —
+   * so this field is genuinely absent on `porCerrar` rows, not just
+   * unpopulated. Rendered with the same "pendiente de integración" fallback
+   * `EventListItem` already uses for the same reason.
+   */
+  salonNombre?: string
 }
 
 /**
- * Mirrors one item of `DashboardCapitan.staffing_riesgo` exactly —
- * documented as the actionable source for an "Invitar meseros" action
- * (see `StaffingRiskSection`'s comment for why that action is disabled
- * on this branch).
- */
-export interface StaffingRiskViewModel {
-  idEvento: string
-  titulo: string
-  horasParaInicio: number
-  faltantes: number
-}
-
-/**
- * Mirrors `DashboardCapitan.operacion` exactly. `idEvento`/`titulo` are
- * both `null` when there is no event currently `en_curso` — that is a
- * valid, documented state, not "unavailable".
- */
-export interface CurrentOperationViewModel {
-  idEvento: string | null
-  titulo: string | null
-  meserosEnPiso: number
-  mesasOcupadas: number
-  mesasTotal: number
-  ordenesActivas: number
-  solicitudesPendientes: number
-}
-
-/** Mirrors `DashboardCapitan.cierre` exactly. */
-export interface ClosingSummaryViewModel {
-  eventosSinPagosCalculados: number
-  pagosPendientes: number
-  montoPendiente: number
-  mermaCostoEstimado: number
-  calificacionPromedio: number | null
-}
-
-/**
- * Mirrors the presentation-relevant fields of `AlertaOperativa`.
- * `technical_message` does not exist on this schema and must never be
- * rendered; `codigoRelacionado` is kept only for support-facing
- * traceability, never as the primary user-facing message (`mensaje` is).
- */
-export interface OperationalAlertViewModel {
-  idAlerta: string
-  tipo: AlertType
-  severidad: AlertSeverity
-  mensaje: string
-  codigoRelacionado: string | null
-  estado: AlertState
-  creadaEn: string
-}
-
-/**
- * Presentation model for the full dashboard payload — mirrors
- * `DashboardCapitan` field-for-field, with every section kept nullable
- * exactly as documented. This is a necessary camelCase re-typing of a
- * schema that *is* fully documented (unlike the events/waiters
- * features' synthesized view models), so this one may be treated as an
- * accurate mirror of the OpenAPI contract, not a guess.
+ * Mirrors `DashboardCapitan`'s real, confirmed shape field-for-field
+ * (camelCase renaming only). Every field is always present — the real
+ * endpoint has no `null`/partial-success semantics at all.
  */
 export interface CaptainDashboardViewModel {
-  generadoEn: string
-  rango: DashboardRange
-  resumen: DashboardResumen | null
-  proximosEventos: readonly UpcomingEventViewModel[] | null
-  staffingRiesgo: readonly StaffingRiskViewModel[] | null
-  operacion: CurrentOperationViewModel | null
-  cierre: ClosingSummaryViewModel | null
-  alertas: readonly OperationalAlertViewModel[] | null
-}
-
-/**
- * Local, typed filter state for the date-range controls — mirrors
- * `fecha_desde`/`fecha_hasta` exactly. `secciones` is deliberately NOT
- * modeled here: it is a future request-optimization parameter, not a
- * documented user-facing filter/wireframe control (see
- * `DashboardDateRangeFilters`'s comment).
- */
-export interface DashboardDateFilterState {
-  fechaDesde: string
-  fechaHasta: string
+  enCurso: readonly DashboardEventViewModel[]
+  proximos: readonly DashboardEventViewModel[]
+  /** Count only — the real endpoint does not return the draft events themselves, just how many exist. */
+  borradores: number
+  porCerrar: readonly DashboardEventViewModel[]
+  totales: {
+    enCurso: number
+    proximos: number
+    porCerrar: number
+  }
 }

@@ -1,50 +1,37 @@
-import { IconInfoCircle } from '@tabler/icons-react'
-import { useState } from 'react'
-
 import { CaptainDashboardContent } from '@/features/dashboard/components/CaptainDashboardContent'
-import { CAPTAIN_DASHBOARD_FIXTURE } from '@/features/dashboard/fixtures/dashboardFixtures'
-import type { DashboardDateFilterState } from '@/features/dashboard/types/dashboard'
-import { getDefaultDashboardDateFilterState } from '@/features/dashboard/utils/dashboardDateRange'
-import { Alert, Text } from '@/shared/components'
+import { useCaptainDashboardQuery } from '@/features/dashboard/queries/useCaptainDashboardQuery'
+import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
 
 /**
- * Routed at /panel. Entirely presentation-only: `CAPTAIN_DASHBOARD_FIXTURE`
- * is development/demo data (see features/dashboard/fixtures), never a
- * real `GET /dashboard/capitan` response. No development-state selector
- * exists — this page only ever shows the populated fixture.
- * `DashboardLoadingState`/`DashboardErrorState`/the SGEB-0004 partial
- * warning remain fully implemented and independently testable through
- * `CaptainDashboardContent`'s own props.
- *
- * Neither `onSelectEvent` nor `onInviteWaiters` is supplied here: no
- * event-detail route is approved (upcoming-event rows render as
- * non-interactive items — see `UpcomingEventItem`), and the waiter-
- * invitation contract remains unresolved (the "Invitar meseros" button
- * renders genuinely disabled — see `StaffingRiskSection`).
+ * Never renders `technical_message` — mirrors `EventsPage`'s
+ * `toSafeErrorMessage`.
+ */
+function toSafeErrorMessage(error: unknown): string {
+  if (isSgebApplicationError(error) || isSgebNetworkError(error)) {
+    return error.message
+  }
+  return 'Ocurrió un error inesperado al cargar el panel.'
+}
+
+/**
+ * Routed at /panel. Live `GET /dashboard/capitan` wiring around
+ * `CaptainDashboardContent` — replaces the previous fixture-backed
+ * foundation (`CAPTAIN_DASHBOARD_FIXTURE`) entirely; see this branch's
+ * report for why the dashboard was rebuilt around a materially different,
+ * simpler shape than the one the fixture/types previously assumed.
  */
 export function CaptainDashboardPage() {
-  const [filters, setFilters] = useState<DashboardDateFilterState>(
-    getDefaultDashboardDateFilterState(),
-  )
+  const dashboardQuery = useCaptainDashboardQuery()
 
   return (
     <div className="flex flex-col gap-6">
-      <Alert
-        tone="info"
-        icon={<IconInfoCircle aria-hidden="true" />}
-        title="Datos de desarrollo"
-      >
-        <Text size="sm">
-          El panel mostrado usa datos de desarrollo (
-          <code>features/dashboard/fixtures</code>), no información real.
-        </Text>
-      </Alert>
-
       <CaptainDashboardContent
-        dashboard={CAPTAIN_DASHBOARD_FIXTURE}
-        isLoading={false}
-        filters={filters}
-        onFilterChange={setFilters}
+        {...(dashboardQuery.data ? { dashboard: dashboardQuery.data } : {})}
+        isLoading={dashboardQuery.isPending}
+        {...(dashboardQuery.error
+          ? { errorMessage: toSafeErrorMessage(dashboardQuery.error) }
+          : {})}
+        onRetry={() => void dashboardQuery.refetch()}
       />
     </div>
   )
