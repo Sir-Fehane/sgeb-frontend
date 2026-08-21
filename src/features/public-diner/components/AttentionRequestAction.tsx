@@ -7,9 +7,9 @@ import type {
 } from '@/features/public-diner/types/publicDiner'
 import { Alert, Button, HelperText, Text } from '@/shared/components'
 
-const DEFAULT_SUCCESS_MESSAGE = 'Avisamos a tu mesero.'
+const DEFAULT_SUCCESS_MESSAGE = 'Hemos avisado a tu mesero. En un momento te atenderá.'
 const DEFAULT_THROTTLED_MESSAGE =
-  'Ya avisamos a tu mesero. Dale unos momentos para atenderte.'
+  'Tu mesero ya fue avisado. Dale un momento para atenderte.'
 
 export interface AttentionRequestActionProps {
   status: ServiceRequestStatus

@@ -13,7 +13,7 @@ import { cn } from '@/shared/utils/cn'
 const buttonVariants = cva(
   [
     'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg',
-    'font-sans text-body-sm font-medium transition-colors',
+    'font-sans text-body-sm font-medium transition-[color,background-color,filter]',
     'disabled:pointer-events-none disabled:opacity-50',
     'focus-visible:ring-ring focus-visible:ring-offset-background focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none',
     '[&_svg]:size-4 [&_svg]:shrink-0',
@@ -21,7 +21,24 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary: 'bg-primary text-primary-foreground hover:bg-primary/90',
+        /**
+         * `hover:brightness-90` (a filter, not `hover:bg-primary/90`
+         * opacity): `--primary` (`#c44d25`) already sits at a
+         * deliberately thin 4.53:1 against `--primary-foreground`
+         * (`#fafaf8` — see `globals.css`'s own audited derivation).
+         * `/90` opacity blends the background *toward whatever sits
+         * behind it* — the page's `--background` (`#fafaf8`, near-white)
+         * — which *lightens* an already-dark fill and measurably drops
+         * the hover state to ~3.9:1, failing WCAG AA for normal text
+         * (confirmed against real manual smoke testing: the label
+         * visibly loses contrast on hover). `brightness-90` instead
+         * darkens the rendered color in place, independent of backdrop,
+         * landing at ~5.4:1 — comfortably passing, and the conventional
+         * "hover = darker" affordance besides. Reuses the same
+         * `--primary`/`--primary-foreground` tokens throughout; nothing
+         * here is a new hardcoded color.
+         */
+        primary: 'bg-primary text-primary-foreground hover:brightness-90',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         outline: 'border-border bg-background text-foreground hover:bg-accent border',
         ghost: 'text-foreground hover:bg-accent',

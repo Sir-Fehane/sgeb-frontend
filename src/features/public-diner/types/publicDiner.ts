@@ -1,34 +1,40 @@
 /**
- * UI domain types for the anonymous public diner (comensal) experience,
- * derived from docs/api/openapi-sgeb.yaml v1.6.0's `/publico/mesas/{codigo_qr}*`
- * endpoints. This feature is architecturally independent of the
+ * UI domain types for the anonymous public diner (comensal) experience.
+ * Confirmed against the pinned backend's actual routes/controllers/tests
+ * (`sgeb-backend` branch `hotfix/local-db-ssl`,
+ * `app/modules/eventos/controllers/publico_controller.ts` and
+ * `app/modules/comensal/controllers/comensal_controller.ts`), not just the
+ * OpenAPI doc — the doc's inline response schema for `GET
+ * /publico/mesas/{codigo_qr}` lists `mesero`/`token_comensal` fields the
+ * real controller never sends; those fields do not exist anywhere in this
+ * feature. This feature is architecturally independent of the
  * authenticated captain/admin console — no SSO, no Bearer token, no
  * derived role, no shared Zustand session store.
  */
 
+/** `EVENTO.estado` lifecycle — mirrors the backend's own `EventoEstado` union. `GET /publico/mesas/{codigo_qr}` only ever resolves while the event is `publicado`/`en_curso` (any other state 404s as an unknown QR before this value could be observed), but the full union is kept here rather than narrowed, since nothing about this type asserts that access rule. */
+export type PublicDinerEventoEstado =
+  'borrador' | 'publicado' | 'en_curso' | 'finalizado' | 'cancelado'
+
 /**
- * Mirrors `GET /publico/mesas/{codigo_qr}`'s response `data` object
- * field-for-field. NOT an API DTO in the strict sense — the OpenAPI
- * schema documents this response inline (no named component schema),
- * so this is a direct transcription, not a `$ref`.
+ * Mirrors `GET /publico/mesas/{codigo_qr}`'s actual response `data` object
+ * field-for-field (`PublicoController#mesa`) — no mesero data of any kind,
+ * no `token_comensal` (that is issued only by the separate `POST
+ * /publico/mesas/{codigo_qr}/token`, requested lazily when a rating is
+ * about to be submitted — see `services/publicDinerApi.ts`).
  */
 export interface PublicDinerTableViewModel {
+  idMesa: number
   /** `etiqueta` — e.g. "Mesa 12". The only table-identifying text ever shown. */
   etiqueta: string
-  /** `mesero` — e.g. "Juan P.". The assigned waiter's display name only. */
-  mesero: string
-  /**
-   * `token_comensal` — an opaque UUID that limits the diner to one
-   * rating. Supplied internally to the page/container from the route's
-   * data; NEVER rendered, never user-entered, never validated as an
-   * identity, and never persisted to `localStorage`/`sessionStorage`
-   * (browser-persistence ownership is an integration decision this
-   * branch does not make — see the README's "Token ambiguity" note).
-   */
-  tokenComensal: string
+  evento: {
+    idEvento: number
+    titulo: string
+    estado: PublicDinerEventoEstado
+  }
 }
 
-/** `POST /publico/mesas/{codigo_qr}/solicitudes`'s documented `tipo` enum — only `atencion` is exposed by this UI. */
+/** `POST /publico/mesas/{codigo_qr}/solicitudes`'s documented `tipo` enum — only `atencion` is exposed by this UI (docs/decisions.md: no "Pedir cuenta", no "otro"). */
 export type ServiceRequestType = 'atencion'
 
 /**

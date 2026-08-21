@@ -51,6 +51,14 @@ describe('Button', () => {
     expect(onClick).not.toHaveBeenCalled()
   })
 
+  it('darkens the primary variant on hover via a brightness filter, never an opacity blend that would lighten it against the page background', () => {
+    render(<Button>Guardar</Button>)
+
+    const button = screen.getByRole('button', { name: 'Guardar' })
+    expect(button.className).toContain('hover:brightness-90')
+    expect(button.className).not.toContain('hover:bg-primary/90')
+  })
+
   it('renders asChild normally, styling the single child element', () => {
     render(
       <Button asChild>

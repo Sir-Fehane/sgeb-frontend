@@ -5,21 +5,27 @@ import { PublicDinerHeader } from '@/features/public-diner/components/PublicDine
 
 describe('PublicDinerHeader', () => {
   it('renders etiqueta as the one clear h1', () => {
-    render(<PublicDinerHeader etiqueta="Mesa 12" mesero="Luis R." />)
+    render(<PublicDinerHeader etiqueta="Mesa 12" eventoTitulo="Boda García" />)
 
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1)
     expect(screen.getByRole('heading', { level: 1, name: 'Mesa 12' })).toBeInTheDocument()
   })
 
-  it('renders the assigned waiter name', () => {
-    render(<PublicDinerHeader etiqueta="Mesa 12" mesero="Luis R." />)
+  it('renders the event title', () => {
+    render(<PublicDinerHeader etiqueta="Mesa 12" eventoTitulo="Boda García" />)
 
-    expect(screen.getByText('Te atiende: Luis R.')).toBeInTheDocument()
+    expect(screen.getByText('Boda García')).toBeInTheDocument()
   })
 
-  it('invents no event, venue, or captain data', () => {
-    render(<PublicDinerHeader etiqueta="Mesa 12" mesero="Luis R." />)
+  it('renders no mesero/waiter name — the real GET /publico/mesas/{codigo_qr} response never includes one', () => {
+    render(<PublicDinerHeader etiqueta="Mesa 12" eventoTitulo="Boda García" />)
 
-    expect(screen.queryByText(/evento|salón|capitán/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/te atiende/i)).not.toBeInTheDocument()
+  })
+
+  it('invents no venue or captain data', () => {
+    render(<PublicDinerHeader etiqueta="Mesa 12" eventoTitulo="Boda García" />)
+
+    expect(screen.queryByText(/salón|capitán/i)).not.toBeInTheDocument()
   })
 })

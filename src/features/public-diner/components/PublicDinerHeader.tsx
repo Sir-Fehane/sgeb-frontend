@@ -2,16 +2,21 @@ import { Caption, PageTitle, Text } from '@/shared/components'
 
 export interface PublicDinerHeaderProps {
   etiqueta: string
-  mesero: string
+  eventoTitulo: string
 }
 
 /**
  * The one `<h1>` for this route — `etiqueta` (the table label), per the
  * documented content hierarchy: brand identity (decorative), then the
- * table label as the main context, then the assigned waiter's name. No
- * avatar (no approved photo source), no fake online status, no
- * event/venue metadata — none of that is part of the documented mesa
- * response.
+ * table label as the main context, then the event title. No mesero name
+ * here: `GET /publico/mesas/{codigo_qr}`'s actual response
+ * (`PublicoController#mesa`) never sends one — its own doc comment is
+ * explicit that this view exists precisely so an anonymous request never
+ * learns "datos del mesero." `eventoTitulo` is shown because the same
+ * comment draws the line at the event, not the table, as the boundary of
+ * what's safe to expose ("nunca... datos del mesero, ni del evento más
+ * allá del título"). No avatar, no fake online status, no other
+ * event/venue metadata beyond that.
  *
  * Deliberately a plain `<div>`, not a `<header>`: this codebase's
  * `<header>` elements resolve to the `banner` landmark role (see
@@ -19,7 +24,7 @@ export interface PublicDinerHeaderProps {
  * single-purpose mobile page has nothing worth landmark-navigating past,
  * so it doesn't need its own landmark region.
  */
-export function PublicDinerHeader({ etiqueta, mesero }: PublicDinerHeaderProps) {
+export function PublicDinerHeader({ etiqueta, eventoTitulo }: PublicDinerHeaderProps) {
   return (
     <div className="flex flex-col items-center gap-2 text-center">
       <span
@@ -31,7 +36,7 @@ export function PublicDinerHeader({ etiqueta, mesero }: PublicDinerHeaderProps) 
       <Caption>SGEB</Caption>
       <PageTitle className="text-heading">{etiqueta}</PageTitle>
       <Text size="sm" className="text-muted-foreground">
-        Te atiende: {mesero}
+        {eventoTitulo}
       </Text>
     </div>
   )

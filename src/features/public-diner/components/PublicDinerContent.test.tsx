@@ -6,12 +6,19 @@ import {
   PublicDinerContent,
   type PublicDinerContentProps,
 } from '@/features/public-diner/components/PublicDinerContent'
-import { PUBLIC_DINER_TABLE_FIXTURE } from '@/features/public-diner/fixtures/publicDinerFixtures'
+import type { PublicDinerTableViewModel } from '@/features/public-diner/types/publicDiner'
+
+/** Test-only literal, not the deleted production fixture — mirrors `GET /publico/mesas/{codigo_qr}`'s real response shape. */
+const TABLE: PublicDinerTableViewModel = {
+  idMesa: 12,
+  etiqueta: 'Mesa 12',
+  evento: { idEvento: 1001, titulo: 'Boda García', estado: 'en_curso' },
+}
 
 function renderContent(overrides: Partial<PublicDinerContentProps> = {}) {
   render(
     <PublicDinerContent
-      table={PUBLIC_DINER_TABLE_FIXTURE}
+      table={TABLE}
       requestStatus="idle"
       ratingStatus="idle"
       {...overrides}
@@ -24,14 +31,9 @@ describe('PublicDinerContent', () => {
     renderContent()
 
     expect(
-      screen.getByRole('heading', {
-        level: 1,
-        name: PUBLIC_DINER_TABLE_FIXTURE.etiqueta,
-      }),
+      screen.getByRole('heading', { level: 1, name: TABLE.etiqueta }),
     ).toBeInTheDocument()
-    expect(
-      screen.getByText(`Te atiende: ${PUBLIC_DINER_TABLE_FIXTURE.mesero}`),
-    ).toBeInTheDocument()
+    expect(screen.getByText(TABLE.evento.titulo)).toBeInTheDocument()
   })
 
   it('renders only the loading state when isLoading is true — no table context, no actions', () => {
@@ -67,9 +69,7 @@ describe('PublicDinerContent', () => {
     renderContent({ errorMessage: 'Ocurrió un problema inesperado.' })
 
     expect(screen.getByText('Ocurrió un problema inesperado.')).toBeInTheDocument()
-    expect(
-      screen.queryByText(PUBLIC_DINER_TABLE_FIXTURE.etiqueta),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByText(TABLE.etiqueta)).not.toBeInTheDocument()
     expect(
       screen.queryByRole('button', { name: 'Llamar al mesero' }),
     ).not.toBeInTheDocument()
@@ -83,23 +83,6 @@ describe('PublicDinerContent', () => {
     await user.click(screen.getByRole('button', { name: 'Reintentar' }))
 
     expect(onRetry).toHaveBeenCalledOnce()
-  })
-
-  it('never renders tokenComensal anywhere, in any state', () => {
-    renderContent()
-    expect(
-      screen.queryByText(PUBLIC_DINER_TABLE_FIXTURE.tokenComensal),
-    ).not.toBeInTheDocument()
-
-    renderContent({ isLoading: true })
-    expect(
-      screen.queryByText(PUBLIC_DINER_TABLE_FIXTURE.tokenComensal),
-    ).not.toBeInTheDocument()
-
-    renderContent({ notFound: true })
-    expect(
-      screen.queryByText(PUBLIC_DINER_TABLE_FIXTURE.tokenComensal),
-    ).not.toBeInTheDocument()
   })
 
   it('wires the attention request and rating callbacks through to the child components', async () => {

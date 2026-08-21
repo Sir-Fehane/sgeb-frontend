@@ -44,6 +44,44 @@ describe('RatingForm', () => {
     expect(fiveStars).toBeChecked()
   })
 
+  it('is keyboard operable via native radio-group arrow-key navigation, without any hand-rolled key handling', async () => {
+    const user = userEvent.setup()
+    render(<RatingForm status="idle" onSubmitRating={vi.fn()} />)
+
+    screen.getByRole('radio', { name: '1 de 5 — Pésimo' }).focus()
+    await user.keyboard('{ArrowRight}{ArrowRight}')
+
+    expect(screen.getByRole('radio', { name: '3 de 5' })).toBeChecked()
+  })
+
+  function labelFor(name: string) {
+    return screen.getByRole('radio', { name }).closest('label')
+  }
+
+  it('fills every star up to and including the selected score, not only the exact star tapped', async () => {
+    const user = userEvent.setup()
+    render(<RatingForm status="idle" onSubmitRating={vi.fn()} />)
+
+    await user.click(screen.getByRole('radio', { name: '3 de 5' }))
+
+    expect(labelFor('1 de 5 — Pésimo')).toHaveClass('border-primary')
+    expect(labelFor('2 de 5')).toHaveClass('border-primary')
+    expect(labelFor('3 de 5')).toHaveClass('border-primary')
+    expect(labelFor('4 de 5')).not.toHaveClass('border-primary')
+    expect(labelFor('5 de 5 — Excelente')).not.toHaveClass('border-primary')
+  })
+
+  it('only the exact chosen score is natively `checked`, even though 1-3 are all visually filled', async () => {
+    const user = userEvent.setup()
+    render(<RatingForm status="idle" onSubmitRating={vi.fn()} />)
+
+    await user.click(screen.getByRole('radio', { name: '3 de 5' }))
+
+    expect(screen.getByRole('radio', { name: '1 de 5 — Pésimo' })).not.toBeChecked()
+    expect(screen.getByRole('radio', { name: '2 de 5' })).not.toBeChecked()
+    expect(screen.getByRole('radio', { name: '3 de 5' })).toBeChecked()
+  })
+
   it('invokes the callback with only puntuacion and comentario — never tokenComensal', async () => {
     const user = userEvent.setup()
     const onSubmitRating = vi.fn()

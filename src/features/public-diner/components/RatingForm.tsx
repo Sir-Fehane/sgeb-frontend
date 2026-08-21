@@ -42,11 +42,18 @@ const SCORE_OPTIONS: readonly { value: 1 | 2 | 3 | 4 | 5; label: string }[] = [
 /**
  * A controlled, accessible rating form — native `<input type="radio">`
  * elements inside a `<fieldset>`/`<legend>` (real radio-group semantics
- * for free, no hand-rolled `role="radio"` bookkeeping). Star icons are a
- * decorative enhancement only (`aria-hidden`); each label's accessible
- * name comes from one visible-to-AT span ("1 de 5 — Pésimo", etc.) — see
+ * for free, no hand-rolled `role="radio"` bookkeeping, and native
+ * arrow-key navigation between options within the group for free too —
+ * no extra keyboard handling needed). Star icons are a decorative
+ * enhancement only (`aria-hidden`); each label's accessible name comes
+ * from one visible-to-AT span ("1 de 5 — Pésimo", etc.) — see
  * `SCORE_OPTIONS`. Selection is shown via icon shape (outline → filled)
- * plus a border change, never color alone.
+ * plus a border change, never color alone. Fill is cumulative — choosing
+ * 3 visually fills stars 1–3, matching the conventional star-rating
+ * reading (★★★☆☆), not just the exact star tapped. Only ONE radio input
+ * is ever natively `checked` (the exact chosen value — required for
+ * correct assistive-technology semantics); `filled` below is a separate,
+ * purely visual prefix-fill computed from that same value.
  *
  * `token_comensal` is never part of this form — see
  * `PublicDinerRatingValues`'s doc comment.
@@ -119,13 +126,14 @@ export function RatingForm({
             >
               {SCORE_OPTIONS.map((option, index) => {
                 const checked = field.value === option.value
+                const filled = field.value !== undefined && option.value <= field.value
                 return (
                   <label
                     key={option.value}
                     className={cn(
                       'flex min-h-11 min-w-11 flex-1 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-lg border p-2',
                       'has-focus-visible:ring-ring has-focus-visible:ring-offset-background has-focus-visible:ring-2 has-focus-visible:ring-offset-2',
-                      checked ? 'border-primary bg-primary/10' : 'border-input',
+                      filled ? 'border-primary bg-primary/10' : 'border-input',
                     )}
                   >
                     <input
@@ -143,7 +151,7 @@ export function RatingForm({
                       ref={index === 0 ? field.ref : undefined}
                       className="sr-only"
                     />
-                    {checked ? (
+                    {filled ? (
                       <IconStarFilled
                         aria-hidden="true"
                         className="text-primary size-5"

@@ -54,7 +54,9 @@ describe('AttentionRequestAction', () => {
   it('renders safe success feedback without promising an arrival time', () => {
     render(<AttentionRequestAction status="success" onRequestAttention={vi.fn()} />)
 
-    expect(screen.getByText('Avisamos a tu mesero.')).toBeInTheDocument()
+    expect(
+      screen.getByText('Hemos avisado a tu mesero. En un momento te atenderá.'),
+    ).toBeInTheDocument()
     expect(screen.queryByText(/minuto|segundo|en camino/i)).not.toBeInTheDocument()
   })
 
@@ -62,7 +64,7 @@ describe('AttentionRequestAction', () => {
     render(<AttentionRequestAction status="throttled" onRequestAttention={vi.fn()} />)
 
     expect(
-      screen.getByText('Ya avisamos a tu mesero. Dale unos momentos para atenderte.'),
+      screen.getByText('Tu mesero ya fue avisado. Dale un momento para atenderte.'),
     ).toBeInTheDocument()
     expect(screen.queryByText('SGEB-4014')).not.toBeInTheDocument()
   })

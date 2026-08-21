@@ -2,9 +2,11 @@ import { SGEB_CODE } from '@/shared/api/sgebCodes'
 import type { ApiResult } from '@/shared/types/api'
 
 /**
- * Normalized error model for the authenticated SGEB transport
- * (`shared/api/sgebClient.ts`) — feature/UI layers depend on this, never on
- * `AxiosError` directly (docs/decisions.md ADR-005).
+ * Normalized error model shared by both SGEB transports —
+ * `shared/api/sgebClient.ts` (authenticated) and
+ * `shared/api/publicClient.ts` (anonymous `/publico/*`) — since both answer
+ * with the identical `{ result, data }` envelope. Feature/UI layers depend
+ * on this, never on `AxiosError` directly (docs/decisions.md ADR-005).
  *
  * Two kinds only, deliberately not a larger hierarchy (CLAUDE.md's "boring,
  * dependable transport boundary"):

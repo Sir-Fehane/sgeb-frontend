@@ -9,6 +9,8 @@ import { beginAuthorization } from '@/features/oidc-client/protocol/authorizatio
 import * as bootstrapModule from '@/features/oidc-client/protocol/bootstrap'
 import type { EventoApiRecord } from '@/features/events/services/eventsApi'
 import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
+import type { PublicRequestConfig } from '@/shared/api/publicClient'
+import { requestPublic } from '@/shared/api/publicClient'
 import { SgebApplicationError } from '@/shared/api/sgebApiError'
 import { requestSgeb, type SgebRequestConfig } from '@/shared/api/sgebClient'
 import type { ApiEnvelope } from '@/shared/types/api'
@@ -25,6 +27,18 @@ import type { ApiEnvelope } from '@/shared/types/api'
  */
 vi.mock('@/shared/api/sgebClient', () => ({
   requestSgeb: vi.fn(),
+}))
+
+/**
+ * `/publico/mesas/:codigoQr` reads through the separate anonymous
+ * transport (`feature/public-diner-live`) — mocked here for the same
+ * reason as `requestSgeb` above, so this file's public-diner routing
+ * assertions don't depend on an unmocked real network call.
+ * Public-diner-specific behavior (loading/error/mutations) has its own
+ * focused coverage in `PublicDinerPage.test.tsx`.
+ */
+vi.mock('@/shared/api/publicClient', () => ({
+  requestPublic: vi.fn(),
 }))
 
 const DETAIL_RECORD_1001: EventoApiRecord = {
@@ -209,6 +223,46 @@ function configureDefaultRequestSgebMock() {
   )
 }
 
+const PUBLIC_MESA_CODIGO_QR = 'a1b2c3d4-e5f6-4a1b-8c2d-000000000099'
+
+/**
+ * `GET /publico/mesas/{codigo_qr}` for the one QR every public-diner test
+ * in this file navigates to — this file only needs the page to reach its
+ * populated, non-loading state so its real content/no-chrome assertions
+ * are meaningful; the mesa/rating data itself has no bearing on routing.
+ * Any other `codigo_qr` resolves not-found (`SGEB-3003`), matching the
+ * pinned backend's real behavior for an unknown QR.
+ */
+function configureDefaultRequestPublicMock() {
+  vi.mocked(requestPublic).mockImplementation(
+    (config: PublicRequestConfig): Promise<ApiEnvelope<unknown>> => {
+      if (
+        config.method === 'GET' &&
+        config.url === `/publico/mesas/${PUBLIC_MESA_CODIGO_QR}`
+      ) {
+        return Promise.resolve({
+          result: { code: 'SGEB-0000', message: 'ok' },
+          data: {
+            id_mesa: 12,
+            etiqueta: 'Mesa 12',
+            evento: {
+              id_evento: 1001,
+              titulo: 'Evento de demostración',
+              estado: 'en_curso',
+            },
+          },
+        })
+      }
+      return Promise.reject(
+        new SgebApplicationError(404, {
+          code: 'SGEB-3003',
+          message: 'El código QR escaneado no corresponde a ninguna mesa activa.',
+        }),
+      )
+    },
+  )
+}
+
 /**
  * Hoisted, whole-module mock — deliberately not a per-test `vi.spyOn` — so
  * the REAL `beginAuthorization` (and therefore the real `getOidcConfig()`,
@@ -252,6 +306,7 @@ beforeEach(() => {
   vi.restoreAllMocks()
   mockedBeginAuthorization.mockReset()
   configureDefaultRequestSgebMock()
+  configureDefaultRequestPublicMock()
   authenticate()
 })
 
@@ -995,7 +1050,9 @@ describe('/publico/mesas/:codigoQr renders the anonymous public diner experience
   it('renders the public diner page, with no AppShell chrome', async () => {
     await renderAt('/publico/mesas/a1b2c3d4-e5f6-4a1b-8c2d-000000000099')
 
-    expect(screen.getByRole('button', { name: 'Llamar al mesero' })).toBeInTheDocument()
+    expect(
+      await screen.findByRole('button', { name: 'Llamar al mesero' }),
+    ).toBeInTheDocument()
     expect(
       screen.queryByRole('navigation', { name: 'Navegación principal' }),
     ).not.toBeInTheDocument()
@@ -1004,6 +1061,7 @@ describe('/publico/mesas/:codigoQr renders the anonymous public diner experience
   it('renders no AuthLayout content for the public diner route', async () => {
     await renderAt('/publico/mesas/a1b2c3d4-e5f6-4a1b-8c2d-000000000099')
 
+    await screen.findByRole('button', { name: 'Llamar al mesero' })
     expect(
       screen.queryByRole('heading', { name: 'Iniciar sesión' }),
     ).not.toBeInTheDocument()

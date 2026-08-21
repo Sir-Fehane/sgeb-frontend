@@ -16,23 +16,23 @@ import type {
 import { SectionHeading } from '@/shared/components'
 
 export interface PublicDinerContentProps {
-  table?: PublicDinerTableViewModel
-  isLoading?: boolean
+  table?: PublicDinerTableViewModel | undefined
+  isLoading?: boolean | undefined
   /** The mesa resource itself is unavailable (invalid/expired QR, documented 404) — distinct from a crash. */
-  notFound?: boolean
+  notFound?: boolean | undefined
   /** A genuine unexpected failure — never raw `Error.message`/`technical_message`. */
-  errorMessage?: string
-  onRetry?: () => void
+  errorMessage?: string | undefined
+  onRetry?: (() => void) | undefined
   requestStatus: ServiceRequestStatus
-  requestMessage?: string
-  /** Overrides the default "Avisamos a tu mesero." success copy — see `AttentionRequestAction`. */
-  requestSuccessMessage?: string
-  onRequestAttention?: (request: PublicDinerAttentionRequest) => void
+  requestMessage?: string | undefined
+  /** Overrides the default "Hemos avisado a tu mesero. En un momento te atenderá." success copy — see `AttentionRequestAction`. */
+  requestSuccessMessage?: string | undefined
+  onRequestAttention?: ((request: PublicDinerAttentionRequest) => void) | undefined
   ratingStatus: RatingStatus
-  ratingMessage?: string
+  ratingMessage?: string | undefined
   /** Overrides the default thank-you copy — see `RatingForm`. */
-  ratingSuccessMessage?: string
-  onSubmitRating?: (values: PublicDinerRatingValues) => void
+  ratingSuccessMessage?: string | undefined
+  onSubmitRating?: ((values: PublicDinerRatingValues) => void) | undefined
 }
 
 /**
@@ -83,7 +83,7 @@ export function PublicDinerContent({
 
   return (
     <div className="flex flex-col gap-8">
-      <PublicDinerHeader etiqueta={table.etiqueta} mesero={table.mesero} />
+      <PublicDinerHeader etiqueta={table.etiqueta} eventoTitulo={table.evento.titulo} />
 
       <section className="flex flex-col gap-3">
         <AttentionRequestAction
