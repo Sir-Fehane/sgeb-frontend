@@ -257,6 +257,30 @@ export const router = createBrowserRouter([
       },
       {
         /*
+         * Event Cubaitor — "Barra" (W-08, `feature/cubaitor-orders-live`).
+         * The event-scoped bar operation surface: live orders ("tablero de
+         * barra", `GET /eventos/{id}/ordenes`), dispensing (`POST
+         * /orden-detalles/{id}/dispensar`, plus a manual `PATCH
+         * /dispensados/{id}/reporte` fallback for MQTT failures), and this
+         * event's pin configuration (`GET/POST/PUT/DELETE
+         * /eventos/{id}/config-dispensado`, `PATCH .../recarga`) —
+         * referencing the GLOBAL Bebidas/Insumos/Envases/Cubaitor catalogs
+         * (`/menu`) for selection, never re-implementing their CRUD. Order
+         * CREATION stays out of scope: `POST /mesas/{id}/ordenes` is
+         * mesero-only server-side. This was the long-documented "still
+         * Proposed — not registered (W-08 deferred)" slug; now real. Same
+         * positive integer SGEB event id as the other `eventos/:id/*`
+         * routes, parsed/validated inside `EventCubaitorPage`, not here.
+         */
+        path: 'eventos/:id/cubaitor',
+        lazy: async () => {
+          const { EventCubaitorPage } =
+            await import('@/features/events/cubaitor/pages/EventCubaitorPage')
+          return { Component: EventCubaitorPage }
+        },
+      },
+      {
+        /*
          * Event Closure — "Cierre del evento"
          * (feature/event-closure-ui-foundation). Closure-readiness
          * diagnostics (`GET /eventos/{id}/cierre`), merma reporting
@@ -303,6 +327,26 @@ export const router = createBrowserRouter([
           const { EventPaymentsPage } =
             await import('@/features/events/payments/pages/EventPaymentsPage')
           return { Component: EventPaymentsPage }
+        },
+      },
+      {
+        /*
+         * Menu — the GLOBAL "Bebidas y Cubaitor" catalog
+         * (`feature/cubaitor-orders-live`): Bebidas/Insumos/Envases/recetas
+         * and the Cubaitor device fleet, all scoped catalog-wide, never to a
+         * specific event. This is the long-documented `/menu` slug
+         * (`docs/FrontendArchitecture.md` §17: "IF global scope is
+         * confirmed (§9)") — confirmed for real against the pinned backend
+         * on this branch (Bebida/Insumo/Envase/Cubaitor all carry no
+         * `id_evento`). The event-scoped live bar operation (orders,
+         * dispensing, this event's pin configuration) lives at
+         * `eventos/:id/cubaitor` instead, reached from Event Detail's
+         * roadmap, not from here.
+         */
+        path: 'menu',
+        lazy: async () => {
+          const { MenuPage } = await import('@/features/menu/pages/MenuPage')
+          return { Component: MenuPage }
         },
       },
       {

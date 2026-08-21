@@ -9,6 +9,7 @@ import { eventsQueryKeys } from '@/features/events/queries/eventsQueryKeys'
 import { mesasQueryKeys } from '@/features/events/queries/mesasQueryKeys'
 import { attendanceQueryKeys } from '@/features/events/attendance/queries/attendanceQueryKeys'
 import { closureQueryKeys } from '@/features/events/closure/queries/closureQueryKeys'
+import { eventCubaitorQueryKeys } from '@/features/events/cubaitor/queries/eventCubaitorQueryKeys'
 import { eventDashboardQueryKeys } from '@/features/events/dashboard/queries/eventDashboardQueryKeys'
 import { montageQueryKeys } from '@/features/events/montage/queries/montageQueryKeys'
 import { serviceRequestsQueryKeys } from '@/features/events/service-requests/queries/serviceRequestsQueryKeys'
@@ -311,7 +312,7 @@ describe('SocketProvider — event → query invalidation mapping', () => {
     })
   })
 
-  it('orden:cambio and dispensado:cambio invalidate the event dashboard aggregate (the only real consumer so far)', () => {
+  it('orden:cambio invalidates the event dashboard aggregate AND the live order board/detail (feature/cubaitor-orders-live)', () => {
     const queryClient = new QueryClient()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
     render(<SocketProvider>{null}</SocketProvider>, {
@@ -327,8 +328,21 @@ describe('SocketProvider — event → query invalidation mapping', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: eventDashboardQueryKeys.detail(1001),
     })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: eventCubaitorQueryKeys.ordenes(1001),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: eventCubaitorQueryKeys.orden(501),
+    })
+  })
 
-    invalidateSpy.mockClear()
+  it('dispensado:cambio invalidates the event dashboard aggregate, the order board, the pin config, and the alerts read', () => {
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    render(<SocketProvider>{null}</SocketProvider>, {
+      wrapper: createWrapper(queryClient),
+    })
+
     act(() => {
       fakeSocket.__emit(
         'dispensado:cambio',
@@ -346,9 +360,18 @@ describe('SocketProvider — event → query invalidation mapping', () => {
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: eventDashboardQueryKeys.detail(1001),
     })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: eventCubaitorQueryKeys.ordenes(1001),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: eventCubaitorQueryKeys.config(1001),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: eventCubaitorQueryKeys.alertas(1001),
+    })
   })
 
-  it('alerta:insumo invalidates the event dashboard aggregate in addition to notifying', () => {
+  it('alerta:insumo invalidates the event dashboard aggregate AND the bar screen alerts read, in addition to notifying', () => {
     const queryClient = new QueryClient()
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
     render(<SocketProvider>{null}</SocketProvider>, {
@@ -371,6 +394,9 @@ describe('SocketProvider — event → query invalidation mapping', () => {
 
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: eventDashboardQueryKeys.detail(1001),
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: eventCubaitorQueryKeys.alertas(1001),
     })
   })
 

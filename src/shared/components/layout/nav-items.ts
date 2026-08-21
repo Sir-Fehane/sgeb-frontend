@@ -69,11 +69,12 @@ export type NavItemConfig = AvailableNavItemConfig | PendingNavItemConfig
  * reasonable Tabler icon instead of a documented one; flag with design
  * if a different icon is intended.
  *
- * Route status: only "Panel", "Eventos", "Meseros", and "Reportes" have
- * a top-level route pinned in docs/FrontendArchitecture.md §17,  and are
- * `status: 'available'`. The other three are `status: 'route-pending'`
- * with `href: null` — their eventual information architecture is a real
- * open question, not a naming detail this frontend gets to decide:
+ * Route status: "Panel", "Eventos", "Meseros", "Reportes", and now
+ * "Bebidas y Cubaitor" (`feature/cubaitor-orders-live`) have a top-level
+ * route and are `status: 'available'`. The remaining two are
+ * `status: 'route-pending'` with `href: null` — their eventual information
+ * architecture is a real open question, not a naming detail this frontend
+ * gets to decide:
  *   - "Operación en vivo" needed an active-event context, confirmed by
  *     `feature/live-operations-participant-exit`: it is now a real,
  *     registered route — but only the event-scoped
@@ -84,15 +85,27 @@ export type NavItemConfig = AvailableNavItemConfig | PendingNavItemConfig
  *     build a static `href` from — exactly the same situation "Pagos"
  *     (below) already resolved the same way once `/eventos/:id/pagos`
  *     shipped.
- *   - "Bebidas y Cubaitor" may end up as two destinations (`/menu` +
- *     `/cubaitor`, both already documented separately) or one parent nav
- *     group over both.
  *   - "Pagos" is only documented nested as `/eventos/:id/pagos` (already
  *     registered) — a global cross-event view may or may not be built;
  *     until it is, this entry correctly stays `route-pending` even though
  *     a real nested route exists.
- * Do not invent a temporary slug for any of these — see `NavItem` for
- * how a pending item renders (visible, labeled "Ruta pendiente",
+ *
+ * "Bebidas y Cubaitor" resolution (`feature/cubaitor-orders-live`): the
+ * global catalog (`/menu` — Bebidas/Insumos/Envases/recetas + the Cubaitor
+ * device fleet) is confirmed global-scoped against the pinned backend (no
+ * `id_evento` on any of those models), so this ONE sidebar entry points
+ * there, matching the single nav slot rather than fragmenting into two
+ * top-level items. The event-scoped live bar operation (orders, dispensing,
+ * a specific event's pin configuration) is a SEPARATE surface at
+ * `/eventos/:id/cubaitor`, reached from Event Detail's roadmap section, not
+ * from this global sidebar — same "global catalog vs. event-scoped
+ * operation" split "Operación en vivo"/"Pagos" already established above. A
+ * standalone `/cubaitor` top-level route (for the device fleet alone) was
+ * considered and deliberately not added: it would fragment this one nav
+ * slot into two without a confirmed product need.
+ *
+ * Do not invent a temporary slug for a `route-pending` entry — see
+ * `NavItem` for how one renders (visible, labeled "Ruta pendiente",
  * non-interactive).
  */
 export const NAV_ITEMS: readonly NavItemConfig[] = [
@@ -127,8 +140,8 @@ export const NAV_ITEMS: readonly NavItemConfig[] = [
   {
     id: 'bebidas-cubaitor',
     label: 'Bebidas y Cubaitor',
-    status: 'route-pending',
-    href: null,
+    status: 'available',
+    href: '/menu',
     icon: IconGlassFull,
   },
   {

@@ -72,7 +72,7 @@ describe('AppShell navigation', () => {
     }
   })
 
-  it('renders only the four approved items as real, activatable links', () => {
+  it('renders only the approved items as real, activatable links', () => {
     renderAppShell('/eventos')
 
     expect(screen.getAllByRole('link')).toHaveLength(AVAILABLE_ITEMS.length)
@@ -84,7 +84,7 @@ describe('AppShell navigation', () => {
     }
   })
 
-  it('renders the three unresolved items as visible, non-interactive, aria-disabled placeholders — never exposed as links', () => {
+  it('renders the still-unresolved items as visible, non-interactive, aria-disabled placeholders — never exposed as links', () => {
     renderAppShell('/eventos')
 
     for (const item of PENDING_ITEMS) {

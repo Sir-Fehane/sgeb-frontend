@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 
 import { attendanceQueryKeys } from '@/features/events/attendance/queries/attendanceQueryKeys'
 import { closureQueryKeys } from '@/features/events/closure/queries/closureQueryKeys'
+import { eventCubaitorQueryKeys } from '@/features/events/cubaitor/queries/eventCubaitorQueryKeys'
 import { eventDashboardQueryKeys } from '@/features/events/dashboard/queries/eventDashboardQueryKeys'
 import { montageQueryKeys } from '@/features/events/montage/queries/montageQueryKeys'
 import { asignacionesQueryKeys } from '@/features/events/queries/asignacionesQueryKeys'
@@ -323,24 +324,43 @@ export function SocketProvider({ children }: SocketProviderProps) {
     }
 
     /**
-     * `orden:cambio`/`dispensado:cambio` — confirmed backend events that
-     * had no frontend query to invalidate against until this branch: the
-     * event dashboard's `barra` section (`GET /eventos/{id}/dashboard`)
-     * reads the same `orden`/`dispensado` tables these events report
-     * changes to. No dedicated Orders/Cubaitor feature exists yet (see
-     * this branch's report), so the dashboard aggregate is the only real
-     * consumer — no per-order/per-dispensado query key exists to target
-     * more narrowly.
+     * `orden:cambio`/`dispensado:cambio` — as of `feature/panel-realtime-
+     * notifications` these only invalidated the event dashboard's `barra`
+     * section, since no dedicated Orders/Cubaitor feature existed yet. Now
+     * that `feature/cubaitor-orders-live` ships the real "tablero de
+     * barra" (`features/events/cubaitor`), extend those same confirmed
+     * events to invalidate its query domains too — never a new event name,
+     * never a duplicate listener, never a manual cache mutation of the
+     * payload (a full refetch is safer than trusting a partial realtime
+     * payload to reconstruct `OrdenViewModel`/`ConfigDispensadoViewModel`).
      */
     function onOrdenCambio(payload: OrdenCambio) {
       void queryClient.invalidateQueries({
         queryKey: eventDashboardQueryKeys.detail(payload.idEvento),
+      })
+      void queryClient.invalidateQueries({
+        queryKey: eventCubaitorQueryKeys.ordenes(payload.idEvento),
+      })
+      void queryClient.invalidateQueries({
+        queryKey: eventCubaitorQueryKeys.orden(payload.idOrden),
       })
     }
 
     function onDispensadoCambio(payload: DispensadoCambio) {
       void queryClient.invalidateQueries({
         queryKey: eventDashboardQueryKeys.detail(payload.idEvento),
+      })
+      void queryClient.invalidateQueries({
+        queryKey: eventCubaitorQueryKeys.ordenes(payload.idEvento),
+      })
+      // A dispensado report can also cross the empty-bottle threshold (the
+      // config's `volumen_disponible_ml` just changed), so the Configuración
+      // tab's pin list should refetch too, not only the order board.
+      void queryClient.invalidateQueries({
+        queryKey: eventCubaitorQueryKeys.config(payload.idEvento),
+      })
+      void queryClient.invalidateQueries({
+        queryKey: eventCubaitorQueryKeys.alertas(payload.idEvento),
       })
     }
 
@@ -356,6 +376,13 @@ export function SocketProvider({ children }: SocketProviderProps) {
       // The event dashboard's `alertas` section reads the same Cubaitor alert logic.
       void queryClient.invalidateQueries({
         queryKey: eventDashboardQueryKeys.detail(payload.idEvento),
+      })
+      // The bar screen's own inline alerts banner (`GET /eventos/{id}/alertas`,
+      // task §13) is a durable, always-current READ of the same live-derived
+      // state this event reports a change to — refetch it too, distinct from
+      // (and in addition to) the ephemeral toast above.
+      void queryClient.invalidateQueries({
+        queryKey: eventCubaitorQueryKeys.alertas(payload.idEvento),
       })
     }
 

@@ -723,12 +723,18 @@ describe('/eventos/:id/pase-de-lista renders the Event Attendance UI inside AppS
     ).toBeInTheDocument()
   })
 
-  it('does not register /eventos/:id/cubaitor', async () => {
+  it('/eventos/:id/cubaitor now renders the real Event Cubaitor UI, not a 404 (feature/cubaitor-orders-live)', async () => {
     await renderAt('/eventos/1001/cubaitor')
 
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+      await screen.findByRole('heading', {
+        level: 2,
+        name: 'Barra — Bebidas y Cubaitor',
+      }),
     ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).not.toBeInTheDocument()
   })
 })
 
@@ -797,12 +803,18 @@ describe('/eventos/:id/montaje renders the Event Montage UI inside AppShell', ()
     ).toBeInTheDocument()
   })
 
-  it('does not register /eventos/:id/cubaitor', async () => {
+  it('/eventos/:id/cubaitor now renders the real Event Cubaitor UI, not a 404 (feature/cubaitor-orders-live)', async () => {
     await renderAt('/eventos/1001/cubaitor')
 
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+      await screen.findByRole('heading', {
+        level: 2,
+        name: 'Barra — Bebidas y Cubaitor',
+      }),
     ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).not.toBeInTheDocument()
   })
 })
 

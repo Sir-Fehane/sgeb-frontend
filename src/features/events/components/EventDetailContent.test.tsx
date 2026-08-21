@@ -222,16 +222,22 @@ describe('EventDetailContent — comanda section wiring', () => {
 })
 
 describe('EventDetailContent — operation roadmap', () => {
-  it('shows the still-pending operation labels as non-interactive entries', () => {
+  it('has no pending operation labels left — every roadmap entry is now a real link (feature/cubaitor-orders-live shipped the last one, "Bebidas y Cubaitor")', () => {
     renderContent({ evento: EVENTO_CON_COMANDA })
 
-    for (const label of ['Bebidas y Cubaitor']) {
-      const item = screen.getByText(label)
-      expect(item).toBeInTheDocument()
-      expect(item.closest('[aria-disabled="true"]')).not.toBeNull()
-    }
+    expect(screen.queryAllByText('Próximamente')).toHaveLength(0)
+    expect(document.querySelectorAll('[aria-disabled="true"]')).toHaveLength(0)
+  })
 
-    expect(screen.getAllByText('Próximamente').length).toBe(1)
+  it('"Bebidas y Cubaitor" is a real link to /eventos/{id}/cubaitor', () => {
+    renderContent({ evento: EVENTO_CON_COMANDA })
+
+    const link = screen.getByRole('link', { name: 'Bebidas y Cubaitor' })
+    expect(link).toHaveAttribute(
+      'href',
+      `/eventos/${String(EVENTO_CON_COMANDA.idEvento)}/cubaitor`,
+    )
+    expect(link.closest('[aria-disabled="true"]')).toBeNull()
   })
 
   it('"Selección de equipo" is a real link to /eventos/{id}/equipo', () => {
@@ -289,18 +295,14 @@ describe('EventDetailContent — operation roadmap', () => {
     expect(link.closest('[aria-disabled="true"]')).toBeNull()
   })
 
-  it('exposes no working navigation for the still-pending roadmap entries', () => {
+  it('never falls back to a dead href="#" link anywhere in the roadmap', () => {
     renderContent({ evento: EVENTO_CON_COMANDA })
 
-    for (const label of ['Bebidas y Cubaitor']) {
-      expect(screen.queryByRole('link', { name: label })).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument()
-    }
     const hrefHash = document.querySelectorAll('a[href="#"]')
     expect(hrefHash.length).toBe(0)
   })
 
-  it('preserves the canonical visual order even though Bebidas y Cubaitor (pending) sits before Cierre (active)', () => {
+  it('preserves the canonical visual order, "Bebidas y Cubaitor" included between "Solicitudes de mesa" and "Cierre"', () => {
     renderContent({ evento: EVENTO_CON_COMANDA })
 
     const list = screen.getByRole('list', { name: 'Áreas operativas del evento' })
