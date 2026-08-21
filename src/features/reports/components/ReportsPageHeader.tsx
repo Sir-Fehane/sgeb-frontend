@@ -3,16 +3,15 @@ import { Text } from '@/shared/components'
 /**
  * No heading is rendered here — `AppShell`'s `Topbar` already renders
  * "Reportes" as the page's `<h1>` (same convention as
- * `EventsPageHeader`/`WaitersPageHeader`). The subtitle below is the
- * honest scope statement for this screen: historical waiter performance
- * only, backed by the single `GET /dashboard/meseros` contract — not a
- * general system report center, financial audit, event report, or
- * merma report.
+ * `EventsPageHeader`/`WaitersPageHeader`). This subtitle only orients the
+ * reader to the page's two independent scopes — the per-event group below
+ * carries its own description of what it covers, and so does the
+ * personnel group, so this line stays short and never repeats either.
  */
 export function ReportsPageHeader() {
   return (
     <Text size="sm" className="text-muted-foreground">
-      Desempeño histórico de meseros: asistencia, calificaciones y pagos por periodo.
+      Reportes reales del sistema, organizados por evento y, por separado, por personal.
     </Text>
   )
 }

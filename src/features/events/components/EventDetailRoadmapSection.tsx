@@ -25,12 +25,23 @@ interface RoadmapItem {
  * whether it renders as a `Link` or a non-interactive entry, independent
  * of its position in this list. Do not reorder this array to group active
  * items together — the order below IS the canonical order.
+ *
+ * "Panel operativo" (feature/operations-and-reports-live) is deliberately
+ * first, ahead of the sequential workflow steps: it is an overview a
+ * captain/admin can open at any point in the event's lifecycle, not a
+ * step that gates the next one — same reasoning "Bebidas y Cubaitor"
+ * already established for a non-sequential entry mixed into this list.
+ * "Solicitudes de mesa" sits next to "Operación en vivo" for the same
+ * reason: both are live-operations screens a captain checks repeatedly
+ * during the event, not one-time setup steps.
  */
 const ROADMAP_ITEMS: readonly RoadmapItem[] = [
+  { label: 'Panel operativo', slug: 'panel-operativo' },
   { label: 'Selección de equipo', slug: 'equipo' },
   { label: 'Pase de lista', slug: 'pase-de-lista' },
   { label: 'Montaje / asignación de mesas', slug: 'montaje' },
   { label: 'Operación en vivo', slug: 'operacion-en-vivo' },
+  { label: 'Solicitudes de mesa', slug: 'solicitudes' },
   { label: 'Bebidas y Cubaitor', slug: null },
   { label: 'Cierre', slug: 'cierre' },
   { label: 'Pagos', slug: 'pagos' },

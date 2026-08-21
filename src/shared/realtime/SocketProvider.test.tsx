@@ -9,7 +9,9 @@ import { eventsQueryKeys } from '@/features/events/queries/eventsQueryKeys'
 import { mesasQueryKeys } from '@/features/events/queries/mesasQueryKeys'
 import { attendanceQueryKeys } from '@/features/events/attendance/queries/attendanceQueryKeys'
 import { closureQueryKeys } from '@/features/events/closure/queries/closureQueryKeys'
+import { eventDashboardQueryKeys } from '@/features/events/dashboard/queries/eventDashboardQueryKeys'
 import { montageQueryKeys } from '@/features/events/montage/queries/montageQueryKeys'
+import { serviceRequestsQueryKeys } from '@/features/events/service-requests/queries/serviceRequestsQueryKeys'
 import { teamSelectionQueryKeys } from '@/features/events/team-selection/queries/teamSelectionQueryKeys'
 import { refreshAccessToken } from '@/features/oidc-client/client/tokenClient'
 import { applyRefreshedAccessToken } from '@/features/oidc-client/session/sessionStore'
@@ -271,6 +273,131 @@ describe('SocketProvider — event → query invalidation mapping', () => {
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: montageQueryKeys.participants(1001),
+    })
+  })
+
+  it('cupo:actualizado, participacion:cambio, mesa:cambio, and checklist:cambio all also invalidate the event dashboard aggregate', () => {
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    render(<SocketProvider>{null}</SocketProvider>, {
+      wrapper: createWrapper(queryClient),
+    })
+
+    act(() => {
+      fakeSocket.__emit(
+        'cupo:actualizado',
+        emitted({ idEvento: 1001, cupoMeseros: 10, ocupados: 3, disponibles: 7 }),
+      )
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: eventDashboardQueryKeys.detail(1001),
+    })
+
+    invalidateSpy.mockClear()
+    act(() => {
+      fakeSocket.__emit(
+        'mesa:cambio',
+        emitted({
+          idEvento: 1001,
+          idMesa: 7,
+          estado: 'ocupada',
+          idParticipacion: 5001,
+          vinculada: true,
+        }),
+      )
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: eventDashboardQueryKeys.detail(1001),
+    })
+  })
+
+  it('orden:cambio and dispensado:cambio invalidate the event dashboard aggregate (the only real consumer so far)', () => {
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    render(<SocketProvider>{null}</SocketProvider>, {
+      wrapper: createWrapper(queryClient),
+    })
+
+    act(() => {
+      fakeSocket.__emit(
+        'orden:cambio',
+        emitted({ idEvento: 1001, idOrden: 501, idMesa: 7, estado: 'en_preparacion' }),
+      )
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: eventDashboardQueryKeys.detail(1001),
+    })
+
+    invalidateSpy.mockClear()
+    act(() => {
+      fakeSocket.__emit(
+        'dispensado:cambio',
+        emitted({
+          idEvento: 1001,
+          idDispensado: 900,
+          idDetalle: 1,
+          pinGpio: 4,
+          estado: 'ok',
+          volumenMl: 45,
+          segundos: 2.9,
+        }),
+      )
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: eventDashboardQueryKeys.detail(1001),
+    })
+  })
+
+  it('alerta:insumo invalidates the event dashboard aggregate in addition to notifying', () => {
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    render(<SocketProvider>{null}</SocketProvider>, {
+      wrapper: createWrapper(queryClient),
+    })
+
+    act(() => {
+      fakeSocket.__emit(
+        'alerta:insumo',
+        emitted({
+          idEvento: 1001,
+          idInsumo: 1,
+          nombreInsumo: 'Ron',
+          motivo: 'botella_vacia',
+          codigo: 'SGEB-4009',
+          ordenesPausadas: 2,
+        }),
+      )
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: eventDashboardQueryKeys.detail(1001),
+    })
+  })
+
+  it('solicitud:cambio invalidates the service-requests list and the event dashboard for every transition, not only pendiente', () => {
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    render(<SocketProvider>{null}</SocketProvider>, {
+      wrapper: createWrapper(queryClient),
+    })
+
+    act(() => {
+      fakeSocket.__emit(
+        'solicitud:cambio',
+        emitted({
+          idEvento: 1001,
+          idSolicitud: 1,
+          idMesa: 7,
+          tipo: 'atencion',
+          estado: 'atendida',
+          idParticipacion: 5001,
+        }),
+      )
+    })
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: serviceRequestsQueryKeys.all })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: eventDashboardQueryKeys.detail(1001),
     })
   })
 

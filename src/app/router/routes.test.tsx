@@ -100,6 +100,13 @@ const DETAIL_RECORD_3001: EventoApiRecord = {
  * (`EventCreatePage`) reaches its real, populated form rather than its
  * own error state.
  *
+ * `/eventos/{1001,3001}/dashboard` (`feature/operations-and-reports-live`)
+ * resolves to a full, non-partial (`SGEB-0000`) dashboard with every
+ * section present but zero-valued — this file's Event Dashboard
+ * assertions only need the page to reach its populated state, same
+ * reasoning as Team Selection above. `/eventos/{1001,3001}/solicitudes`
+ * resolves to an empty list, same reasoning again.
+ *
  * `/dashboard/capitan` (`feature/panel-live-consolidation`) resolves to a
  * genuinely empty-but-successful portfolio (every real field present, all
  * zero/empty) — this file's `/panel` assertions only need
@@ -169,6 +176,71 @@ function configureDefaultRequestSgebMock() {
         })
       }
       if (config.url === '/eventos/1001/mesas' || config.url === '/eventos/3001/mesas') {
+        return Promise.resolve({
+          result: { code: 'SGEB-0002', message: 'Sin resultados.' },
+          data: [],
+        })
+      }
+      if (
+        config.url === '/eventos/1001/dashboard' ||
+        config.url === '/eventos/3001/dashboard'
+      ) {
+        return Promise.resolve({
+          result: { code: 'SGEB-0000', message: 'ok' },
+          data: {
+            id_evento: config.url === '/eventos/1001/dashboard' ? 1001 : 3001,
+            titulo:
+              config.url === '/eventos/1001/dashboard'
+                ? DETAIL_RECORD_1001.titulo
+                : DETAIL_RECORD_3001.titulo,
+            estado:
+              config.url === '/eventos/1001/dashboard'
+                ? DETAIL_RECORD_1001.estado
+                : DETAIL_RECORD_3001.estado,
+            fecha: DETAIL_RECORD_1001.fecha,
+            salon: 'Salón de prueba',
+            resumen: {
+              cupo_meseros: 0,
+              inscritos: 0,
+              disponibles: 0,
+              mesas: 0,
+              tarifa_por_mesero: 0,
+            },
+            asistencia: { por_estado: {}, llegadas_fallidas: 0 },
+            montaje: {
+              participaciones: 0,
+              checklist_aprobado: 0,
+              instancias_abiertas: 0,
+            },
+            piso: { mesas_por_estado: {}, asignaciones_vinculadas: 0 },
+            barra: {
+              pendientes: 0,
+              en_preparacion: 0,
+              dispensando: 0,
+              pausadas_por_insumo: 0,
+              entregadas: 0,
+              canceladas: 0,
+              dispensados_por_estado: {},
+            },
+            servicio: {
+              solicitudes_pendientes: 0,
+              calificaciones: 0,
+              promedio_calificacion: null,
+              calificaciones_bajas: 0,
+            },
+            alertas: {
+              alertas: [],
+              total: 0,
+              ordenes_pausadas: 0,
+              severidad_maxima: null,
+            },
+          },
+        })
+      }
+      if (
+        config.url === '/eventos/1001/solicitudes' ||
+        config.url === '/eventos/3001/solicitudes'
+      ) {
         return Promise.resolve({
           result: { code: 'SGEB-0002', message: 'Sin resultados.' },
           data: [],
@@ -804,6 +876,49 @@ describe('/eventos/:id/operacion-en-vivo renders the Live Operations UI inside A
   })
 })
 
+describe('/eventos/:id/panel-operativo renders the Event Dashboard UI inside AppShell', () => {
+  it('renders the AppShell chrome and the dashboard content for a known fixture id', async () => {
+    await renderAt('/eventos/1001/panel-operativo')
+
+    expect(
+      screen.getByRole('navigation', { name: 'Navegación principal' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('banner')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', {
+        level: 2,
+        name: 'Evento de demostración — boda',
+      }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('renders the unavailable state for a malformed event id', async () => {
+    await renderAt('/eventos/not-a-number/panel-operativo')
+
+    expect(screen.getByText('No encontramos el evento solicitado.')).toBeInTheDocument()
+  })
+})
+
+describe('/eventos/:id/solicitudes renders the Service Requests UI inside AppShell', () => {
+  it('renders the AppShell chrome and the service-requests content for a known fixture id', async () => {
+    await renderAt('/eventos/1001/solicitudes')
+
+    expect(
+      screen.getByRole('navigation', { name: 'Navegación principal' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('banner')).toBeInTheDocument()
+    expect(
+      await screen.findByRole('heading', { level: 2, name: 'Solicitudes de mesa' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).not.toBeInTheDocument()
+  })
+})
+
 describe('/eventos/:id/cierre renders the Event Closure UI inside AppShell', () => {
   it('renders the AppShell chrome and the closure content for a known fixture id', async () => {
     await renderAt('/eventos/1001/cierre')
@@ -1004,15 +1119,22 @@ describe('/meseros renders the real waiters UI inside AppShell', () => {
   })
 })
 
-describe('/reportes renders the real waiter-performance report UI inside AppShell', () => {
-  it('renders the AppShell chrome and the report content at /reportes', async () => {
+describe('/reportes renders the real event-scoped reports UI inside AppShell', () => {
+  it('renders the AppShell chrome and the reports content at /reportes', async () => {
     await renderAt('/reportes')
 
     expect(
       screen.getByRole('navigation', { name: 'Navegación principal' }),
     ).toBeInTheDocument()
     expect(screen.getByRole('banner')).toBeInTheDocument()
-    expect(screen.getByRole('table')).toBeInTheDocument()
+    // `ReportsPageHeader`'s subtitle is static — rendered regardless of the
+    // real `GET /eventos` query's loading/error/success state, same
+    // reasoning `/panel`'s own route test above uses `findByText`.
+    expect(
+      await screen.findByText(
+        'Reportes reales del sistema, organizados por evento y, por separado, por personal.',
+      ),
+    ).toBeInTheDocument()
   })
 
   it('does not register /reportes/exportar', async () => {

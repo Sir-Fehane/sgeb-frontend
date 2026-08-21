@@ -1,112 +1,186 @@
-import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { render, screen, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
   ReportsContent,
   type ReportsContentProps,
 } from '@/features/reports/components/ReportsContent'
-import { WAITER_PERFORMANCE_REPORT_FIXTURE } from '@/features/reports/fixtures/reportFixtures'
-import type { ReportFilterState } from '@/features/reports/types/report'
+import type { EventListItemViewModel } from '@/features/events/types/event'
 
-const DEFAULT_FILTERS: ReportFilterState = {
-  fechaDesde: '2026-07-01',
-  fechaHasta: '2026-07-31',
-  orden: 'calificacion',
+const EVENTO: EventListItemViewModel = {
+  idEvento: 1001,
+  idSalon: 1,
+  capitan: {
+    uuidUsuario: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    nombre: 'Capitán',
+    apellidoPaterno: 'Prueba',
+    apellidoMaterno: null,
+    correo: 'capitan.prueba@example.com',
+  },
+  titulo: 'Boda Pérez',
+  tipo: 'social',
+  fecha: '2026-09-12',
+  horaPresentacion: '16:00',
+  inicio: '2026-09-12T18:00:00',
+  fin: null,
+  cupoMeseros: 10,
+  numMesas: 20,
+  tarifaPorMesero: 350,
+  radioGeocercaM: 150,
+  estado: 'en_curso',
+  creadoEn: '2026-08-01T00:00:00Z',
 }
 
-function renderContent(overrides: Partial<ReportsContentProps> = {}) {
-  const onFilterChange = overrides.onFilterChange ?? vi.fn()
-  render(
-    <ReportsContent
-      items={WAITER_PERFORMANCE_REPORT_FIXTURE}
-      filters={DEFAULT_FILTERS}
-      onFilterChange={onFilterChange}
-      {...overrides}
-    />,
+const OTRO_EVENTO: EventListItemViewModel = {
+  ...EVENTO,
+  idEvento: 2002,
+  titulo: 'Aniversario Gómez',
+  fecha: '2026-10-01',
+}
+
+function renderContent(props: Partial<ReportsContentProps> = {}) {
+  return render(
+    <MemoryRouter>
+      <ReportsContent
+        events={[EVENTO, OTRO_EVENTO]}
+        isLoadingEvents={false}
+        onRetryEvents={vi.fn()}
+        idEvento={1001}
+        onEventoChange={vi.fn()}
+        canViewRatings={true}
+        mermaSummary={{ reportesCount: 2, costoTotal: 470, piezasSinCostear: 1 }}
+        isLoadingMerma={false}
+        onRetryMerma={vi.fn()}
+        ratingsSummary={{ calificaciones: [], total: 0, promedio: null }}
+        soloBajas={false}
+        onSoloBajasChange={vi.fn()}
+        isLoadingRatings={false}
+        onRetryRatings={vi.fn()}
+        {...props}
+      />
+    </MemoryRouter>,
   )
-  return { onFilterChange }
 }
 
-describe('ReportsContent', () => {
-  it('renders the populated table when items is non-empty and isLoading/errorMessage are absent', () => {
+describe('ReportsContent — information architecture: two separate scopes', () => {
+  it('renders "Reportes por evento" and "Histórico de personal" as two distinct labeled regions', () => {
     renderContent()
-
-    const first = WAITER_PERFORMANCE_REPORT_FIXTURE[0]
-    if (!first) {
-      throw new Error('Expected at least one fixture item')
-    }
-    expect(screen.getByText(first.nombreCompleto)).toBeInTheDocument()
-    expect(screen.queryByRole('status', { name: /Cargando/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('region', { name: 'Reportes por evento' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('region', { name: 'Histórico de personal' }),
+    ).toBeInTheDocument()
   })
 
-  it('renders only the loading state when isLoading is true — no rows underneath, no empty state', () => {
-    renderContent({ isLoading: true })
+  it('keeps the event picker and every event-scoped card inside "Reportes por evento" only', () => {
+    renderContent()
+    const eventScope = screen.getByRole('region', { name: 'Reportes por evento' })
 
     expect(
-      screen.getByRole('status', { name: 'Cargando reporte de desempeño' }),
+      within(eventScope).getByRole('combobox', { name: 'Evento' }),
     ).toBeInTheDocument()
-    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    expect(within(eventScope).getByText('Merma')).toBeInTheDocument()
+    expect(within(eventScope).getByText('Calificaciones')).toBeInTheDocument()
+    expect(within(eventScope).getByText('Pagos')).toBeInTheDocument()
+  })
+
+  it('places the deferred waiter-performance card outside "Reportes por evento", inside "Histórico de personal" only', () => {
+    renderContent()
+    const eventScope = screen.getByRole('region', { name: 'Reportes por evento' })
+    const personnelScope = screen.getByRole('region', { name: 'Histórico de personal' })
+
+    expect(within(eventScope).queryByText('Desempeño de meseros')).not.toBeInTheDocument()
+    expect(within(personnelScope).getByText('Desempeño de meseros')).toBeInTheDocument()
+  })
+
+  it('never implies the selected event scopes the waiter-performance report — no event context text appears in that section', () => {
+    renderContent({ idEvento: 1001 })
+    const personnelScope = screen.getByRole('region', { name: 'Histórico de personal' })
+
+    expect(within(personnelScope).queryByText(/Boda Pérez/)).not.toBeInTheDocument()
     expect(
-      screen.queryByText('No encontramos resultados para este periodo.'),
+      within(personnelScope).queryByText(/Mostrando reportes de/),
     ).not.toBeInTheDocument()
   })
 
-  it('renders only the error state when errorMessage is set, taking priority over items — no rows underneath', () => {
-    renderContent({ errorMessage: 'Ocurrió un problema inesperado.' })
+  it('renders no date-range or waiter filter controls anywhere — the backend does not support that report yet', () => {
+    const { container } = renderContent()
+    // Only the real "Evento" combobox and "solo bajas" checkbox exist —
+    // no date/text input of any kind, and no second combobox that could
+    // be a waiter selector.
+    expect(container.querySelectorAll('input[type="date"]')).toHaveLength(0)
+    expect(container.querySelectorAll('input[type="text"]')).toHaveLength(0)
+    expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('combobox')).toHaveLength(1)
+  })
+})
 
-    expect(screen.getByRole('alert')).toHaveTextContent('Ocurrió un problema inesperado.')
-    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+describe('ReportsContent — event selection scopes the event-report section', () => {
+  it('shows a "Mostrando reportes de" context line naming the selected event once one is chosen', () => {
+    renderContent({ idEvento: 1001 })
+    expect(screen.getByText(/Mostrando reportes de: Boda Pérez/)).toBeInTheDocument()
   })
 
-  it('invokes onRetry from the error state', async () => {
-    const user = userEvent.setup()
-    const onRetry = vi.fn()
-    renderContent({ errorMessage: 'Error.', onRetry })
-
-    await user.click(screen.getByRole('button', { name: 'Reintentar' }))
-
-    expect(onRetry).toHaveBeenCalledOnce()
-  })
-
-  it('renders the empty state when items is an empty array', () => {
-    renderContent({ items: [] })
-
+  it('prompts the user to select an event before showing any event-scoped card', () => {
+    renderContent({ idEvento: null })
     expect(
-      screen.getByText('No encontramos resultados para este periodo.'),
+      screen.getByText('Selecciona un evento para ver sus reportes.'),
     ).toBeInTheDocument()
-    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    expect(screen.queryByText('Merma')).not.toBeInTheDocument()
+    expect(screen.queryByText('Pagos')).not.toBeInTheDocument()
   })
 
-  it('keeps zero-valued metrics visible — zero is not treated as empty', () => {
-    const zeroValued = [
-      {
-        uuidUsuario: 'c3d4e5f6-a7b8-4c1d-9e2f-000000000099',
-        nombreCompleto: 'Waiter Cero',
-        eventosApartados: 0,
-        asistenciasConfirmadas: 0,
-        inasistencias: 0,
-        porcentajeAsistencia: 0,
-        calificacionPromedio: 0,
-        calificacionesRecibidas: 0,
-        montoPagado: 0,
-        montoPendiente: 0,
-        clabeVigente: false,
-      },
-    ]
-    renderContent({ items: zeroValued })
+  it('still shows the deferred waiter-performance card even when no event is selected', () => {
+    renderContent({ idEvento: null })
+    expect(screen.getByText('Desempeño de meseros')).toBeInTheDocument()
+  })
+})
 
-    expect(screen.getByText('Waiter Cero')).toBeInTheDocument()
+describe('ReportsContent — role gate on calificaciones', () => {
+  it('renders the ratings section for a capitán/admin session', () => {
+    renderContent({ canViewRatings: true })
+    expect(screen.getByText('Calificaciones')).toBeInTheDocument()
+  })
+
+  it('renders an honest role-restricted message instead of fetching for a mesero session', () => {
+    renderContent({ canViewRatings: false })
     expect(
-      screen.queryByText('No encontramos resultados para este periodo.'),
-    ).not.toBeInTheDocument()
+      screen.getByText('Esta sección es para capitanes y administradores.'),
+    ).toBeInTheDocument()
+  })
+})
+
+describe('ReportsContent — honest scope', () => {
+  it('always shows the deferred waiter-performance card, never a fabricated report', () => {
+    renderContent()
+    expect(screen.getByText('Desempeño de meseros')).toBeInTheDocument()
+    expect(screen.getByText('Próximamente')).toBeInTheDocument()
   })
 
-  it('always renders the header and filters alongside whichever state is active', () => {
-    renderContent({ isLoading: true })
+  it('describes the intended future capability concisely', () => {
+    renderContent()
+    expect(
+      screen.getByText(
+        'Histórico por periodo de asistencia, calificaciones y pagos por mesero.',
+      ),
+    ).toBeInTheDocument()
+  })
 
-    expect(screen.getByLabelText('Desde')).toBeInTheDocument()
-    expect(screen.getByLabelText('Ordenar por')).toBeInTheDocument()
+  it('links to the real Payments screen instead of duplicating payment data', () => {
+    renderContent()
+    expect(screen.getByRole('link', { name: 'Ver pagos del evento' })).toHaveAttribute(
+      'href',
+      '/eventos/1001/pagos',
+    )
+  })
+
+  it('links to the real Closure screen for merma detail', () => {
+    renderContent()
+    expect(screen.getByRole('link', { name: 'Ver detalle en Cierre' })).toHaveAttribute(
+      'href',
+      '/eventos/1001/cierre',
+    )
   })
 })

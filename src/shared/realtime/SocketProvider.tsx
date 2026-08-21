@@ -3,10 +3,12 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 
 import { attendanceQueryKeys } from '@/features/events/attendance/queries/attendanceQueryKeys'
 import { closureQueryKeys } from '@/features/events/closure/queries/closureQueryKeys'
+import { eventDashboardQueryKeys } from '@/features/events/dashboard/queries/eventDashboardQueryKeys'
 import { montageQueryKeys } from '@/features/events/montage/queries/montageQueryKeys'
 import { asignacionesQueryKeys } from '@/features/events/queries/asignacionesQueryKeys'
 import { eventsQueryKeys } from '@/features/events/queries/eventsQueryKeys'
 import { mesasQueryKeys } from '@/features/events/queries/mesasQueryKeys'
+import { serviceRequestsQueryKeys } from '@/features/events/service-requests/queries/serviceRequestsQueryKeys'
 import { teamSelectionQueryKeys } from '@/features/events/team-selection/queries/teamSelectionQueryKeys'
 import { refreshAccessToken } from '@/features/oidc-client/client/tokenClient'
 import { applyRefreshedAccessToken } from '@/features/oidc-client/session/sessionStore'
@@ -19,7 +21,9 @@ import type {
   ChecklistCambio,
   CronogramaDisparado,
   CupoActualizado,
+  DispensadoCambio,
   MesaCambio,
+  OrdenCambio,
   ParticipacionCambio,
   SolicitudCambio,
 } from '@/shared/realtime/realtimeEvents'
@@ -69,9 +73,13 @@ export interface SocketProviderProps {
  * comment: "this is the only place that knows both the domain and the
  * transport"):
  *  1. Connection lifecycle (connect/disconnect/reconnect/auth-retry).
- *  2. Registering the 7 backend-confirmed, frontend-actionable domain
- *     events exactly once, mapping each to either a narrow TanStack Query
- *     invalidation, an ephemeral notification, or both.
+ *  2. Registering all 9 backend-confirmed domain events exactly once,
+ *     mapping each to either a narrow TanStack Query invalidation, an
+ *     ephemeral notification, or both. `orden:cambio`/`dispensado:cambio`
+ *     joined the other 7 on feature/operations-and-reports-live once the
+ *     event dashboard's `barra` section gave them something real to
+ *     invalidate — see those two handlers' own comment for why they still
+ *     target only that one aggregate query, not a dedicated Orders query.
  *  3. Exposing `joinEventRoom`/`leaveEventRoom` so individual event-scoped
  *     pages can opt into the `evento:{id}` room for their own event,
  *     without each page touching `socket` directly.
@@ -252,6 +260,11 @@ export function SocketProvider({ children }: SocketProviderProps) {
       void queryClient.invalidateQueries({
         queryKey: teamSelectionQueryKeys.list(payload.idEvento),
       })
+      // `resumen.disponibles`/`asistencia` on the event dashboard read the
+      // same underlying counts.
+      void queryClient.invalidateQueries({
+        queryKey: eventDashboardQueryKeys.detail(payload.idEvento),
+      })
     }
 
     function onParticipacionCambio(payload: ParticipacionCambio) {
@@ -271,6 +284,11 @@ export function SocketProvider({ children }: SocketProviderProps) {
       void queryClient.invalidateQueries({
         queryKey: closureQueryKeys.readiness(payload.idEvento),
       })
+      // The event dashboard's `resumen`/`asistencia`/`montaje` sections all
+      // aggregate `Participacion` state.
+      void queryClient.invalidateQueries({
+        queryKey: eventDashboardQueryKeys.detail(payload.idEvento),
+      })
     }
 
     function onMesaCambio(payload: MesaCambio) {
@@ -279,6 +297,10 @@ export function SocketProvider({ children }: SocketProviderProps) {
       })
       void queryClient.invalidateQueries({
         queryKey: asignacionesQueryKeys.list(payload.idEvento),
+      })
+      // The event dashboard's `piso` section aggregates `Mesa`/`AsignacionMesa` state.
+      void queryClient.invalidateQueries({
+        queryKey: eventDashboardQueryKeys.detail(payload.idEvento),
       })
     }
 
@@ -294,6 +316,32 @@ export function SocketProvider({ children }: SocketProviderProps) {
       void queryClient.invalidateQueries({
         queryKey: montageQueryKeys.participants(payload.idEvento),
       })
+      // The event dashboard's `montaje` section aggregates checklist completion.
+      void queryClient.invalidateQueries({
+        queryKey: eventDashboardQueryKeys.detail(payload.idEvento),
+      })
+    }
+
+    /**
+     * `orden:cambio`/`dispensado:cambio` — confirmed backend events that
+     * had no frontend query to invalidate against until this branch: the
+     * event dashboard's `barra` section (`GET /eventos/{id}/dashboard`)
+     * reads the same `orden`/`dispensado` tables these events report
+     * changes to. No dedicated Orders/Cubaitor feature exists yet (see
+     * this branch's report), so the dashboard aggregate is the only real
+     * consumer — no per-order/per-dispensado query key exists to target
+     * more narrowly.
+     */
+    function onOrdenCambio(payload: OrdenCambio) {
+      void queryClient.invalidateQueries({
+        queryKey: eventDashboardQueryKeys.detail(payload.idEvento),
+      })
+    }
+
+    function onDispensadoCambio(payload: DispensadoCambio) {
+      void queryClient.invalidateQueries({
+        queryKey: eventDashboardQueryKeys.detail(payload.idEvento),
+      })
     }
 
     function onAlertaInsumo(payload: AlertaInsumo) {
@@ -305,15 +353,28 @@ export function SocketProvider({ children }: SocketProviderProps) {
         body: `${motivoCopy(payload.motivo)} — ${String(payload.ordenesPausadas)} orden(es) en pausa.`,
         emitidoEn: payload.emitido_en,
       })
+      // The event dashboard's `alertas` section reads the same Cubaitor alert logic.
+      void queryClient.invalidateQueries({
+        queryKey: eventDashboardQueryKeys.detail(payload.idEvento),
+      })
     }
 
     function onSolicitudCambio(payload: SolicitudCambio) {
+      // Every transition (not just a new `pendiente` one) invalidates the
+      // real data now that this branch has a Solicitudes screen
+      // (`features/events/service-requests`) and the dashboard's
+      // `servicio.solicitudes_pendientes` count to keep in sync — a
+      // captain resolving a request on their own screen still needs that
+      // list/count to drop the row.
+      void queryClient.invalidateQueries({ queryKey: serviceRequestsQueryKeys.all })
+      void queryClient.invalidateQueries({
+        queryKey: eventDashboardQueryKeys.detail(payload.idEvento),
+      })
+
       // Only a NEW request is worth a proactive nudge — `atendida`/`cancelada`
       // transitions are typically the captain's own action on a screen that
       // already reflects them; surfacing those too would be noise with
-      // nothing new to act on (this branch has no Solicitudes screen at all
-      // yet — see deferred items — so there is no "already on that screen"
-      // case to further suppress against).
+      // nothing new to act on.
       if (payload.estado !== 'pendiente') {
         return
       }
@@ -340,6 +401,8 @@ export function SocketProvider({ children }: SocketProviderProps) {
     socket.on('participacion:cambio', onParticipacionCambio)
     socket.on('mesa:cambio', onMesaCambio)
     socket.on('checklist:cambio', onChecklistCambio)
+    socket.on('orden:cambio', onOrdenCambio)
+    socket.on('dispensado:cambio', onDispensadoCambio)
     socket.on('alerta:insumo', onAlertaInsumo)
     socket.on('solicitud:cambio', onSolicitudCambio)
     socket.on('cronograma:disparado', onCronogramaDisparado)
@@ -349,6 +412,8 @@ export function SocketProvider({ children }: SocketProviderProps) {
       socket.off('participacion:cambio', onParticipacionCambio)
       socket.off('mesa:cambio', onMesaCambio)
       socket.off('checklist:cambio', onChecklistCambio)
+      socket.off('orden:cambio', onOrdenCambio)
+      socket.off('dispensado:cambio', onDispensadoCambio)
       socket.off('alerta:insumo', onAlertaInsumo)
       socket.off('solicitud:cambio', onSolicitudCambio)
       socket.off('cronograma:disparado', onCronogramaDisparado)

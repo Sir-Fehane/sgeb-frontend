@@ -10,11 +10,7 @@ const PLACEHOLDER_ROWS = 4
  */
 export function ReportsLoadingState() {
   return (
-    <div
-      role="status"
-      aria-label="Cargando reporte de desempeño"
-      className="flex flex-col gap-3"
-    >
+    <div role="status" aria-label="Cargando reportes" className="flex flex-col gap-3">
       {Array.from({ length: PLACEHOLDER_ROWS }, (_, index) => (
         <Skeleton key={index} className="h-16 w-full" />
       ))}

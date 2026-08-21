@@ -1,10 +1,8 @@
 /**
- * Isolated formatting utilities for the waiter-performance report —
- * display-only, never re-derives amounts client-side. Deliberately not
- * shared with `features/dashboard`'s own formatters: duplicating these
- * few lines keeps each feature independently owned, per this branch's
- * explicit instruction not to refactor Captain Dashboard merely to
- * deduplicate a small formatter.
+ * Isolated, display-only formatting for the Reports feature — each
+ * feature owns its own tiny formatter rather than sharing one across
+ * features, same precedent `features/events/closure/utils/closureFormatting.ts`
+ * already established.
  */
 
 const MXN_FORMATTER = new Intl.NumberFormat('es-MX', {
@@ -12,17 +10,20 @@ const MXN_FORMATTER = new Intl.NumberFormat('es-MX', {
   currency: 'MXN',
 })
 
-/** `monto_pagado` / `monto_pendiente` — both documented as MXN. Zero is a valid amount. */
+/** `costo_total` — display only, never a payroll/payment deduction. */
 export function formatReportMxn(amount: number): string {
   return MXN_FORMATTER.format(amount)
 }
 
-/** `calificacion_promedio` — `null` renders as "Sin calificaciones", never a blank or a zero. */
+/** `promedio` — `null` renders as "Sin calificaciones", never a blank or a zero. */
 export function formatReportRating(rating: number | null): string {
   return rating === null ? 'Sin calificaciones' : `${rating.toFixed(1)} / 5`
 }
 
-/** `clabe_vigente` — a boolean status rendered as readable text, never the CLABE itself. */
-export function formatClabeStatus(clabeVigente: boolean): string {
-  return clabeVigente ? 'Vigente' : 'No vigente'
+/** A calificación's `creada_en` — a full date-time string. */
+export function formatReportDateTime(dateTime: string): string {
+  return new Date(dateTime).toLocaleString('es-MX', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })
 }

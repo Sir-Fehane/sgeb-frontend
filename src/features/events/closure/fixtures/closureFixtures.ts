@@ -4,12 +4,13 @@ import type {
 } from '@/features/events/closure/types/closure'
 
 /**
- * Development/demo fixtures — NOT live backend data. `EventClosurePage`
- * no longer reads these (it uses `queries/useEventClosureReadinessQuery`/
- * `useMermaReportsQuery` against the real backend); this file stays for
- * this feature's own tests and for `EventPaymentsPage`, which still
- * imports `findEventClosureReadiness` directly (Payments gets its own
- * live-integration branch later — see `docs/decisions.md`). Reuses
+ * Development/demo fixtures — NOT live backend data. Neither
+ * `EventClosurePage` nor `EventPaymentsPage` reads these anymore: both use
+ * their own real live queries (`useEventClosureReadinessQuery`/
+ * `useMermaReportsQuery`, `useEventPaymentsQuery` and friends) against the
+ * real backend. This file stays only for this feature's own tests
+ * (`closureFixtures.test.ts`) — confirmed no production consumer remains
+ * as of feature/operations-and-reports-live's audit. Reuses
  * existing Event Detail identity (events 1001/2001/3001) rather than
  * duplicating event title/type/status inside this feature. `listo` is
  * hand-authored per fixture as the SERVER-DERIVED value it is in the live

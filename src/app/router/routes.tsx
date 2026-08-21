@@ -52,13 +52,15 @@ export const router = createBrowserRouter([
      * shared/components/layout/nav-items.ts for why that's a deliberate,
      * unrelated decision, not an oversight). `panel`, `eventos`,
      * `eventos/:id`, `eventos/:id/equipo`, `eventos/:id/pase-de-lista`,
-     * `eventos/:id/montaje`, `eventos/:id/operacion-en-vivo`,
+     * `eventos/:id/montaje`, `eventos/:id/panel-operativo`,
+     * `eventos/:id/solicitudes`, `eventos/:id/operacion-en-vivo`,
      * `eventos/:id/cierre`, `eventos/:id/pagos`, `meseros` and `reportes`
      * render the real, presentation-only dashboard/events/event-detail/
-     * team-selection/attendance/montage/live-operations/closure/payments/
-     * waiters/reports features (features/dashboard, features/events,
-     * features/waiters, features/reports) — every child now renders a real
-     * page, not the shared development placeholder.
+     * team-selection/attendance/montage/event-dashboard/service-requests/
+     * live-operations/closure/payments/waiters/reports features
+     * (features/dashboard, features/events, features/waiters,
+     * features/reports) — every child now renders a real page, not the
+     * shared development placeholder.
      */
     errorElement: <RouteErrorBoundary />,
     hydrateFallbackElement: <RouteHydrateFallback />,
@@ -180,6 +182,47 @@ export const router = createBrowserRouter([
       },
       {
         /*
+         * Event Dashboard — "Panel operativo" (feature/operations-and-
+         * reports-live). The real per-event operational command-center,
+         * backed by the confirmed `GET /eventos/{id}/dashboard` endpoint
+         * (7 sections: resumen/asistencia/montaje/piso/barra/servicio/
+         * alertas, SGEB-0004 partial-success). Distinct from both `/panel`
+         * (the portfolio-level `GET /dashboard/capitan` view) and
+         * `eventos/:id/operacion-en-vivo` (the narrower participant-exit
+         * screen below) — no route naming collision intended, but the two
+         * labels are close enough that `EventDetailRoadmapSection` orders
+         * "Panel operativo" first specifically to disambiguate at a
+         * glance. Same positive integer SGEB event id as the other
+         * `eventos/:id/*` routes, parsed/validated inside
+         * `EventDashboardPage`, not here.
+         */
+        path: 'eventos/:id/panel-operativo',
+        lazy: async () => {
+          const { EventDashboardPage } =
+            await import('@/features/events/dashboard/pages/EventDashboardPage')
+          return { Component: EventDashboardPage }
+        },
+      },
+      {
+        /*
+         * Service Requests — "Solicitudes de mesa"
+         * (feature/operations-and-reports-live). Staff-facing read +
+         * resolve view over `GET /eventos/{id}/solicitudes` and
+         * `PATCH /solicitudes/{id}/estado` — the anonymous diner's own
+         * creation flow stays in `features/public-diner`, never here. Same
+         * positive integer SGEB event id as the other `eventos/:id/*`
+         * routes, parsed/validated inside `EventServiceRequestsPage`, not
+         * here.
+         */
+        path: 'eventos/:id/solicitudes',
+        lazy: async () => {
+          const { EventServiceRequestsPage } =
+            await import('@/features/events/service-requests/pages/EventServiceRequestsPage')
+          return { Component: EventServiceRequestsPage }
+        },
+      },
+      {
+        /*
          * Operación en vivo — event-scoped live participant roster +
          * captain/admin participant-exit action
          * (feature/live-operations-participant-exit). Product ownership:
@@ -244,12 +287,16 @@ export const router = createBrowserRouter([
          * never called or modeled here. Calculation
          * (`POST /eventos/{id}/pagos/calcular`) and per-payment recording
          * (`PATCH /pagos/{id}/pagado`, `PATCH /pagos/{id}/fallido`) are
-         * local, fixture-backed captain actions only — no network call,
-         * no bank/gateway integration; the actual transfer always happens
-         * manually, outside SGEB. Same positive integer SGEB event id as
-         * the other `eventos/:id/*` routes, parsed/validated inside
-         * `EventPaymentsPage`, not here. `/cubaitor`, `/bebidas` remain
-         * unregistered.
+         * real, live captain actions against the pinned backend (this
+         * comment previously said "local, fixture-backed" — stale as of
+         * feature/operations-and-reports-live's audit; `paymentsApi.ts`
+         * has called the real endpoints since `feature/event-payments-ui-
+         * foundation` shipped). There is still no bank/gateway
+         * integration — the actual transfer always happens manually,
+         * outside SGEB, and this screen only records the outcome. Same
+         * positive integer SGEB event id as the other `eventos/:id/*`
+         * routes, parsed/validated inside `EventPaymentsPage`, not here.
+         * `/cubaitor`, `/bebidas` remain unregistered.
          */
         path: 'eventos/:id/pagos',
         lazy: async () => {

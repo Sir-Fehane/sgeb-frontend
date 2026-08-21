@@ -309,10 +309,12 @@ describe('EventDetailContent — operation roadmap', () => {
       .map((item) => item.textContent?.replace('Próximamente', '').trim())
 
     expect(items).toEqual([
+      'Panel operativo',
       'Selección de equipo',
       'Pase de lista',
       'Montaje / asignación de mesas',
       'Operación en vivo',
+      'Solicitudes de mesa',
       'Bebidas y Cubaitor',
       'Cierre',
       'Pagos',

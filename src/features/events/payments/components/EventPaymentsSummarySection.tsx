@@ -8,8 +8,11 @@ export interface EventPaymentsSummarySectionProps {
 }
 
 /**
- * Computed purely from the local fixture-backed payments list — never
- * `GET /eventos/{id}/dashboard`, no polling, no Socket.IO. `total` is a
+ * Computed purely from the real, live payments list this page already
+ * fetches (`GET /eventos/{id}/pagos`) — never `GET /eventos/{id}/dashboard`
+ * (which, as of feature/operations-and-reports-live, has no payment
+ * section at all — see `features/events/dashboard`'s own module comment),
+ * no polling, no Socket.IO. `total` is a
  * presentation-only sum of every non-cancelled row's already-provided
  * `monto` (never a frontend calculation of what a payment *should* be —
  * the server owns that), always recomputed from the CURRENT list so it

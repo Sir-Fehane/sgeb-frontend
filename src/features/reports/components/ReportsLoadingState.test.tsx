@@ -7,8 +7,6 @@ describe('ReportsLoadingState', () => {
   it('exposes a single accessible loading status', () => {
     render(<ReportsLoadingState />)
 
-    expect(
-      screen.getByRole('status', { name: 'Cargando reporte de desempeño' }),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: 'Cargando reportes' })).toBeInTheDocument()
   })
 })

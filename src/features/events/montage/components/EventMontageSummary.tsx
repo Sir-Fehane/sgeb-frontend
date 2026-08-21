@@ -9,9 +9,10 @@ export interface EventMontageSummaryProps {
 }
 
 /**
- * Computed purely from the local fixture-backed participant/table lists —
- * never `GET /eventos/{id}/dashboard` (`DashboardEvento`, a separate,
- * explicitly out-of-scope live aggregate this branch does not integrate).
+ * Computed purely from the real, live participant/table lists this page
+ * already fetches — never `GET /eventos/{id}/dashboard`'s own `montaje`
+ * aggregate (a separate endpoint, integrated on its own dedicated page as
+ * of feature/operations-and-reports-live — see `features/events/dashboard`).
  * No hidden business formula: every number here is a plain count over the
  * same rows the checklist/table sections below render.
  */

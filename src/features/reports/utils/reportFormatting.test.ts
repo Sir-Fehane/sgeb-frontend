@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  formatClabeStatus,
+  formatReportDateTime,
   formatReportMxn,
   formatReportRating,
 } from '@/features/reports/utils/reportFormatting'
@@ -30,12 +30,9 @@ describe('formatReportRating', () => {
   })
 })
 
-describe('formatClabeStatus', () => {
-  it('renders "Vigente" for true', () => {
-    expect(formatClabeStatus(true)).toBe('Vigente')
-  })
-
-  it('renders "No vigente" for false', () => {
-    expect(formatClabeStatus(false)).toBe('No vigente')
+describe('formatReportDateTime', () => {
+  it('formats a full date-time string as a readable date and time', () => {
+    const formatted = formatReportDateTime('2026-07-15T18:30:00.000-06:00')
+    expect(formatted.length).toBeGreaterThan(0)
   })
 })

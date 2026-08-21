@@ -9,12 +9,13 @@
  * state, never a delta — reapplying the same or a late event after a
  * reconnect is safe (docs/decisions.md ADR-006).
  *
- * `orden:cambio` and `dispensado:cambio` are confirmed backend events but
- * are deliberately NOT registered in `SocketProvider` yet — this frontend
- * has no Orders/Cubaitor feature or query key to invalidate against them
- * (see this branch's final report, "deferred items"). Their types stay
- * declared here so the full nine-event contract is documented in one
- * place for whichever branch builds that feature next.
+ * `orden:cambio` and `dispensado:cambio` are registered in
+ * `SocketProvider` as of feature/operations-and-reports-live, invalidating
+ * the event dashboard's `barra` section (the only real consumer of
+ * order/dispensing state so far — see that provider's own comment on
+ * those two handlers). There is still no dedicated Orders/Cubaitor
+ * feature or per-order query key; a future one would extend those
+ * handlers rather than replace them.
  */
 
 export interface Emitido {
@@ -53,7 +54,6 @@ export interface ChecklistCambio extends Emitido {
   pendientes: number
 }
 
-/** Confirmed backend event — not yet consumed (see module comment above). */
 export interface OrdenCambio extends Emitido {
   idEvento: number
   idOrden: number
@@ -61,7 +61,6 @@ export interface OrdenCambio extends Emitido {
   estado: string
 }
 
-/** Confirmed backend event — not yet consumed (see module comment above). */
 export interface DispensadoCambio extends Emitido {
   idEvento: number
   idDispensado: number

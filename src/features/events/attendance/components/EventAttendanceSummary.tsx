@@ -8,11 +8,14 @@ export interface EventAttendanceSummaryProps {
 }
 
 /**
- * Computed purely from the local fixture-backed participant list — never
- * `DashboardEvento.staffing` (a separate, explicitly out-of-scope live
- * aggregate this branch does not integrate). No hidden business formula:
- * every number here is a plain count over the same rows the participant
- * list below renders.
+ * Computed purely from the real, live participant list this page already
+ * fetches (`GET /eventos/{id}/participaciones`) — never
+ * `GET /eventos/{id}/dashboard`'s own `asistencia` aggregate (a separate
+ * endpoint, integrated on its own dedicated page as of
+ * feature/operations-and-reports-live — see
+ * `features/events/dashboard`). No hidden business formula: every number
+ * here is a plain count over the same rows the participant list below
+ * renders.
  */
 export function EventAttendanceSummary({
   seleccionadosTotal,

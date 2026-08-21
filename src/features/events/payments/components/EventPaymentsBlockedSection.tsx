@@ -7,12 +7,14 @@ export interface EventPaymentsBlockedSectionProps {
 }
 
 /**
- * Renders when Closure's `listo === false` — reuses the SAME readiness
- * data Closure already computes (`findEventClosureReadiness`, imported by
- * the page), never a second, independently-maintained copy of the three
- * blockers. This component only re-frames that data for a Payments-
- * specific heading; it does not duplicate or reinvent Closure's own
- * blocker logic. No enabled calculation control is ever rendered here.
+ * Renders when Closure's `listo === false` — reuses the SAME real
+ * readiness data Closure itself reads (`GET /eventos/{id}/cierre` via
+ * `useEventClosureReadinessQuery`, fetched independently by
+ * `EventPaymentsPage` and passed down as `readiness`), never a second,
+ * independently-maintained copy of the three blockers. This component
+ * only re-frames that data for a Payments-specific heading; it does not
+ * duplicate or reinvent Closure's own blocker logic. No enabled
+ * calculation control is ever rendered here.
  */
 export function EventPaymentsBlockedSection({
   readiness,
