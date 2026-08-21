@@ -22,32 +22,21 @@ function pickLatest(
 }
 
 /**
- * Resolves "who currently has which table" from `Participacion.estado`
- * crossed with matching `AsignacionMesa` rows — see `types/montage.ts`'s
- * module comment for why raw row history alone cannot answer this
- * (`AsignacionMesa` rows are never deleted, and releasing one never
- * reverts `Participacion.estado`).
+ * Resolves "who currently has which table" from `AsignacionMesa.activa`
+ * alone — v1.13's explicit validity field, confirmed at the
+ * model/migration/test level (see `types/montage.ts`'s module comment).
+ * `activa=true` is current, linked or not; `activa=false` is
+ * released/historical and never surfaces here, regardless of the
+ * participant's own `estado` — a departed (`salida`) or otherwise
+ * out-of-sequence participant with a genuinely `activa: true` row still
+ * shows as currently assigned, since that is real, actionable state for
+ * the captain (e.g. a table nobody remembered to release), not something a
+ * UI-level heuristic should hide.
  *
- * - `estado === 'asignado'` → the newest `vinculada: false` row for that
- *   participation is their current (pending) table.
- * - `estado === 'vinculo'` → the newest `vinculada: true` row is their
- *   current (linked) table. If none exists — the confirmed
- *   release-doesn't-revert-estado gap — this participant is treated as
- *   having no current table: mesa-side truth wins over the stale
- *   participation state.
- * - Any other `estado` → no current table, regardless of old rows.
- *
- * Residual, reported (not silently patched) limitation: this only
- * self-heals the `'vinculo'`-without-a-`vinculada:true`-row case. A table
- * assigned and then released *before* ever being linked leaves the
- * participation at `estado: 'asignado'` with its one `vinculada: false`
- * row untouched by `liberarMesa` — nothing in the API distinguishes that
- * row from a still-pending one, so it keeps showing as "pending" until a
- * later real change (e.g. a fresh assignment, which wins on
- * `fechaAsignacion`) supersedes it. Fixing this needs a backend-side
- * signal (e.g. an `activa` flag on `asignacion_mesa`, or having
- * `liberarMesa` also revert `Participacion.estado`) — see this branch's
- * report.
+ * A participant can hold more than one `activa: true` row at once (the
+ * backend does not prevent it); this resolves to the most recently
+ * assigned one, same tie-break as before. Modeling multiple simultaneous
+ * tables per participant is out of this branch's scope — see the report.
  */
 export function deriveMontageAssignments(
   participants: readonly MontageRosterParticipant[],
@@ -57,23 +46,15 @@ export function deriveMontageAssignments(
   const currentAssignmentByParticipation = new Map<number, MontageAssignmentViewModel>()
 
   for (const participant of participants) {
-    const wantsVinculada = participant.estado === 'vinculo'
-    if (!wantsVinculada && participant.estado !== 'asignado') {
-      continue
-    }
-
     const candidates = assignments.filter(
       (assignment) =>
-        assignment.idParticipacion === participant.idParticipacion &&
-        assignment.vinculada === wantsVinculada,
+        assignment.idParticipacion === participant.idParticipacion && assignment.activa,
     )
     if (candidates.length === 0) {
       continue
     }
 
-    const latest = wantsVinculada
-      ? pickLatest(candidates, (a) => a.fechaVinculacion ?? a.fechaAsignacion)
-      : pickLatest(candidates, (a) => a.fechaAsignacion)
+    const latest = pickLatest(candidates, (a) => a.fechaAsignacion)
 
     currentAssignmentByParticipation.set(participant.idParticipacion, {
       idAsignacion: latest.idAsignacion,

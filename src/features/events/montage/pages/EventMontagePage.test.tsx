@@ -127,6 +127,8 @@ function asignacion(
   return {
     fecha_asignacion: '2026-08-19T10:00:00.000Z',
     fecha_vinculacion: null,
+    activa: true,
+    fecha_liberacion: null,
     ...overrides,
   }
 }
@@ -188,9 +190,9 @@ function completedInstancia(idParticipacion: number): ChecklistInstanciaApiRecor
  * mirrors `TeamSelectionPage.test.tsx`'s `fakeTransport`. Successful
  * mutations (`aprobar`, assign, release) mutate the in-memory roster/mesas/
  * asignaciones, so the refetch each mutation's cache invalidation triggers
- * reflects real new state, exactly like the pinned backend — except
- * `checklist_ok`/`Participacion.estado` on release, which the real backend
- * also never mutates (see `deriveMontageAssignments`'s own comment).
+ * reflects real new state, exactly like the pinned backend, including
+ * release flipping `activa` to `false` (see the `DELETE` handler below and
+ * `deriveMontageAssignments`'s own comment).
  */
 function fakeTransport(
   idEvento: number,
@@ -294,6 +296,8 @@ function fakeTransport(
           vinculada: false,
           fecha_asignacion: '2026-08-19T12:00:00.000Z',
           fecha_vinculacion: null,
+          activa: true,
+          fecha_liberacion: null,
           mesa: mesaRecord,
           participacion: {
             id_participacion: idParticipacion,
@@ -330,7 +334,14 @@ function fakeTransport(
           m.id_mesa === target.id_mesa ? { ...m, estado: 'libre' } : m,
         )
         asignaciones = asignaciones.map((a) =>
-          a.id_asignacion === idAsignacion ? { ...a, vinculada: false } : a,
+          a.id_asignacion === idAsignacion
+            ? {
+                ...a,
+                vinculada: false,
+                activa: false,
+                fecha_liberacion: '2026-08-19T13:00:00.000Z',
+              }
+            : a,
         )
       }
       return Promise.resolve(successEnvelope(null))

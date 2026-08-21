@@ -23,6 +23,8 @@ const RECORD: AsignacionMesaApiRecord = {
   vinculada: true,
   fecha_asignacion: '2026-09-12T17:00:00',
   fecha_vinculacion: '2026-09-12T17:45:00',
+  activa: true,
+  fecha_liberacion: null,
   mesa: {
     id_mesa: 501,
     id_evento: 1001,
@@ -68,6 +70,8 @@ describe('fetchAsignaciones', () => {
         vinculada: true,
         fechaAsignacion: '2026-09-12T17:00:00',
         fechaVinculacion: '2026-09-12T17:45:00',
+        activa: true,
+        fechaLiberacion: null,
         mesa: { idMesa: 501, etiqueta: 'Mesa 1', estado: 'ocupada' },
         participacion: {
           idParticipacion: 301,
@@ -96,6 +100,20 @@ describe('fetchAsignaciones', () => {
     expect(requestSgeb).toHaveBeenCalledWith({
       url: '/eventos/1001/asignaciones',
       params: { vinculada: true },
+    })
+  })
+
+  it('sends the activa filter only when explicitly provided, matching the server default when omitted', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0000', message: 'ok' },
+      data: [],
+    })
+
+    await fetchAsignaciones(1001, { activa: false })
+
+    expect(requestSgeb).toHaveBeenCalledWith({
+      url: '/eventos/1001/asignaciones',
+      params: { activa: false },
     })
   })
 

@@ -37,6 +37,8 @@ function assignment(
   return {
     fechaAsignacion: '2026-08-19T10:00:00.000Z',
     fechaVinculacion: null,
+    activa: true,
+    fechaLiberacion: null,
     mesa: {
       idMesa: overrides.idMesa,
       etiqueta: `Mesa ${String(overrides.idMesa)}`,
@@ -100,13 +102,18 @@ describe('deriveMontageAssignments', () => {
     expect(result.currentAssignmentByParticipation.get(2)?.idMesa).toBe(20)
   })
 
-  it('self-heals a stale "vinculo" participation with no matching vinculada:true row (release doesn\'t revert estado)', () => {
-    const participants = [participant({ idParticipacion: 3, estado: 'vinculo' })]
+  it('ignores a released (activa:false) row entirely — regression: a released mesero must never again show "con mesa asignada"', () => {
+    const participants = [participant({ idParticipacion: 3, estado: 'confirmo_llegada' })]
     const mesas = [mesa({ idMesa: 30 })]
-    // Only a historical, now-released row exists — vinculada:false, left
-    // over from before the release. There is no vinculada:true row.
     const assignments = [
-      assignment({ idAsignacion: 300, idParticipacion: 3, idMesa: 30, vinculada: false }),
+      assignment({
+        idAsignacion: 300,
+        idParticipacion: 3,
+        idMesa: 30,
+        vinculada: false,
+        activa: false,
+        fechaLiberacion: '2026-08-19T10:30:00.000Z',
+      }),
     ]
 
     const result = deriveMontageAssignments(participants, mesas, assignments)
@@ -115,23 +122,39 @@ describe('deriveMontageAssignments', () => {
     expect(result.tables[0]?.currentAssignment).toBeUndefined()
   })
 
-  it('documents the residual gap: a released-before-linked "asignado" row cannot be told apart from a still-pending one', () => {
-    // liberarMesa never touches Participacion.estado nor marks the row —
-    // so from the client's point of view this looks identical to a
-    // genuinely pending assignment. See this function's own module
-    // comment and the branch report.
+  it('resolves the still-active row over an older released one for the same participant — the pre-v1.13 ambiguity `activa` now resolves', () => {
+    // Before v1.13, a released-before-linked row and a genuinely pending
+    // one were both bare `vinculada: false` rows, indistinguishable. The
+    // explicit `activa` field removes that ambiguity: the released row is
+    // simply excluded as a candidate.
     const participants = [participant({ idParticipacion: 7, estado: 'asignado' })]
-    const mesas = [mesa({ idMesa: 70 })]
+    const mesas = [mesa({ idMesa: 70 }), mesa({ idMesa: 71 })]
     const assignments = [
-      assignment({ idAsignacion: 700, idParticipacion: 7, idMesa: 70, vinculada: false }),
+      assignment({
+        idAsignacion: 699,
+        idParticipacion: 7,
+        idMesa: 70,
+        vinculada: false,
+        activa: false,
+        fechaAsignacion: '2026-08-19T08:00:00.000Z',
+        fechaLiberacion: '2026-08-19T08:30:00.000Z',
+      }),
+      assignment({
+        idAsignacion: 700,
+        idParticipacion: 7,
+        idMesa: 71,
+        vinculada: false,
+        fechaAsignacion: '2026-08-19T09:00:00.000Z',
+      }),
     ]
 
     const result = deriveMontageAssignments(participants, mesas, assignments)
 
     expect(result.currentAssignmentByParticipation.get(7)?.idAsignacion).toBe(700)
+    expect(result.currentAssignmentByParticipation.get(7)?.idMesa).toBe(71)
   })
 
-  it('picks the newest matching row when a participant has more than one (reassigned after an earlier release)', () => {
+  it('picks the newest matching row when a participant holds more than one simultaneous active assignment (the backend does not prevent this)', () => {
     const participants = [participant({ idParticipacion: 4, estado: 'asignado' })]
     const mesas = [mesa({ idMesa: 40 }), mesa({ idMesa: 41 })]
     const assignments = [
@@ -157,20 +180,20 @@ describe('deriveMontageAssignments', () => {
     expect(result.currentAssignmentByParticipation.get(4)?.idMesa).toBe(41)
   })
 
-  it('never resolves a current table for a participant before "asignado" or after "salida"', () => {
-    const participants = [
-      participant({ idParticipacion: 5, estado: 'confirmo_llegada' }),
-      participant({ idParticipacion: 6, estado: 'salida' }),
-    ]
-    const mesas = [mesa({ idMesa: 50 }), mesa({ idMesa: 60 })]
+  it('trusts activa over participation estado — a departed ("salida") participant whose table was never released still shows as currently assigned', () => {
+    // v1.13 makes `activa` the sole source of truth for "current table."
+    // Hiding a genuinely active row because the participant's own estado
+    // looks unusual would mask a real operational problem (a table nobody
+    // remembered to release) rather than protect against one.
+    const participants = [participant({ idParticipacion: 6, estado: 'salida' })]
+    const mesas = [mesa({ idMesa: 60, estado: 'ocupada' })]
     const assignments = [
-      assignment({ idAsignacion: 500, idParticipacion: 5, idMesa: 50, vinculada: false }),
       assignment({ idAsignacion: 600, idParticipacion: 6, idMesa: 60, vinculada: true }),
     ]
 
     const result = deriveMontageAssignments(participants, mesas, assignments)
 
-    expect(result.currentAssignmentByParticipation.size).toBe(0)
+    expect(result.currentAssignmentByParticipation.get(6)?.idAsignacion).toBe(600)
   })
 
   it('leaves currentAssignment absent for a table nobody currently has', () => {

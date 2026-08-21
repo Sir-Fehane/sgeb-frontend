@@ -30,12 +30,13 @@ function initialsFor(name: string | undefined): string {
  * `useOidcSessionBootstrap`). Same click-outside/Escape dropdown
  * convention as `NotificationBell`.
  *
- * No edit-profile action: `GET /usuarios/me` (the would-be prefill source)
- * is broken on the pinned backend (routes to a controller file that does
- * not exist — `#modules/identidad/controllers/perfil_controller.mostrar`).
- * This branch's report flags that as a backend gap; until it's fixed,
- * this menu only ever displays real, already-available `/userinfo` fields
- * plus the one real, already-wired action: logout
+ * No edit-profile action, still: `GET /usuarios/me` is confirmed fixed and
+ * live as of v1.13 (`features/account/services/usuariosApi.ts`'s
+ * `fetchMiPerfil`/`updateMiPerfil` now exist), but this branch is a
+ * contract-sync, not a profile feature — building the edit UI itself is
+ * out of scope here (see the branch report's recommended next branch).
+ * Until then this menu only ever displays real, already-available
+ * `/userinfo` fields plus the one real, already-wired action: logout
  * (`features/oidc-client/client/logoutUrl.ts`'s `logout()`, previously
  * implemented but called from nowhere).
  */

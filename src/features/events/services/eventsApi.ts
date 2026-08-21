@@ -393,26 +393,17 @@ export async function updateEvento(
  * component) only ever offer the transitions valid for the event's current
  * `estado`, and the server remains the authoritative enforcer regardless.
  *
- * **Deliberately returns `void`, not the mapped `Evento` — a confirmed
- * backend response-shape gap, not a frontend choice.** Unlike
- * `EventoService.obtener`/`.listar`, `.cambiarEstado`
- * (`evento_service.ts`) fetches its row for the transition with no
- * `.preload('capitan')`/`.preload('salon')` — so this endpoint's response
- * `data` is a real, successfully-updated `Evento`, but with `capitan`
- * absent from the JSON entirely. `mapEventoToDetail`/`mapCapitan` assume
- * `capitan` is always present (true for every other endpoint that embeds
- * it) and previously threw a `TypeError` reading into it — which
- * `useChangeEventoEstadoMutation` surfaced as a failed mutation even
- * though the transition had already committed server-side (confirmed:
- * `EventoService.cambiarEstado` saves inside its transaction before the
- * response is even serialized). No caller ever actually consumed the
- * mapped detail — `useChangeEventoEstadoMutation` never reads
- * `mutation.data`, and `finalizeEvento` already discarded it — so the fix
- * is to stop mapping it here and let the existing
- * `eventsQueryKeys.detail`/`.lists()` invalidation pull correct, fully
- * -preloaded data through `fetchEventoDetalle`/the events list instead.
- * Reported backend follow-up: preload `capitan`/`salon` in
- * `EventoService.cambiarEstado` to match `obtener`/`listar`.
+ * **Deliberately still returns `void`, not the mapped `Evento`.** As of
+ * v1.13, `EventoService.cambiarEstado` re-fetches through the same
+ * `obtener()` `GET /eventos/{id}` uses — `capitan`/`salon` preloaded, same
+ * shape either way — confirmed the previous incomplete-response gap (a
+ * `capitan`-less payload that made `mapEventoToDetail` throw on an
+ * otherwise-successful transition) is fixed. This function keeps
+ * discarding the response and relying on `eventsQueryKeys.detail`/
+ * `.lists()` invalidation regardless: no caller has ever read
+ * `mutation.data` here, invalidation is already correct and inexpensive,
+ * and mapping a second response shape for this one endpoint would just be
+ * a second code path to keep in sync for no behavioral gain.
  */
 export async function changeEventoEstado(
   idEvento: number,

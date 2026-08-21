@@ -24,21 +24,18 @@
  *       scanned table). This screen only ever displays `vinculada` state —
  *       it never triggers this transition.
  *
- * **Deriving "who currently has which table" — a documented backend
- * ambiguity, not an invented rule:**
- * `AsignacionMesa` rows are never deleted — `liberarMesa` only flips
- * `vinculada` back to `false` — and releasing a table never reverts
- * `Participacion.estado` (confirmed: `liberarMesa` never touches
- * `ParticipacionEvento` at all). So a `vinculada: false` row alone cannot
- * say whether it means "just assigned, not yet linked" or "was linked,
- * then released." `utils/deriveMontageAssignments.ts` resolves this using
- * `Participacion.estado` (real, authoritative) instead of raw row history:
- * `estado === 'asignado'` → their newest `vinculada: false` row is current;
- * `estado === 'vinculo'` → their newest `vinculada: true` row is current,
- * and if none exists (the release-doesn't-revert-estado gap above) they
- * are treated as having no current table, letting mesa-side truth win over
- * the stale participation state. Any other `estado` → no current table
- * regardless of old rows. See this branch's report for the full writeup.
+ * **Deriving "who currently has which table" — v1.13 explicit truth:**
+ * `AsignacionMesa` now carries an explicit `activa` flag (plus
+ * `fecha_liberacion`), orthogonal to `vinculada`: `activa=true` means the
+ * row is a current assignment (linked or not); `activa=false` means
+ * released/historical. Rows are still never deleted — release is a
+ * soft-release — but the row itself now says which it is, confirmed at the
+ * model/migration/test level on the pinned backend. `GET
+ * /eventos/{id_evento}/asignaciones` defaults to `activa=true` only.
+ * `utils/deriveMontageAssignments.ts` derives "current table" purely from
+ * this field — no cross-referencing against `Participacion.estado`, which
+ * was the pre-v1.13 workaround for the ambiguity `activa` now resolves
+ * server-side. See this branch's report.
  *
  * Critical correction to a naive "one checklist per event" reading:
  * `GET/POST /participaciones/{id_participacion}/checklist-instancias` is

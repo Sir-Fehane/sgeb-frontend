@@ -26,17 +26,15 @@ export interface EventMontageAssignmentSectionProps {
 }
 
 /**
- * Server-enforced: assigning a table requires `checklist_ok`
- * (`POST /participaciones/{id}/asignaciones` → `SGEB-4005` otherwise) —
- * mirrored here as `checklistStatus !== 'approved'`. Everything else below
- * is a UI-level safeguard on top of a more permissive backend (confirmed:
- * no participation-state or event-state guard exists on that endpoint),
- * added specifically to protect against a confirmed backend gap —
- * `SGEB-4006` only blocks a second assign against an already-*linked*
- * mesa, not merely a pending one — see `types/montage.ts`'s module
- * comment and this branch's report. No "change table" action exists —
- * moving a mesero is only ever release-then-assign, matching the two
- * separate documented endpoints (no single "change" operation exists).
+ * Server-enforced, confirmed against `ParticipacionService.asignarMesa`:
+ * assigning a table requires the participation's `estado` to already be
+ * `confirmo_llegada | asignado | vinculo` (`SGEB-4011`) and `checklist_ok`
+ * (`SGEB-4005`). This UI mirrors both as a proactive safeguard —
+ * `estado`'s early states below, and `checklistStatus !== 'approved'` — so
+ * the button is never even offered for a request the server would reject;
+ * the server remains authoritative regardless. No "change table" action
+ * exists — moving a mesero is only ever release-then-assign, matching the
+ * two separate documented endpoints (no single "change" operation exists).
  */
 function ineligibilityReason(
   estado: ParticipacionEstado,

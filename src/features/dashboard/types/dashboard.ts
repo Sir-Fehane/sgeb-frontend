@@ -5,17 +5,12 @@ import type { EventStatus, EventType } from '@/features/events/types/event'
  *
  * Confirmed directly against the pinned backend's `DashboardService.capitan`
  * (`app/modules/dashboard/services/dashboard_service.ts`) and
- * `DashboardController.capitan` — not against `docs/api/openapi-sgeb.yaml`,
- * whose `DashboardCapitan` schema (query params `fecha_desde`/`fecha_hasta`/
- * `secciones`, sections `resumen`/`staffing_riesgo`/`operacion`/`cierre`/
- * `alertas`, `SGEB-0004` partial success) does not match the live
- * controller/service code at all: the real endpoint takes no query
- * parameters, never returns partial success (`responder.ok`, never
- * `responder.parcial`), and has none of those sections. See this branch's
- * report for the full mismatch writeup. This type mirrors the ACTUAL
- * response — a portfolio-level events overview, nothing else. The richer
- * per-event operational concepts the yaml describes (staffing, montaje,
- * piso, barra, servicio/comensal, cierre, alertas) do exist, but one level
+ * `DashboardController.capitan`, and — as of OpenAPI 1.13.0 — matching
+ * `docs/api/openapi-sgeb.yaml`'s `DashboardCapitan` schema too: no query
+ * parameters, no partial-success semantics, and exactly the fields below.
+ * This type mirrors that shape — a portfolio-level events overview,
+ * nothing else. The richer per-event operational concepts (staffing,
+ * montaje, piso, barra, servicio/comensal, cierre, alertas) exist one level
  * down, on `GET /eventos/{id}/dashboard` — out of scope for this page.
  */
 

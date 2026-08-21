@@ -45,9 +45,10 @@ export function EventMontageParticipantList({
   }
 
   // Excludes a table with any current assignment, even an unlinked one —
-  // a UI-level safeguard, since the backend's own double-assign guard
-  // (SGEB-4006) only blocks a second assign against an already-*linked*
-  // mesa (see `EventMontageAssignmentSection`'s own comment).
+  // matching the backend's own double-assign guard (SGEB-4006), confirmed
+  // keyed on `activa` (any current assignment, linked or not), not merely
+  // `vinculada`. Proactively hiding these here just avoids offering a
+  // request the server would reject anyway.
   const freeTables = tables.filter(
     (mesa) => mesa.estado === 'libre' && mesa.currentAssignment === undefined,
   )

@@ -6,7 +6,7 @@ import {
   type CreateMesaRequest,
   type MesaApiRecord,
 } from '@/features/events/services/mesasApi'
-import { SgebNetworkError } from '@/shared/api/sgebApiError'
+import { SgebApplicationError, SgebNetworkError } from '@/shared/api/sgebApiError'
 import { requestSgeb } from '@/shared/api/sgebClient'
 
 vi.mock('@/shared/api/sgebClient', () => ({
@@ -83,5 +83,28 @@ describe('createMesa', () => {
     await expect(createMesa(1001, { etiqueta: 'Mesa 2' })).rejects.toBeInstanceOf(
       SgebNetworkError,
     )
+  })
+
+  it('propagates a duplicate etiqueta (SGEB-2013) as the backend-approved friendly message, never raw DB/constraint text', async () => {
+    const error = new SgebApplicationError(409, {
+      code: 'SGEB-2013',
+      message: 'Ya existe un registro con ese dato. Verifica la información.',
+      technical_message:
+        "MESA.etiqueta='Mesa 1' ya existe en el evento 1001. Restricción: mesa_id_evento_etiqueta_unique.",
+    })
+    vi.mocked(requestSgeb).mockRejectedValue(error)
+
+    await expect(createMesa(1001, { etiqueta: 'Mesa 1' })).rejects.toBe(error)
+    try {
+      await createMesa(1001, { etiqueta: 'Mesa 1' })
+      expect.unreachable()
+    } catch (thrown) {
+      expect(thrown).toBeInstanceOf(SgebApplicationError)
+      const sgebError = thrown as SgebApplicationError
+      expect(sgebError.code).toBe('SGEB-2013')
+      expect(sgebError.message).toBe(
+        'Ya existe un registro con ese dato. Verifica la información.',
+      )
+    }
   })
 })

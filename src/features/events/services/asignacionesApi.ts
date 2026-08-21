@@ -56,9 +56,18 @@ export interface AsignacionMesaParticipacionApiRecord {
 
 /**
  * Wire shape of `GET /eventos/{id_evento}/asignaciones`
- * (docs/api/openapi-sgeb.yaml v1.12.0, `AsignacionMesaDetalle`) — confirmed
+ * (docs/api/openapi-sgeb.yaml v1.13.0, `AsignacionMesaDetalle`) — confirmed
  * against the pinned backend's `ParticipacionService.listarAsignaciones`
- * (`app/modules/participaciones/services/participacion_service.ts`).
+ * (`app/modules/participaciones/services/participacion_service.ts`) and its
+ * `AsignacionMesa` model.
+ *
+ * `activa`/`fecha_liberacion` are v1.13's explicit validity fields,
+ * orthogonal to `vinculada`: `activa=true,vinculada=false` → assigned, the
+ * mesero hasn't scanned the table's QR yet; `activa=true,vinculada=true` →
+ * linked; `activa=false` → released (`fecha_liberacion` says when). Rows
+ * are never deleted — release is a soft-release — so `activa` is the one
+ * field that says whether a row is current. See `deriveMontageAssignments`,
+ * which now derives "current table" purely from this field.
  */
 export interface AsignacionMesaApiRecord {
   id_asignacion: number
@@ -67,6 +76,8 @@ export interface AsignacionMesaApiRecord {
   vinculada: boolean
   fecha_asignacion: string
   fecha_vinculacion: string | null
+  activa: boolean
+  fecha_liberacion: string | null
   mesa: AsignacionMesaMesaApiRecord
   participacion: AsignacionMesaParticipacionApiRecord
 }
@@ -79,6 +90,9 @@ export interface AsignacionMesaViewModel {
   vinculada: boolean
   fechaAsignacion: string
   fechaVinculacion: string | null
+  /** `false` means released/historical — see `AsignacionMesaApiRecord`'s own comment. The default (unfiltered) `fetchAsignaciones` call only ever returns `activa: true` rows; this field only becomes relevant once a caller passes `{ activa: false }` to read history. */
+  activa: boolean
+  fechaLiberacion: string | null
   mesa: {
     idMesa: number
     etiqueta: string
@@ -108,6 +122,8 @@ function mapAsignacionToViewModel(
     vinculada: record.vinculada,
     fechaAsignacion: record.fecha_asignacion,
     fechaVinculacion: record.fecha_vinculacion,
+    activa: record.activa,
+    fechaLiberacion: record.fecha_liberacion,
     mesa: {
       idMesa: record.mesa.id_mesa,
       etiqueta: record.mesa.etiqueta,
@@ -131,6 +147,14 @@ function mapAsignacionToViewModel(
 export interface FetchAsignacionesParams {
   /** `true` for assignments where the mesero has already scanned the mesa's QR in person; omit for all. */
   vinculada?: boolean
+  /**
+   * `true` (the server default when omitted) for current assignments only;
+   * `false` queries the released/historical set instead. Every existing
+   * caller in this codebase omits this — matching the server's own
+   * default — so passing it explicitly is only for a future
+   * assignment-history screen, not built in this branch.
+   */
+  activa?: boolean
 }
 
 /**
@@ -139,22 +163,29 @@ export interface FetchAsignacionesParams {
  * sits in the pinned backend's "any authenticated role" route group — no
  * `middleware.rol([...])` guard (`start/routes.ts`) — same as `fetchMesas`.
  *
- * Confirmed backend quirk, NOT matching `openapi-sgeb.yaml`'s documented
- * `404`: `listarAsignaciones` never checks the event exists before
- * querying, so an unknown `idEvento` resolves to an empty array (HTTP 200),
- * never a rejected promise. Callers must not treat an empty result as
- * "event not found."
+ * Confirmed on the pinned v1.13 backend: an unknown `idEvento` now responds
+ * `404` (`SGEB-3001`), a deliberate fix — an empty result and a nonexistent
+ * event used to both resolve `200 []`, and the panel couldn't tell "nothing
+ * assigned yet" from "this screen doesn't exist." This function lets that
+ * rejection propagate like any other `SgebApplicationError`, same as
+ * `fetchEventoDetalle`.
  */
 export async function fetchAsignaciones(
   idEvento: number,
   params?: FetchAsignacionesParams,
   signal?: AbortSignal,
 ): Promise<AsignacionMesaViewModel[]> {
+  const queryParams: Record<string, boolean> = {}
+  if (params?.vinculada !== undefined) {
+    queryParams.vinculada = params.vinculada
+  }
+  if (params?.activa !== undefined) {
+    queryParams.activa = params.activa
+  }
+
   const envelope = await requestSgeb<AsignacionMesaApiRecord[]>({
     url: `/eventos/${String(idEvento)}/asignaciones`,
-    ...(params?.vinculada !== undefined
-      ? { params: { vinculada: params.vinculada } }
-      : {}),
+    ...(Object.keys(queryParams).length > 0 ? { params: queryParams } : {}),
     ...(signal ? { signal } : {}),
   })
   return (envelope.data ?? []).map(mapAsignacionToViewModel)
@@ -163,16 +194,18 @@ export async function fetchAsignaciones(
 /**
  * `POST /participaciones/{id_participacion}/asignaciones` (capitan/admin,
  * RF-21) — request body confirmed against the pinned backend's
- * `asignarMesaValidator` (`vine.object({ idMesa: ... })`, camelCase). The
- * only server guard is `Participacion.checklist_ok` (`SGEB-4005`); there is
- * no participation-state or event-state check in this endpoint (confirmed
- * by direct read of `ParticipacionService.asignarMesa`) — this screen's own
- * eligibility copy is a UI-level safeguard on top of a more permissive
- * backend, not a mirror of a server rule (see the branch report). The
- * response is a bare `AsignacionMesa` (no joined `mesa`/`participacion`,
- * unlike the readback endpoint) — never read here, since every caller
- * reconciles through `fetchAsignaciones` after invalidating instead of
- * trusting this response as local truth.
+ * `asignarMesaValidator` (`vine.object({ idMesa: ... })`, camelCase).
+ * Confirmed server guards, in order (`ParticipacionService.asignarMesa`):
+ * event not `finalizado`/`cancelado` (`SGEB-4013`); participation `estado`
+ * ∈ `confirmo_llegada | asignado | vinculo` (`SGEB-4011`); `checklist_ok`
+ * (`SGEB-4005`); mesa belongs to the same event (`SGEB-3002`); no other
+ * currently-`activa` assignment on that mesa (`SGEB-4006`). This screen's
+ * own eligibility copy (`EventMontageAssignmentSection`) is a UI-level
+ * safeguard on top of these — not a substitute, the server remains
+ * authoritative. The response is a bare `AsignacionMesa` (no joined
+ * `mesa`/`participacion`, unlike the readback endpoint) — never read here,
+ * since every caller reconciles through `fetchAsignaciones` after
+ * invalidating instead of trusting this response as local truth.
  */
 export async function assignTable(
   idParticipacion: number,
@@ -187,12 +220,16 @@ export async function assignTable(
 
 /**
  * `DELETE /asignaciones/{id_asignacion}` (capitan/admin) — a logical
- * release: the `AsignacionMesa` row is never deleted server-side, only
- * `vinculada` flips back to `false` and `Mesa.estado` returns to `libre`
- * (confirmed by direct read of `ParticipacionService.liberarMesa`). Blocks
- * only on active orders for that mesa (`SGEB-4018`). `data` is always
- * `null` on success per the documented contract — not a defensive guard
- * like `assignTable`'s, an expected response shape.
+ * release, confirmed by direct read of `ParticipacionService.liberarMesa`:
+ * the `AsignacionMesa` row is never deleted, only soft-released (`activa`
+ * and `vinculada` both flip to `false`, `fecha_liberacion` set) and
+ * `Mesa.estado` returns to `libre`. As of v1.13 it also reverts the
+ * participation's `estado` back to `confirmo_llegada` when this was its
+ * last remaining active assignment — the fix for the previously-reported
+ * smoke bug where a released mesero could still show "con mesa asignada."
+ * Blocks only on active orders for that mesa (`SGEB-4018`). `data` is
+ * always `null` on success per the documented contract — not a defensive
+ * guard like `assignTable`'s, an expected response shape.
  */
 export async function releaseAssignment(idAsignacion: number): Promise<void> {
   await requestSgeb<null>({
