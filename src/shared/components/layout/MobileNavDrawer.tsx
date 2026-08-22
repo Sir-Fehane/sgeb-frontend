@@ -2,6 +2,7 @@ import { IconX } from '@tabler/icons-react'
 import { useEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 
+import { BrandLogo } from '@/shared/components/layout/BrandLogo'
 import { SidebarNavList } from '@/shared/components/layout/SidebarNavList'
 import { cn } from '@/shared/utils/cn'
 
@@ -81,9 +82,12 @@ export function MobileNavDrawer({ open, onClose }: MobileNavDrawerProps) {
         className="bg-card absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col shadow-lg"
       >
         <div className="border-border flex h-16 shrink-0 items-center justify-between border-b px-4">
-          <span className="font-heading text-body text-foreground font-semibold">
-            SGEB
-          </span>
+          <div className="flex items-center gap-2">
+            <BrandLogo className="size-7" />
+            <span className="font-heading text-body text-foreground font-semibold">
+              SGEB
+            </span>
+          </div>
           <button
             ref={closeButtonRef}
             type="button"

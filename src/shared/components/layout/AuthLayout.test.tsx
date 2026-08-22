@@ -23,6 +23,17 @@ describe('AuthLayout', () => {
     expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
   })
 
+  it('renders the real brand mark with an accessible name, since it is the only brand identification on screen', () => {
+    render(
+      <AuthLayout title="Iniciar sesión">
+        <p>Contenido del formulario</p>
+      </AuthLayout>,
+    )
+
+    const logo = screen.getByRole('img', { name: 'SGEB' })
+    expect(logo).toHaveAttribute('src', expect.stringContaining('image/svg+xml'))
+  })
+
   it('omits the description when none is supplied', () => {
     render(
       <AuthLayout title="Recuperar acceso">

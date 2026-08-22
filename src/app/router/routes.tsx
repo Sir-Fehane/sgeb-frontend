@@ -115,10 +115,10 @@ export const router = createBrowserRouter([
          * USUARIO's public identifier is a UUID). Parsed/validated inside
          * `EventDetailPage`, not here — a malformed id renders the
          * feature's own unavailable state rather than a routing error.
-         * Only this one route is registered; none of its documented
-         * operational children (`/editar`, `/equipo`, `/pase-de-lista`,
-         * `/montaje`, `/cubaitor`, `/cierre`, `/pagos` —
-         * docs/FrontendArchitecture.md §17) exist yet.
+         * Its documented operational children (docs/FrontendArchitecture.md
+         * §17) — `/equipo`, `/pase-de-lista`, `/montaje`, `/cubaitor`,
+         * `/cierre`, `/pagos` — are all registered below; only `/editar`
+         * does not have its own route.
          */
         path: 'eventos/:id',
         lazy: async () => {
@@ -132,11 +132,11 @@ export const router = createBrowserRouter([
          * Team Selection — W-05 "Seleccionar equipo"
          * (feature/event-team-selection-ui-foundation). The route value is
          * the same positive integer SGEB event id as `eventos/:id`,
-         * parsed/validated inside `TeamSelectionPage`, not here. This is
+         * parsed/validated inside `TeamSelectionPage`, not here. This was
          * the first of Event Detail's documented operational children
          * (docs/FrontendArchitecture.md §17) to become real; the rest
          * (`/pase-de-lista`, `/montaje`, `/cubaitor`, `/cierre`, `/pagos`)
-         * remain unregistered.
+         * are all registered below too.
          */
         path: 'eventos/:id/equipo',
         lazy: async () => {
@@ -155,7 +155,7 @@ export const router = createBrowserRouter([
          * called from here. Same positive integer SGEB event id as the
          * other `eventos/:id/*` routes, parsed/validated inside
          * `EventAttendancePage`, not here. `/montaje`, `/cubaitor`,
-         * `/cierre`, `/pagos` remain unregistered.
+         * `/cierre`, `/pagos` are all registered below too.
          */
         path: 'eventos/:id/pase-de-lista',
         lazy: async () => {
@@ -178,7 +178,7 @@ export const router = createBrowserRouter([
          * see `montage/types/montage.ts`'s module comment. Same positive
          * integer SGEB event id as the other `eventos/:id/*` routes,
          * parsed/validated inside `EventMontagePage`, not here.
-         * `/cubaitor`, `/cierre`, `/pagos` remain unregistered.
+         * `/cubaitor`, `/cierre`, `/pagos` are all registered below too.
          */
         path: 'eventos/:id/montaje',
         lazy: async () => {
@@ -298,8 +298,9 @@ export const router = createBrowserRouter([
          * `feature/event-payments-ui-foundation`), no W-08 (Bebidas y
          * Cubaitor, still deferred). Same positive integer SGEB event id
          * as the other `eventos/:id/*` routes, parsed/validated inside
-         * `EventClosurePage`, not here. `/cubaitor`, `/bebidas`, `/pagos`
-         * remain unregistered.
+         * `EventClosurePage`, not here. `/cubaitor` and `/pagos` are both
+         * registered below too; there is still no separate `/bebidas`
+         * route — that catalog lives at the global `/menu` route instead.
          */
         path: 'eventos/:id/cierre',
         lazy: async () => {
@@ -326,7 +327,9 @@ export const router = createBrowserRouter([
          * outside SGEB, and this screen only records the outcome. Same
          * positive integer SGEB event id as the other `eventos/:id/*`
          * routes, parsed/validated inside `EventPaymentsPage`, not here.
-         * `/cubaitor`, `/bebidas` remain unregistered.
+         * `/cubaitor` is registered below too; there is still no separate
+         * `/bebidas` route — that catalog lives at the global `/menu`
+         * route instead.
          */
         path: 'eventos/:id/pagos',
         lazy: async () => {

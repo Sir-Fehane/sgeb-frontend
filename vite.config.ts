@@ -14,7 +14,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
-      includeAssets: ['favicon.svg'],
+      includeAssets: ['favicon.svg', 'favicon.ico', 'icons/apple-touch-icon.png'],
       manifest: {
         name: 'SGEB · Sistema de Gestión de Eventos de Banquetes',
         short_name: 'SGEB',
@@ -24,26 +24,29 @@ export default defineConfig({
         background_color: '#fafaf8',
         display: 'standalone',
         start_url: '/',
-        // PENDING: these are temporary placeholder icons (flat-color SVG
-        // squares) so the manifest is installable during foundation work.
-        // Production-ready 192x192 and 512x512 PNG icons (and a maskable
-        // variant) still need to be produced from the real brand mark
-        // before this app ships — do not treat these as final artwork.
+        // Production icons generated from the authoritative brand isotype
+        // (src/assets/branding/logo-dark.svg) — see public/icons/.
         icons: [
           {
-            src: '/pwa-192x192.svg',
+            src: '/icons/pwa-192x192.png',
             sizes: '192x192',
-            type: 'image/svg+xml',
+            type: 'image/png',
           },
           {
-            src: '/pwa-512x512.svg',
+            src: '/icons/pwa-512x512.png',
             sizes: '512x512',
-            type: 'image/svg+xml',
+            type: 'image/png',
           },
           {
-            src: '/pwa-512x512.svg',
+            src: '/icons/pwa-maskable-192x192.png',
+            sizes: '192x192',
+            type: 'image/png',
+            purpose: 'maskable',
+          },
+          {
+            src: '/icons/pwa-maskable-512x512.png',
             sizes: '512x512',
-            type: 'image/svg+xml',
+            type: 'image/png',
             purpose: 'maskable',
           },
         ],

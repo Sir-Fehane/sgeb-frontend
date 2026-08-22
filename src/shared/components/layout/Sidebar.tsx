@@ -1,5 +1,6 @@
 import { IconChevronLeft, IconChevronRight } from '@tabler/icons-react'
 
+import { BrandLogo } from '@/shared/components/layout/BrandLogo'
 import { SidebarNavList } from '@/shared/components/layout/SidebarNavList'
 import { cn } from '@/shared/utils/cn'
 
@@ -21,9 +22,7 @@ export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
       )}
     >
       <div className="border-border flex h-16 shrink-0 items-center gap-2 border-b px-4">
-        <span className="bg-foreground text-background flex size-8 shrink-0 items-center justify-center rounded-lg font-heading text-body-sm font-bold">
-          SG
-        </span>
+        <BrandLogo className="size-8" />
         {!collapsed && (
           <span className="font-heading text-body text-foreground font-semibold">
             SGEB

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 
+import { BrandLogo } from '@/shared/components/layout/BrandLogo'
 import { Card, CardContent } from '@/shared/components/ui/card'
 import { PageTitle, Text } from '@/shared/components/ui/typography'
 import { cn } from '@/shared/utils/cn'
@@ -41,12 +42,7 @@ export function AuthLayout({
     >
       <div className="flex w-full max-w-md flex-col gap-6">
         <div className="flex flex-col items-center gap-3 text-center">
-          <span
-            aria-hidden="true"
-            className="bg-foreground text-background flex size-12 shrink-0 items-center justify-center rounded-lg font-heading text-body font-bold"
-          >
-            SG
-          </span>
+          <BrandLogo className="size-12" alt="SGEB" />
           <div className="flex flex-col gap-1">
             <PageTitle className="text-heading">{title}</PageTitle>
             {description ? (
