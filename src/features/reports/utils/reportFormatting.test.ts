@@ -4,6 +4,7 @@ import {
   formatReportDateTime,
   formatReportMxn,
   formatReportRating,
+  formatReportResponseTime,
 } from '@/features/reports/utils/reportFormatting'
 
 describe('formatReportMxn', () => {
@@ -34,5 +35,31 @@ describe('formatReportDateTime', () => {
   it('formats a full date-time string as a readable date and time', () => {
     const formatted = formatReportDateTime('2026-07-15T18:30:00.000-06:00')
     expect(formatted.length).toBeGreaterThan(0)
+  })
+})
+
+describe('formatReportResponseTime', () => {
+  it('renders "Sin datos" for a null response time', () => {
+    expect(formatReportResponseTime(null)).toBe('Sin datos')
+  })
+
+  it('renders whole seconds under a minute as "N s"', () => {
+    expect(formatReportResponseTime(45)).toBe('45 s')
+  })
+
+  it('renders zero seconds as a valid value, not "Sin datos"', () => {
+    expect(formatReportResponseTime(0)).toBe('0 s')
+  })
+
+  it('renders an exact number of minutes without a trailing "0 s"', () => {
+    expect(formatReportResponseTime(120)).toBe('2 min')
+  })
+
+  it('renders minutes and remaining seconds together', () => {
+    expect(formatReportResponseTime(82)).toBe('1 min 22 s')
+  })
+
+  it('rounds a fractional number of seconds to the nearest whole second', () => {
+    expect(formatReportResponseTime(59.6)).toBe('1 min')
   })
 })

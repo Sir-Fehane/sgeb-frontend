@@ -5,8 +5,11 @@ import { ReportsLoadingState } from '@/features/reports/components/ReportsLoadin
 import { ReportsMermaSummarySection } from '@/features/reports/components/ReportsMermaSummarySection'
 import { ReportsPageHeader } from '@/features/reports/components/ReportsPageHeader'
 import { ReportsPaymentsLinkSection } from '@/features/reports/components/ReportsPaymentsLinkSection'
-import { ReportsPerformanceDeferredSection } from '@/features/reports/components/ReportsPerformanceDeferredSection'
 import { ReportsRatingsSection } from '@/features/reports/components/ReportsRatingsSection'
+import {
+  WaiterPerformanceSection,
+  type WaiterPerformanceSectionProps,
+} from '@/features/reports/components/WaiterPerformanceSection'
 import type {
   EventMermaSummaryViewModel,
   EventRatingsSummaryViewModel,
@@ -37,6 +40,8 @@ export interface ReportsContentProps {
   isLoadingRatings: boolean
   ratingsErrorMessage?: string | undefined
   onRetryRatings: () => void
+
+  waiterPerformance: WaiterPerformanceSectionProps
 }
 
 /**
@@ -46,12 +51,12 @@ export interface ReportsContentProps {
  *
  * 1. "Reportes por evento" — event picker + Merma/Calificaciones/Pagos,
  *    all genuinely scoped to whichever event is selected.
- * 2. "Histórico de personal" — the deferred waiter-performance card,
- *    which is NOT event-scoped at all (it is a future cross-event,
- *    date-range report by mesero) and must never visually read as if the
- *    event picker above also filters it. The two groups are separated by
- *    a real `<Separator />` and each owns its own `<h2>` (`SectionHeading`),
- *    and the deferred card is placed in its own `<section>` entirely
+ * 2. "Histórico de personal" — `WaiterPerformanceSection`, a real
+ *    cross-event, date-range report by mesero, which is NOT event-scoped
+ *    at all and must never visually read as if the event picker above
+ *    also filters it. The two groups are separated by a real
+ *    `<Separator />` and each owns its own `<h2>` (`SectionHeading`), and
+ *    `WaiterPerformanceSection` is placed in its own `<section>` entirely
  *    outside the event-scoped one — not merely styled differently while
  *    sharing a container.
  *
@@ -78,6 +83,7 @@ export function ReportsContent({
   isLoadingRatings,
   ratingsErrorMessage,
   onRetryRatings,
+  waiterPerformance,
 }: ReportsContentProps) {
   const selectedEvent = events.find((evento) => evento.idEvento === idEvento) ?? null
 
@@ -173,7 +179,7 @@ export function ReportsContent({
           </Text>
         </div>
 
-        <ReportsPerformanceDeferredSection />
+        <WaiterPerformanceSection {...waiterPerformance} />
       </section>
     </div>
   )
