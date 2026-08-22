@@ -1,5 +1,6 @@
 import { IconLogout, IconUserCircle } from '@tabler/icons-react'
 import { useEffect, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 import { logout } from '@/features/oidc-client/client/logoutUrl'
 import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
@@ -30,15 +31,12 @@ function initialsFor(name: string | undefined): string {
  * `useOidcSessionBootstrap`). Same click-outside/Escape dropdown
  * convention as `NotificationBell`.
  *
- * No edit-profile action, still: `GET /usuarios/me` is confirmed fixed and
- * live as of v1.13 (`features/account/services/usuariosApi.ts`'s
- * `fetchMiPerfil`/`updateMiPerfil` now exist), but this branch is a
- * contract-sync, not a profile feature — building the edit UI itself is
- * out of scope here (see the branch report's recommended next branch).
- * Until then this menu only ever displays real, already-available
- * `/userinfo` fields plus the one real, already-wired action: logout
- * (`features/oidc-client/client/logoutUrl.ts`'s `logout()`, previously
- * implemented but called from nowhere).
+ * Two real actions only, deliberately (`feature/app-shell-hardening`):
+ * "Mi perfil" (`/perfil`, `features/account/pages/ProfilePage.tsx` —
+ * `GET`/`PUT /usuarios/me`) and logout
+ * (`features/oidc-client/client/logoutUrl.ts`'s `logout()`). No
+ * password/2FA/account-security control is ever added here — that belongs
+ * to the separate SSO project, never to this menu.
  */
 export function AccountMenu() {
   const session = useOidcSessionStore((state) => state.session)
@@ -141,6 +139,20 @@ export function AccountMenu() {
             ) : null}
           </div>
           <div className="p-1">
+            <Link
+              to="/perfil"
+              onClick={() => {
+                setOpen(false)
+              }}
+              className={cn(
+                'flex w-full items-center gap-2 rounded-md px-3 py-2 text-left',
+                'font-sans text-body-sm text-foreground',
+                'hover:bg-accent focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-2',
+              )}
+            >
+              <IconUserCircle aria-hidden="true" className="size-4" />
+              Mi perfil
+            </Link>
             <button
               type="button"
               onClick={handleLogout}

@@ -1,8 +1,6 @@
 import {
-  IconActivity,
   IconCalendarEvent,
   IconChartBar,
-  IconCurrencyDollar,
   IconGlassFull,
   IconLayoutDashboard,
   IconUserCheck,
@@ -20,36 +18,19 @@ export interface NavIconProps {
   'aria-hidden'?: boolean | 'true' | 'false'
 }
 
-interface NavItemBase {
+/**
+ * A confirmed, navigable top-level destination — the only kind of entry
+ * this sidebar renders (`feature/app-shell-hardening` removed the
+ * `route-pending`/no-`href` variant this type used to be one half of, once
+ * its last two consumers were removed from `NAV_ITEMS` below — see
+ * `NavItem` for the corresponding rendering simplification).
+ */
+export interface NavItemConfig {
   id: string
   label: string
+  href: string
   icon: ComponentType<NavIconProps>
 }
-
-/** A confirmed, navigable destination. */
-export interface AvailableNavItemConfig extends NavItemBase {
-  status: 'available'
-  href: string
-}
-
-/**
- * A wireframe nav item whose top-level route is not yet approved in
- * docs/FrontendArchitecture.md. Deliberately has no `href` at all —
- * inventing a placeholder slug would itself be an unapproved
- * information-architecture decision, not just a naming detail.
- */
-export interface PendingNavItemConfig extends NavItemBase {
-  status: 'route-pending'
-  href: null
-}
-
-/**
- * A discriminated union (rather than a flat `href: string | null` +
- * `status` pair) so `item.href` is statically guaranteed to be a
- * non-null `string` wherever `item.status === 'available'`, and `null`
- * wherever it's `'route-pending'` — the two fields can't drift apart.
- */
-export type NavItemConfig = AvailableNavItemConfig | PendingNavItemConfig
 
 /**
  * The authenticated sidebar navigation, per the captain wireframes
@@ -64,97 +45,53 @@ export type NavItemConfig = AvailableNavItemConfig | PendingNavItemConfig
  *
  * Icons are chosen from docs/branding/branding.pdf's "Sistema de
  * iconografía" table where a row matches directly (Meseros, Bebidas,
- * Pagos, Reportes). The branding table has no row for "Panel",
- * "Eventos", or "Operación en vivo" — those three use the closest
- * reasonable Tabler icon instead of a documented one; flag with design
- * if a different icon is intended.
+ * Pagos, Reportes). The branding table has no row for "Panel" or
+ * "Eventos" — those two use the closest reasonable Tabler icon instead of
+ * a documented one; flag with design if a different icon is intended.
  *
- * Route status: "Panel", "Eventos", "Meseros", "Reportes", and now
- * "Bebidas y Cubaitor" (`feature/cubaitor-orders-live`) have a top-level
- * route and are `status: 'available'`. The remaining two are
- * `status: 'route-pending'` with `href: null` — their eventual information
- * architecture is a real open question, not a naming detail this frontend
- * gets to decide:
- *   - "Operación en vivo" needed an active-event context, confirmed by
- *     `feature/live-operations-participant-exit`: it is now a real,
- *     registered route — but only the event-scoped
- *     `/eventos/:id/operacion-en-vivo` (reached from Event Detail's
- *     roadmap section, `EventDetailRoadmapSection`), never a standalone
- *     top-level one. This sidebar entry deliberately stays
- *     `route-pending`/`href: null`: there is no event context here to
- *     build a static `href` from — exactly the same situation "Pagos"
- *     (below) already resolved the same way once `/eventos/:id/pagos`
- *     shipped.
- *   - "Pagos" is only documented nested as `/eventos/:id/pagos` (already
- *     registered) — a global cross-event view may or may not be built;
- *     until it is, this entry correctly stays `route-pending` even though
- *     a real nested route exists.
- *
- * "Bebidas y Cubaitor" resolution (`feature/cubaitor-orders-live`): the
- * global catalog (`/menu` — Bebidas/Insumos/Envases/recetas + the Cubaitor
- * device fleet) is confirmed global-scoped against the pinned backend (no
- * `id_evento` on any of those models), so this ONE sidebar entry points
- * there, matching the single nav slot rather than fragmenting into two
- * top-level items. The event-scoped live bar operation (orders, dispensing,
- * a specific event's pin configuration) is a SEPARATE surface at
- * `/eventos/:id/cubaitor`, reached from Event Detail's roadmap section, not
- * from this global sidebar — same "global catalog vs. event-scoped
- * operation" split "Operación en vivo"/"Pagos" already established above. A
- * standalone `/cubaitor` top-level route (for the device fleet alone) was
- * considered and deliberately not added: it would fragment this one nav
- * slot into two without a confirmed product need.
- *
- * Do not invent a temporary slug for a `route-pending` entry — see
- * `NavItem` for how one renders (visible, labeled "Ruta pendiente",
- * non-interactive).
+ * Every entry below is a confirmed, navigable top-level route.
+ * "Operación en vivo" and "Pagos" were REMOVED from this list entirely on
+ * `feature/app-shell-hardening` — both stay real, but only as the
+ * event-scoped `eventos/:id/operacion-en-vivo`/`eventos/:id/pagos`
+ * children reached from Event Detail's roadmap
+ * (`EventDetailRoadmapSection`), never from this global sidebar. Neither
+ * has a confirmed cross-event destination to build a top-level `href`
+ * from; inventing one just to fill this sidebar slot would be an
+ * unapproved information-architecture decision, not a routing detail —
+ * the misleading "Ruta pendiente" placeholder they previously showed here
+ * was removed for the same reason (see `routes.tsx`'s own comment). If a
+ * genuine global destination is ever confirmed for either, it belongs
+ * here as a plain entry like every other one below — not a resurrected
+ * pending placeholder.
  */
 export const NAV_ITEMS: readonly NavItemConfig[] = [
   {
     id: 'panel',
     label: 'Panel',
-    status: 'available',
     href: '/panel',
     icon: IconLayoutDashboard,
   },
   {
     id: 'eventos',
     label: 'Eventos',
-    status: 'available',
     href: '/eventos',
     icon: IconCalendarEvent,
   },
   {
     id: 'meseros',
     label: 'Meseros',
-    status: 'available',
     href: '/meseros',
     icon: IconUserCheck,
   },
   {
-    id: 'operacion-en-vivo',
-    label: 'Operación en vivo',
-    status: 'route-pending',
-    href: null,
-    icon: IconActivity,
-  },
-  {
     id: 'bebidas-cubaitor',
     label: 'Bebidas y Cubaitor',
-    status: 'available',
     href: '/menu',
     icon: IconGlassFull,
   },
   {
-    id: 'pagos',
-    label: 'Pagos',
-    status: 'route-pending',
-    href: null,
-    icon: IconCurrencyDollar,
-  },
-  {
     id: 'reportes',
     label: 'Reportes',
-    status: 'available',
     href: '/reportes',
     icon: IconChartBar,
   },

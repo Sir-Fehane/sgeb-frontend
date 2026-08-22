@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { logout } from '@/features/oidc-client/client/logoutUrl'
@@ -14,6 +15,15 @@ beforeEach(() => {
   useOidcSessionStore.getState().reset()
   vi.mocked(logout).mockReset()
 })
+
+/** `AccountMenu` renders a real `Link` to `/perfil` (feature/app-shell-hardening) — a `Router` context is required now. */
+function renderMenu() {
+  return render(
+    <MemoryRouter>
+      <AccountMenu />
+    </MemoryRouter>,
+  )
+}
 
 function authenticate() {
   useOidcSessionStore.getState().setAuthenticated({
@@ -34,7 +44,7 @@ function authenticate() {
 
 describe('AccountMenu', () => {
   it('renders a safe disabled fallback when there is no authenticated session — never a crash', () => {
-    render(<AccountMenu />)
+    renderMenu()
 
     const button = screen.getByRole('button', { name: 'Cuenta' })
     expect(button).toBeDisabled()
@@ -43,7 +53,7 @@ describe('AccountMenu', () => {
   it('shows the real session identity (name, email, role) from /userinfo — no placeholder/pending copy', async () => {
     authenticate()
     const user = userEvent.setup()
-    render(<AccountMenu />)
+    renderMenu()
 
     await user.click(screen.getByRole('button', { name: 'Cuenta de Juana Pérez' }))
 
@@ -56,7 +66,7 @@ describe('AccountMenu', () => {
   it('calls the real, previously-unwired logout() with the session id token when "Cerrar sesión" is activated', async () => {
     authenticate()
     const user = userEvent.setup()
-    render(<AccountMenu />)
+    renderMenu()
 
     await user.click(screen.getByRole('button', { name: 'Cuenta de Juana Pérez' }))
     await user.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
@@ -64,10 +74,38 @@ describe('AccountMenu', () => {
     expect(logout).toHaveBeenCalledWith({ idTokenHint: 'test-id-token' })
   })
 
+  it('links "Mi perfil" to /perfil and renders no password/2FA/security control (feature/app-shell-hardening)', async () => {
+    authenticate()
+    const user = userEvent.setup()
+    renderMenu()
+
+    await user.click(screen.getByRole('button', { name: 'Cuenta de Juana Pérez' }))
+
+    const profileLink = screen.getByRole('link', { name: 'Mi perfil' })
+    expect(profileLink).toHaveAttribute('href', '/perfil')
+    expect(
+      screen.queryByRole('button', { name: /contraseña|2fa|seguridad/i }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: /contraseña|2fa|seguridad/i }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('closes the dropdown when "Mi perfil" is activated', async () => {
+    authenticate()
+    const user = userEvent.setup()
+    renderMenu()
+
+    await user.click(screen.getByRole('button', { name: 'Cuenta de Juana Pérez' }))
+    await user.click(screen.getByRole('link', { name: 'Mi perfil' }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
   it('closes the dropdown on Escape', async () => {
     authenticate()
     const user = userEvent.setup()
-    render(<AccountMenu />)
+    renderMenu()
 
     await user.click(screen.getByRole('button', { name: 'Cuenta de Juana Pérez' }))
     expect(screen.getByRole('dialog', { name: 'Cuenta' })).toBeInTheDocument()

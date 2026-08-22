@@ -406,52 +406,80 @@ async function renderAt(path: string) {
   return render(<RouterProvider router={router} />, { wrapper: TestQueryProvider })
 }
 
-describe('public auth routes render outside AppShell, using AuthLayout', () => {
-  it('renders /login', async () => {
-    await renderAt('/login')
+describe('legacy SGEB auth routes are no longer registered (feature/app-shell-hardening)', () => {
+  it.each(['/login', '/verificacion-2fa', '/recuperar', '/recuperar/un-token-de-prueba'])(
+    '%s falls through to the not-found page, not a redirect',
+    async (path) => {
+      await renderAt(path)
 
-    expect(screen.getByRole('main')).toBeInTheDocument()
+      expect(
+        screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+      ).toBeInTheDocument()
+      expect(router.state.location.pathname).toBe(path)
+    },
+  )
+})
+
+describe('/ redirects into the authenticated shell (feature/app-shell-hardening)', () => {
+  it('an authenticated session at / lands on /panel, not the design-system preview', async () => {
+    await renderAt('/')
+
+    await waitFor(() => {
+      expect(router.state.location.pathname).toBe('/panel')
+    })
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Iniciar sesión' }),
+      await screen.findByRole('navigation', { name: 'Navegación principal' }),
     ).toBeInTheDocument()
-    expect(screen.queryByRole('banner')).not.toBeInTheDocument()
-    expect(screen.queryByRole('navigation')).not.toBeInTheDocument()
+    expect(await screen.findByText('Próximos eventos')).toBeInTheDocument()
+    expect(
+      screen.queryByText('SGEB frontend foundation is running'),
+    ).not.toBeInTheDocument()
   })
 
-  it('renders /verificacion-2fa with the no-active-verification fallback on direct navigation', async () => {
-    await renderAt('/verificacion-2fa')
+  it('an anonymous session at / never renders the design-system preview and starts authorization exactly once', async () => {
+    useOidcSessionStore.getState().setAnonymous()
+    mockedBeginAuthorization.mockResolvedValue('https://auth.sgeb.mediocres.mx/authorize')
 
+    await renderAt('/')
+
+    await waitFor(() => {
+      expect(mockedBeginAuthorization).toHaveBeenCalledOnce()
+    })
+    expect(mockedBeginAuthorization).toHaveBeenCalledWith({ returnTo: '/' })
     expect(
-      screen.getByRole('heading', { level: 1, name: 'Verificación en dos pasos' }),
-    ).toBeInTheDocument()
-    expect(screen.getByText('No hay una verificación en curso')).toBeInTheDocument()
+      screen.queryByText('SGEB frontend foundation is running'),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('navigation', { name: 'Navegación principal' }),
+    ).not.toBeInTheDocument()
+  })
+})
+
+describe('/dev/design-system renders the preview directly, unguarded (feature/app-shell-hardening)', () => {
+  it('renders the design-system preview with no AppShell chrome', async () => {
+    await renderAt('/dev/design-system')
+
+    expect(screen.getByText('SGEB frontend foundation is running')).toBeInTheDocument()
+    // No AppShell chrome — Topbar's `AccountMenu`/sidebar nav are absent
+    // (the page's own content `<header>` is unrelated to this).
+    expect(
+      screen.queryByRole('navigation', { name: 'Navegación principal' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Cuenta/ })).not.toBeInTheDocument()
   })
 
-  it('renders /recuperar', async () => {
-    await renderAt('/recuperar')
+  it('does not invoke the private OIDC bootstrap', async () => {
+    useOidcSessionStore.getState().reset()
+    const bootstrapSpy = vi.spyOn(bootstrapModule, 'bootstrapSession')
 
-    expect(
-      screen.getByRole('heading', { level: 1, name: 'Recuperar acceso' }),
-    ).toBeInTheDocument()
-  })
+    await renderAt('/dev/design-system')
 
-  it('renders /recuperar/:token without exposing the token anywhere', async () => {
-    await renderAt('/recuperar/un-token-de-prueba')
-
-    expect(
-      screen.getByRole('heading', { level: 1, name: 'Crea una nueva contraseña' }),
-    ).toBeInTheDocument()
-    expect(screen.queryByText('un-token-de-prueba')).not.toBeInTheDocument()
+    expect(bootstrapSpy).not.toHaveBeenCalled()
+    expect(useOidcSessionStore.getState().session.status).toBe('idle')
   })
 })
 
 describe('existing routes remain available', () => {
-  it('still renders the design-system preview at /', async () => {
-    await renderAt('/')
-
-    expect(screen.getByText('SGEB frontend foundation is running')).toBeInTheDocument()
-  })
-
   it('still renders the AppShell (sidebar nav) for /panel', async () => {
     await renderAt('/panel')
 
@@ -462,6 +490,17 @@ describe('existing routes remain available', () => {
 
   it('/reportes remains available', async () => {
     await renderAt('/reportes')
+
+    expect(
+      screen.getByRole('navigation', { name: 'Navegación principal' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('/perfil renders inside AppShell (feature/app-shell-hardening)', async () => {
+    await renderAt('/perfil')
 
     expect(
       screen.getByRole('navigation', { name: 'Navegación principal' }),
@@ -1367,16 +1406,6 @@ describe('Private route boundary — authentication guard', () => {
     const bootstrapSpy = vi.spyOn(bootstrapModule, 'bootstrapSession')
 
     await renderAt('/publico/mesas/a1b2c3d4-e5f6-4a1b-8c2d-000000000099')
-
-    expect(bootstrapSpy).not.toHaveBeenCalled()
-    expect(useOidcSessionStore.getState().session.status).toBe('idle')
-  })
-
-  it('does not invoke the private OIDC bootstrap for /login', async () => {
-    useOidcSessionStore.getState().reset()
-    const bootstrapSpy = vi.spyOn(bootstrapModule, 'bootstrapSession')
-
-    await renderAt('/login')
 
     expect(bootstrapSpy).not.toHaveBeenCalled()
     expect(useOidcSessionStore.getState().session.status).toBe('idle')

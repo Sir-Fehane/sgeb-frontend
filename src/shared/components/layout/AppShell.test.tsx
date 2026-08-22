@@ -27,9 +27,6 @@ vi.mock('@/shared/realtime/useSocket', () => ({
   }),
 }))
 
-const AVAILABLE_ITEMS = NAV_ITEMS.filter((item) => item.status === 'available')
-const PENDING_ITEMS = NAV_ITEMS.filter((item) => item.status === 'route-pending')
-
 function LocationDisplay() {
   const location = useLocation()
   return <p data-testid="location">{location.pathname}</p>
@@ -45,80 +42,20 @@ function renderAppShell(initialPath: string) {
   )
 }
 
-/**
- * Pending items are deliberately NOT exposed with any interactive role
- * (see NavItem), so they can't be looked up via `getByRole('link', ...)`
- * like the available ones — find the element that actually carries
- * `aria-disabled` via the visible label's containing `<li>` instead.
- */
-function getPendingElement(label: string): HTMLElement {
-  const listItem = screen.getByText(label).closest('li')
-  if (!listItem) {
-    throw new Error(`Expected "${label}" to be inside an <li>`)
-  }
-  const wrapper = listItem.querySelector('[aria-disabled="true"]')
-  if (!(wrapper instanceof HTMLElement)) {
-    throw new Error(`Expected an aria-disabled element for "${label}"`)
-  }
-  return wrapper
-}
-
 describe('AppShell navigation', () => {
-  it('keeps all seven wireframe nav items visible', () => {
+  it('keeps all five wireframe nav items visible, each a real, activatable link (feature/app-shell-hardening removed the two route-pending placeholders)', () => {
     renderAppShell('/eventos')
+
+    expect(screen.getAllByRole('link')).toHaveLength(NAV_ITEMS.length)
 
     for (const item of NAV_ITEMS) {
-      expect(screen.getByText(item.label)).toBeInTheDocument()
-    }
-  })
-
-  it('renders only the approved items as real, activatable links', () => {
-    renderAppShell('/eventos')
-
-    expect(screen.getAllByRole('link')).toHaveLength(AVAILABLE_ITEMS.length)
-
-    for (const item of AVAILABLE_ITEMS) {
       const link = screen.getByRole('link', { name: item.label })
       expect(link).toHaveAttribute('href', item.href)
       expect(link).not.toHaveAttribute('aria-disabled')
     }
   })
 
-  it('renders the still-unresolved items as visible, non-interactive, aria-disabled placeholders — never exposed as links', () => {
-    renderAppShell('/eventos')
-
-    for (const item of PENDING_ITEMS) {
-      // Not reachable via an interactive role at all.
-      expect(
-        screen.queryByRole('link', { name: new RegExp(item.label) }),
-      ).not.toBeInTheDocument()
-      expect(
-        screen.queryByRole('button', { name: new RegExp(item.label) }),
-      ).not.toBeInTheDocument()
-
-      const pending = getPendingElement(item.label)
-      expect(pending).not.toHaveAttribute('role')
-      expect(pending).toHaveAttribute('aria-disabled', 'true')
-      expect(pending).not.toHaveAttribute('href')
-      expect(pending).not.toHaveAttribute('tabindex')
-
-      // The label and its "Ruta pendiente" status are both still
-      // present as ordinary reading-order text — not color alone.
-      expect(pending).toHaveTextContent(item.label)
-      expect(pending).toHaveTextContent('Ruta pendiente')
-    }
-  })
-
-  it('does not navigate when a pending item is clicked', async () => {
-    const user = userEvent.setup()
-    renderAppShell('/eventos')
-
-    await user.click(getPendingElement('Pagos'))
-
-    expect(screen.getByTestId('location')).toHaveTextContent('/eventos')
-  })
-
-  it('marks only the active route with aria-current, and never on a pending item', () => {
+  it('marks only the active route with aria-current', () => {
     renderAppShell('/eventos')
 
     expect(screen.getByRole('link', { name: 'Eventos' })).toHaveAttribute(
@@ -128,9 +65,6 @@ describe('AppShell navigation', () => {
     expect(screen.getByRole('link', { name: 'Panel' })).not.toHaveAttribute(
       'aria-current',
     )
-    for (const item of PENDING_ITEMS) {
-      expect(getPendingElement(item.label)).not.toHaveAttribute('aria-current')
-    }
   })
 
   it('exposes the expected landmarks', () => {

@@ -66,8 +66,7 @@ export function AppShellLayout() {
 
   const activeItem = NAV_ITEMS.find(
     (item) =>
-      item.href === location.pathname ||
-      (item.href !== null && location.pathname.startsWith(`${item.href}/`)),
+      item.href === location.pathname || location.pathname.startsWith(`${item.href}/`),
   )
 
   if (status !== 'authenticated') {

@@ -1,10 +1,10 @@
-import { createBrowserRouter } from 'react-router-dom'
+import { createBrowserRouter, Navigate } from 'react-router-dom'
 
 import { RouteErrorBoundary } from '@/features/route-errors/components/RouteErrorBoundary'
 import { RouteHydrateFallback } from '@/features/route-errors/components/RouteHydrateFallback'
 
 /**
- * Minimal route table for the technical foundation.
+ * Route table for the app shell (`feature/app-shell-hardening`).
  *
  * Uses React Router's own route-level `lazy` loading (rather than raw
  * `React.lazy` + a manual `<Suspense>` boundary), which is the pattern the
@@ -12,10 +12,17 @@ import { RouteHydrateFallback } from '@/features/route-errors/components/RouteHy
  * docs/FrontendArchitecture.md §17 for the full planned route map. The
  * private authentication route boundary (`feature/private-route-guard`)
  * lives at `AppShellLayout`, not here — see that component's own doc
- * comment. `/login`/`/verificacion-2fa`/`/recuperar`/`/recuperar/:token`,
- * `/publico/mesas/:codigoQr`, and `/auth/callback` are deliberately
- * registered as siblings of the `AppShellLayout` route, not children of
- * it, so none of them is ever gated by the private guard.
+ * comment. `/dev/design-system`, `/publico/mesas/:codigoQr`, and
+ * `/auth/callback` are deliberately registered as siblings of the
+ * `AppShellLayout` route, not children of it, so none of them is ever
+ * gated by the private guard. The legacy, frozen `/login`/
+ * `/verificacion-2fa`/`/recuperar`/`/recuperar/:token` family (pre-dating
+ * the finalized OIDC/PKCE architecture) was removed on this same branch —
+ * SGEB has never owned auth UI; that belongs to the separate SSO project.
+ * `/` is now the `AppShellLayout` boundary's own `index` route (below), not
+ * a sibling — so the root path resolves through the exact same
+ * authenticated-or-redirect-to-authorization guard as every other private
+ * route, with no second bootstrap/redirect path invented for it.
  *
  * `errorElement`/`hydrateFallbackElement` are attached directly (not via
  * each route's own `lazy()` loader) so both stay effective even if a
@@ -23,44 +30,40 @@ import { RouteHydrateFallback } from '@/features/route-errors/components/RouteHy
  * `features/route-errors/components/RouteErrorBoundary` and
  * `RouteHydrateFallback`. Both bubble from a child route to its nearest
  * ancestor that defines one, so the single instance on `AppShellLayout`
- * covers `panel`/`eventos`/`meseros`/`reportes` too — no per-child
- * repetition needed, and (correctly) no AppShell chrome remains once
- * either fires: a route failure or loading gap is never rendered as
+ * covers `panel`/`eventos`/`meseros`/`reportes`/`perfil` too — no
+ * per-child repetition needed, and (correctly) no AppShell chrome remains
+ * once either fires: a route failure or loading gap is never rendered as
  * AppShell domain content.
  */
 export const router = createBrowserRouter([
   {
-    path: '/',
-    errorElement: <RouteErrorBoundary />,
-    hydrateFallbackElement: <RouteHydrateFallback />,
-    lazy: async () => {
-      const { DesignSystemPreviewPage } =
-        await import('@/app/router/pages/DesignSystemPreviewPage')
-      return { Component: DesignSystemPreviewPage }
-    },
-  },
-  {
     /**
      * Authenticated shell, guarded at `AppShellLayout` — every route below
      * requires a resolved, authenticated OIDC session before its content
-     * mounts (`feature/private-route-guard`). Only the 4 nav items with an
-     * approved top-level, global-sidebar route in
-     * docs/FrontendArchitecture.md §17 are `status: 'available'` in
-     * `NAV_ITEMS` ("Operación en vivo" and "Pagos" both now have a real
-     * *event-scoped* child route here, but neither has a standalone
-     * top-level destination — see the comment on `NAV_ITEMS` in
-     * shared/components/layout/nav-items.ts for why that's a deliberate,
-     * unrelated decision, not an oversight). `panel`, `eventos`,
-     * `eventos/:id`, `eventos/:id/equipo`, `eventos/:id/pase-de-lista`,
+     * mounts (`feature/private-route-guard`). Every entry in `NAV_ITEMS`
+     * (shared/components/layout/nav-items.ts) is now a confirmed,
+     * navigable top-level route — "Operación en vivo" and
+     * "Pagos" were removed from `NAV_ITEMS` entirely on
+     * `feature/app-shell-hardening` (both stay real, but only as the
+     * *event-scoped* `eventos/:id/operacion-en-vivo`/`eventos/:id/pagos`
+     * children below, reached from Event Detail, never from the global
+     * sidebar — see that file's own comment for why). `index` (this
+     * layout's own root, i.e. `/`) simply redirects to `panel` — the
+     * `AppShellLayout` guard above it is what actually decides whether
+     * that ever renders or a visible authorization request starts first;
+     * no second bootstrap/redirect path exists. `perfil` (`/perfil`) is
+     * reached only from `AccountMenu`'s "Mi perfil" entry, deliberately
+     * absent from `NAV_ITEMS`/the sidebar — it's account-level, not a
+     * business navigation destination. `panel`, `eventos`, `eventos/:id`,
+     * `eventos/:id/equipo`, `eventos/:id/pase-de-lista`,
      * `eventos/:id/montaje`, `eventos/:id/panel-operativo`,
      * `eventos/:id/solicitudes`, `eventos/:id/operacion-en-vivo`,
-     * `eventos/:id/cierre`, `eventos/:id/pagos`, `meseros` and `reportes`
-     * render the real, presentation-only dashboard/events/event-detail/
-     * team-selection/attendance/montage/event-dashboard/service-requests/
-     * live-operations/closure/payments/waiters/reports features
-     * (features/dashboard, features/events, features/waiters,
-     * features/reports) — every child now renders a real page, not the
-     * shared development placeholder.
+     * `eventos/:id/cierre`, `eventos/:id/pagos`, `menu`, `meseros`,
+     * `reportes` and `perfil` render the real dashboard/events/event-
+     * detail/team-selection/attendance/montage/event-dashboard/service-
+     * requests/live-operations/closure/payments/menu/waiters/reports/
+     * account features — every child renders a real page, never a
+     * placeholder.
      */
     errorElement: <RouteErrorBoundary />,
     hydrateFallbackElement: <RouteHydrateFallback />,
@@ -69,6 +72,10 @@ export const router = createBrowserRouter([
       return { Component: AppShellLayout }
     },
     children: [
+      {
+        index: true,
+        element: <Navigate to="/panel" replace />,
+      },
       {
         path: 'panel',
         lazy: async () => {
@@ -230,16 +237,15 @@ export const router = createBrowserRouter([
          * `PATCH /participaciones/{id}/estado`), restricted to the one
          * legal transition the pinned backend's state machine allows —
          * `vinculo → salida`. No canonical slug was documented anywhere
-         * (`docs/FrontendArchitecture.md` §17 never listed one, and the
-         * `NAV_ITEMS` "Operación en vivo" entry was `route-pending` with no
-         * `href` — see that file's own comment); `operacion-en-vivo`
-         * follows this router's own kebab-case, Spanish-label-derived
-         * convention exactly (same as `pase-de-lista`, `montaje`,
-         * `cierre`). Reached from Event Detail's roadmap section
-         * (`EventDetailRoadmapSection`), not from the global sidebar — the
-         * global "Operación en vivo" `NAV_ITEMS` entry deliberately stays
-         * `route-pending`, same as "Pagos" — see that file's comment. No
-         * event-finalization action, no payment/montage/comanda mutation
+         * (`docs/FrontendArchitecture.md` §17 never listed one at the
+         * time); `operacion-en-vivo` follows this router's own kebab-case,
+         * Spanish-label-derived convention exactly (same as
+         * `pase-de-lista`, `montaje`, `cierre`). Reached from Event
+         * Detail's roadmap section (`EventDetailRoadmapSection`), never
+         * from the global sidebar — `NAV_ITEMS` has no "Operación en vivo"
+         * entry at all (`feature/app-shell-hardening` removed the
+         * misleading `route-pending` one — see that file's own comment).
+         * No event-finalization action, no payment/montage/comanda mutation
          * lives here — REST + targeted query invalidation only, PLUS (as of
          * feature/panel-realtime-notifications) a joined `evento:{id}`
          * Socket.IO room for live `participacion:cambio` push updates
@@ -363,49 +369,40 @@ export const router = createBrowserRouter([
           return { Component: ReportsPage }
         },
       },
+      {
+        /*
+         * Mi perfil (feature/app-shell-hardening) — self-service editing
+         * of the four fields the pinned backend's `PUT /usuarios/me`
+         * actually accepts from the subject (`ProfilePage`). Reached only
+         * from `AccountMenu`'s "Mi perfil" entry, never from `NAV_ITEMS`/
+         * the sidebar — see this file's own top comment.
+         */
+        path: 'perfil',
+        lazy: async () => {
+          const { ProfilePage } = await import('@/features/account/pages/ProfilePage')
+          return { Component: ProfilePage }
+        },
+      },
     ],
   },
   /*
-   * Public SSO web auth screens (S1, the web adaptation of S3, S5, S6 —
-   * docs/FrontendArchitecture.md §17). Each page renders `AuthLayout`
-   * itself (no shared AppShell chrome, no route guards — auth
-   * integration is out of scope for this branch, see §10.1/§18).
+   * Development-only reference page demonstrating the design tokens and
+   * foundation components built early in this project — NOT a business
+   * screen, and NOT the production root anymore (`feature/app-shell-
+   * hardening` moved it here from `/`, its previous, incorrect production
+   * entry point). Registered as an unguarded top-level sibling, same as
+   * `/publico/mesas/:codigoQr` and `/auth/callback` below — directly
+   * reachable for developers, deliberately absent from `NAV_ITEMS`/the
+   * sidebar and from any authenticated-session assumption.
    */
   {
-    path: '/login',
+    path: '/dev/design-system',
     errorElement: <RouteErrorBoundary />,
     hydrateFallbackElement: <RouteHydrateFallback />,
     lazy: async () => {
-      const { LoginPage } = await import('@/features/auth/pages/LoginPage')
-      return { Component: LoginPage }
-    },
-  },
-  {
-    path: '/verificacion-2fa',
-    errorElement: <RouteErrorBoundary />,
-    hydrateFallbackElement: <RouteHydrateFallback />,
-    lazy: async () => {
-      const { TwoFactorPage } = await import('@/features/auth/pages/TwoFactorPage')
-      return { Component: TwoFactorPage }
-    },
-  },
-  {
-    path: '/recuperar',
-    errorElement: <RouteErrorBoundary />,
-    hydrateFallbackElement: <RouteHydrateFallback />,
-    lazy: async () => {
-      const { RecoveryRequestPage } =
-        await import('@/features/auth/pages/RecoveryRequestPage')
-      return { Component: RecoveryRequestPage }
-    },
-  },
-  {
-    path: '/recuperar/:token',
-    errorElement: <RouteErrorBoundary />,
-    hydrateFallbackElement: <RouteHydrateFallback />,
-    lazy: async () => {
-      const { NewPasswordPage } = await import('@/features/auth/pages/NewPasswordPage')
-      return { Component: NewPasswordPage }
+      const { DesignSystemPreviewPage } =
+        await import('@/app/router/pages/DesignSystemPreviewPage')
+      return { Component: DesignSystemPreviewPage }
     },
   },
   /*
