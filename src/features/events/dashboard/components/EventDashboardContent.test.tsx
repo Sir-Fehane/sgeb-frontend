@@ -61,7 +61,7 @@ describe('EventDashboardContent — states', () => {
   it('renders the loading state when isLoading is true', () => {
     renderContent({ isLoading: true, dashboard: null })
     expect(
-      screen.getByRole('status', { name: 'Cargando panel operativo' }),
+      screen.getByRole('status', { name: 'Cargando resumen operativo' }),
     ).toBeInTheDocument()
   })
 
@@ -125,6 +125,14 @@ describe('EventDashboardContent — deep links', () => {
     expect(screen.getByRole('link', { name: 'Ver pase de lista' })).toHaveAttribute(
       'href',
       '/eventos/1001/pase-de-lista',
+    )
+  })
+
+  it('links the Barra section to Cubaitor', () => {
+    renderContent()
+    expect(screen.getByRole('link', { name: 'Ver Cubaitor' })).toHaveAttribute(
+      'href',
+      '/eventos/1001/cubaitor',
     )
   })
 })

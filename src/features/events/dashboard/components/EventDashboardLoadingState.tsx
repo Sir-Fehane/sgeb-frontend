@@ -6,7 +6,7 @@ export function EventDashboardLoadingState() {
   return (
     <div
       role="status"
-      aria-label="Cargando panel operativo"
+      aria-label="Cargando resumen operativo"
       className="flex flex-col gap-4"
     >
       <Skeleton className="h-16 w-full max-w-md" />

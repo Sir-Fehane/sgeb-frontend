@@ -34,7 +34,7 @@ export function EventDashboardHeader({ dashboard }: EventDashboardHeaderProps) {
         <Text size="sm" className="text-muted-foreground">
           {formatEventDate(dashboard.fecha)} · {dashboard.salon}
         </Text>
-        <Caption>Panel operativo del evento</Caption>
+        <Caption>Resumen operativo del evento</Caption>
       </div>
     </div>
   )

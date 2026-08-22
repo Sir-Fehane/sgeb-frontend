@@ -221,106 +221,84 @@ describe('EventDetailContent — comanda section wiring', () => {
   })
 })
 
-describe('EventDetailContent — operation roadmap', () => {
-  it('has no pending operation labels left — every roadmap entry is now a real link (feature/cubaitor-orders-live shipped the last one, "Bebidas y Cubaitor")', () => {
+describe('EventDetailContent — grouped operational navigation', () => {
+  it('has no pending/"Próximamente" items left — every navigation entry is a real link', () => {
     renderContent({ evento: EVENTO_CON_COMANDA })
 
     expect(screen.queryAllByText('Próximamente')).toHaveLength(0)
     expect(document.querySelectorAll('[aria-disabled="true"]')).toHaveLength(0)
+    expect(document.querySelectorAll('a[href="#"]')).toHaveLength(0)
   })
 
-  it('"Bebidas y Cubaitor" is a real link to /eventos/{id}/cubaitor', () => {
+  it('renders three real group headings: Planeación, Operación en vivo, Cierre', () => {
     renderContent({ evento: EVENTO_CON_COMANDA })
 
-    const link = screen.getByRole('link', { name: 'Bebidas y Cubaitor' })
-    expect(link).toHaveAttribute(
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Planeación' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Operación en vivo' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('heading', { level: 2, name: 'Cierre' })).toBeInTheDocument()
+  })
+
+  it('Planeación groups "Selección de equipo"', () => {
+    renderContent({ evento: EVENTO_CON_COMANDA })
+
+    const group = screen.getByRole('list', { name: 'Áreas de planeación del evento' })
+    expect(
+      within(group).getByRole('link', { name: /Selección de equipo/ }),
+    ).toHaveAttribute('href', `/eventos/${String(EVENTO_CON_COMANDA.idEvento)}/equipo`)
+  })
+
+  it('Operación en vivo groups Resumen operativo, Pase de lista, Montaje, Control de salida, Solicitudes de mesa, and Bebidas y Cubaitor', () => {
+    renderContent({ evento: EVENTO_CON_COMANDA })
+
+    const idEvento = String(EVENTO_CON_COMANDA.idEvento)
+    const group = screen.getByRole('list', {
+      name: 'Áreas de operación en vivo del evento',
+    })
+    const expectedLinks: [string, string][] = [
+      ['Resumen operativo', `/eventos/${idEvento}/panel-operativo`],
+      ['Pase de lista', `/eventos/${idEvento}/pase-de-lista`],
+      ['Montaje', `/eventos/${idEvento}/montaje`],
+      ['Control de salida', `/eventos/${idEvento}/operacion-en-vivo`],
+      ['Solicitudes de mesa', `/eventos/${idEvento}/solicitudes`],
+      ['Bebidas y Cubaitor', `/eventos/${idEvento}/cubaitor`],
+    ]
+
+    for (const [name, href] of expectedLinks) {
+      expect(within(group).getByRole('link', { name: new RegExp(name) })).toHaveAttribute(
+        'href',
+        href,
+      )
+    }
+  })
+
+  it('Cierre groups "Cierre" and "Pagos"', () => {
+    renderContent({ evento: EVENTO_CON_COMANDA })
+
+    const idEvento = String(EVENTO_CON_COMANDA.idEvento)
+    const group = screen.getByRole('list', { name: 'Áreas de cierre del evento' })
+    expect(within(group).getByRole('link', { name: /^Cierre/ })).toHaveAttribute(
       'href',
-      `/eventos/${String(EVENTO_CON_COMANDA.idEvento)}/cubaitor`,
+      `/eventos/${idEvento}/cierre`,
     )
-    expect(link.closest('[aria-disabled="true"]')).toBeNull()
-  })
-
-  it('"Selección de equipo" is a real link to /eventos/{id}/equipo', () => {
-    renderContent({ evento: EVENTO_CON_COMANDA })
-
-    const link = screen.getByRole('link', { name: 'Selección de equipo' })
-    expect(link).toHaveAttribute(
+    expect(within(group).getByRole('link', { name: /^Pagos/ })).toHaveAttribute(
       'href',
-      `/eventos/${String(EVENTO_CON_COMANDA.idEvento)}/equipo`,
+      `/eventos/${idEvento}/pagos`,
     )
-    expect(link.closest('[aria-disabled="true"]')).toBeNull()
   })
 
-  it('"Pase de lista" is a real link to /eventos/{id}/pase-de-lista', () => {
+  it('never labels the narrow exit screen "Operación en vivo" — that name now belongs only to the group heading', () => {
     renderContent({ evento: EVENTO_CON_COMANDA })
 
-    const link = screen.getByRole('link', { name: 'Pase de lista' })
-    expect(link).toHaveAttribute(
-      'href',
-      `/eventos/${String(EVENTO_CON_COMANDA.idEvento)}/pase-de-lista`,
-    )
-    expect(link.closest('[aria-disabled="true"]')).toBeNull()
-  })
-
-  it('"Montaje / asignación de mesas" is a real link to /eventos/{id}/montaje', () => {
-    renderContent({ evento: EVENTO_CON_COMANDA })
-
-    const link = screen.getByRole('link', { name: 'Montaje / asignación de mesas' })
-    expect(link).toHaveAttribute(
-      'href',
-      `/eventos/${String(EVENTO_CON_COMANDA.idEvento)}/montaje`,
-    )
-    expect(link.closest('[aria-disabled="true"]')).toBeNull()
-  })
-
-  it('"Cierre" is a real link to /eventos/{id}/cierre', () => {
-    renderContent({ evento: EVENTO_CON_COMANDA })
-
-    const link = screen.getByRole('link', { name: 'Cierre' })
-    expect(link).toHaveAttribute(
-      'href',
-      `/eventos/${String(EVENTO_CON_COMANDA.idEvento)}/cierre`,
-    )
-    expect(link.closest('[aria-disabled="true"]')).toBeNull()
-  })
-
-  it('"Pagos" is a real link to /eventos/{id}/pagos', () => {
-    renderContent({ evento: EVENTO_CON_COMANDA })
-
-    const link = screen.getByRole('link', { name: 'Pagos' })
-    expect(link).toHaveAttribute(
-      'href',
-      `/eventos/${String(EVENTO_CON_COMANDA.idEvento)}/pagos`,
-    )
-    expect(link.closest('[aria-disabled="true"]')).toBeNull()
-  })
-
-  it('never falls back to a dead href="#" link anywhere in the roadmap', () => {
-    renderContent({ evento: EVENTO_CON_COMANDA })
-
-    const hrefHash = document.querySelectorAll('a[href="#"]')
-    expect(hrefHash.length).toBe(0)
-  })
-
-  it('preserves the canonical visual order, "Bebidas y Cubaitor" included between "Solicitudes de mesa" and "Cierre"', () => {
-    renderContent({ evento: EVENTO_CON_COMANDA })
-
-    const list = screen.getByRole('list', { name: 'Áreas operativas del evento' })
-    const items = within(list)
-      .getAllByRole('listitem')
-      .map((item) => item.textContent?.replace('Próximamente', '').trim())
-
-    expect(items).toEqual([
-      'Panel operativo',
-      'Selección de equipo',
-      'Pase de lista',
-      'Montaje / asignación de mesas',
-      'Operación en vivo',
-      'Solicitudes de mesa',
-      'Bebidas y Cubaitor',
-      'Cierre',
-      'Pagos',
-    ])
+    const group = screen.getByRole('list', {
+      name: 'Áreas de operación en vivo del evento',
+    })
+    expect(
+      within(group).queryByRole('link', { name: 'Operación en vivo' }),
+    ).not.toBeInTheDocument()
   })
 })
 

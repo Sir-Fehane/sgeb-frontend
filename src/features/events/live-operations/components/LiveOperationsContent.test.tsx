@@ -78,11 +78,11 @@ function renderContent(props: Partial<LiveOperationsContentProps> = {}) {
 }
 
 describe('LiveOperationsContent — header', () => {
-  it('renders exactly one h2 "Operación en vivo" and the event context', () => {
+  it('renders exactly one h2 "Control de salida" and the event context', () => {
     renderContent()
 
     expect(
-      screen.getAllByRole('heading', { level: 2, name: 'Operación en vivo' }),
+      screen.getAllByRole('heading', { level: 2, name: 'Control de salida' }),
     ).toHaveLength(1)
     expect(screen.getByText(EVENTO.titulo)).toBeInTheDocument()
   })
@@ -203,7 +203,7 @@ describe('LiveOperationsContent — loading / error / unavailable', () => {
     renderContent({ isLoading: true })
 
     expect(
-      screen.getByRole('status', { name: 'Cargando operación en vivo' }),
+      screen.getByRole('status', { name: 'Cargando control de salida' }),
     ).toBeInTheDocument()
     expect(screen.queryByText(VINCULADO.nombre)).not.toBeInTheDocument()
   })
@@ -240,7 +240,7 @@ describe('LiveOperationsContent — loading / error / unavailable', () => {
     renderContent({ isLoading: true, errorMessage: 'Error.' })
 
     expect(
-      screen.getByRole('status', { name: 'Cargando operación en vivo' }),
+      screen.getByRole('status', { name: 'Cargando control de salida' }),
     ).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })

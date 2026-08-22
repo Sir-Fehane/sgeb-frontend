@@ -161,10 +161,18 @@ export interface EventDashboardBarraSectionProps {
   barra: EventDashboardBarraViewModel | null
 }
 
-/** No dedicated Cubaitor/bar management screen exists yet in this frontend (confirmed — see this branch's report), so this section is summary-only: real counts from `GET /eventos/{id}/dashboard`, no deep link to build against. */
-export function EventDashboardBarraSection({ barra }: EventDashboardBarraSectionProps) {
+/** Deep-links to `/eventos/{id}/cubaitor` (`feature/cubaitor-orders-live`) — this section stayed summary-only for a while because Cubaitor shipped one branch later than the rest of the dashboard's deep links; now fixed. */
+export function EventDashboardBarraSection({
+  idEvento,
+  barra,
+}: EventDashboardBarraSectionProps) {
   return (
-    <EventDashboardSectionCard title="Barra" unavailable={barra === null}>
+    <EventDashboardSectionCard
+      title="Barra"
+      unavailable={barra === null}
+      linkTo={`/eventos/${String(idEvento)}/cubaitor`}
+      linkLabel="Ver Cubaitor"
+    >
       {barra ? (
         <>
           <EventDashboardStat label="Pendientes" value={barra.pendientes} />

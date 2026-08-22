@@ -15,7 +15,7 @@ export function LiveOperationsErrorState({
   onRetry,
 }: LiveOperationsErrorStateProps) {
   return (
-    <Alert tone="danger" title="No pudimos cargar la operación en vivo">
+    <Alert tone="danger" title="No pudimos cargar el control de salida">
       <p>{errorMessage}</p>
       {onRetry ? (
         <Button

@@ -10,7 +10,7 @@ import { EventDetailLoadingState } from '@/features/events/components/EventDetai
 import { EventDetailLogisticsSection } from '@/features/events/components/EventDetailLogisticsSection'
 import { EventDetailMesasSection } from '@/features/events/components/EventDetailMesasSection'
 import type { EventDetailMesasSectionProps } from '@/features/events/components/EventDetailMesasSection'
-import { EventDetailRoadmapSection } from '@/features/events/components/EventDetailRoadmapSection'
+import { EventDetailNavigationSection } from '@/features/events/components/EventDetailNavigationSection'
 import { EventDetailScheduleSection } from '@/features/events/components/EventDetailScheduleSection'
 import { EventDetailUnavailableState } from '@/features/events/components/EventDetailUnavailableState'
 import { EventEditForm } from '@/features/events/components/EventEditForm'
@@ -40,7 +40,7 @@ export interface EventDetailLifecycleBundleProps {
 }
 
 export interface EventDetailContentProps {
-  /** `null` means "not found" — a fixture-lookup miss or a malformed route id, not a loading gap. */
+  /** `null` means "not found" — a real `SGEB-3001` 404 or a malformed route id, not a loading gap. */
   evento: EventDetailViewModel | null
   isLoading?: boolean
   errorMessage?: string
@@ -54,8 +54,8 @@ export interface EventDetailContentProps {
 /**
  * The reusable presentational composition — header + (schedule/logistics/
  * geofence-preview OR the edit form, mutually exclusive) + mesas +
- * lifecycle actions + comanda + operation roadmap, or exactly one of
- * loading / error / unavailable, selected purely from props. Mirrors
+ * lifecycle actions + comanda + grouped operational navigation, or exactly
+ * one of loading / error / unavailable, selected purely from props. Mirrors
  * `EventsContent`'s architecture (`EventDetailPage` is the thin,
  * live-wired layer around it).
  *
@@ -132,7 +132,7 @@ export function EventDetailContent({
       />
 
       <EventDetailComandaSection {...comanda} />
-      <EventDetailRoadmapSection idEvento={evento.idEvento} />
+      <EventDetailNavigationSection idEvento={evento.idEvento} />
     </div>
   )
 }

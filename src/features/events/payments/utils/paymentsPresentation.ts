@@ -24,8 +24,8 @@ export const PAYMENT_STATUS_TONES: Record<PaymentStatus, Tone> = {
 /**
  * The local presentation filter this screen offers (`Todos` plus the four
  * documented `estado` values) — mirrors `GET /eventos/{id}/pagos`'s
- * optional `estado` query parameter, but is applied client-side only in
- * this fixture-backed foundation; no request is ever sent.
+ * optional `estado` query parameter, but is applied client-side only over
+ * the already-fetched list; no separate filtered request is ever sent.
  */
 export const PAYMENT_FILTER_OPTIONS = [
   { value: 'todos', label: 'Todos' },

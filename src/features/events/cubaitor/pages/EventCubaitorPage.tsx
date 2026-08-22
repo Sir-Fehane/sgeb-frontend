@@ -47,9 +47,9 @@ const TABS = [
  * screen is the captain/admin "tablero de barra," not an order form.
  *
  * The event dashboard's `barra` section (`/eventos/:id/panel-operativo`,
- * `feature/operations-and-reports-live`) stays the summary surface; this
- * page is its detailed deep-link target (task §15) — reused via the "Ver
- * panel operativo" link below, never a second copy of those counts.
+ * user-facing label "Resumen operativo") stays the summary surface; this
+ * page is its detailed deep-link target — reused via the "Ver resumen
+ * operativo" link below, never a second copy of those counts.
  */
 export function EventCubaitorPage() {
   const { id } = useParams<{ id: string }>()
@@ -204,7 +204,7 @@ export function EventCubaitorPage() {
         </div>
         <Button asChild variant="outline" size="sm" className="w-fit">
           <Link to={`/eventos/${String(evento.idEvento)}/panel-operativo`}>
-            Ver panel operativo del evento
+            Ver resumen operativo del evento
           </Link>
         </Button>
       </div>

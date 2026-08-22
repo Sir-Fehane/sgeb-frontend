@@ -10,7 +10,7 @@ export function LiveOperationsLoadingState() {
   return (
     <div
       role="status"
-      aria-label="Cargando operación en vivo"
+      aria-label="Cargando control de salida"
       className="flex flex-col gap-6"
     >
       <Skeleton className="h-9 w-40" />

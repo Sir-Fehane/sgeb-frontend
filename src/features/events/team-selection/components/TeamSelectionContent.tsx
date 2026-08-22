@@ -14,7 +14,7 @@ import type {
 } from '@/features/events/team-selection/types/teamSelection'
 
 export interface TeamSelectionContentProps {
-  /** `null` means "not found" — a fixture-lookup miss or a malformed route id, not a loading gap. Reuses `EventDetailUnavailableState`: same concern as Event Detail's own unavailable event. */
+  /** `null` means "not found" — a real `SGEB-3001` 404 or a malformed route id, not a loading gap. Reuses `EventDetailUnavailableState`: same concern as Event Detail's own unavailable event. */
   evento: EventDetailViewModel | null
   isLoading?: boolean
   errorMessage?: string
@@ -29,7 +29,7 @@ export interface TeamSelectionContentProps {
  * The reusable presentational composition — header + summary + candidate
  * section + selected section, or exactly one of loading / error /
  * unavailable, selected purely from props. Mirrors `EventDetailContent`'s
- * architecture (`TeamSelectionPage` is the thin, fixture-backed wiring
+ * architecture (`TeamSelectionPage` is the thin, live-query wiring
  * layer around it). Candidates/selected are derived from `participants`'
  * live `estado` — a participant moves from one list to the other purely
  * by its `estado` changing, never by a separate "removed" action.

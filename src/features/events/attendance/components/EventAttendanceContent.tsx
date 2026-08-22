@@ -10,7 +10,7 @@ import type { EventAttendanceParticipantViewModel } from '@/features/events/atte
 import { arrivalRequiresAttention } from '@/features/events/attendance/utils/attendancePresentation'
 
 export interface EventAttendanceContentProps {
-  /** `null` means "not found" — a fixture-lookup miss or a malformed route id, not a loading gap. Reuses `EventDetailUnavailableState`: same concern as Event Detail's own unavailable event. */
+  /** `null` means "not found" — a real `SGEB-3001` 404 or a malformed route id, not a loading gap. Reuses `EventDetailUnavailableState`: same concern as Event Detail's own unavailable event. */
   evento: EventDetailViewModel | null
   isLoading?: boolean
   errorMessage?: string

@@ -28,10 +28,10 @@ export function LiveOperationsHeader({
 
       <div className="flex flex-col gap-1">
         <Caption>{tituloEvento}</Caption>
-        <SectionHeading className="text-heading">Operación en vivo</SectionHeading>
+        <SectionHeading className="text-heading">Control de salida</SectionHeading>
         <Text size="sm" className="text-muted-foreground">
-          Consulta el estado operativo del personal vinculado a este evento y registra su
-          salida.
+          Registra la salida del personal vinculado a este evento y consulta su estado
+          operativo.
         </Text>
       </div>
     </div>

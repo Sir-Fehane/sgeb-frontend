@@ -353,7 +353,7 @@ describe('EventDetailPage', () => {
     expect(eventoCall?.[0].signal).toBeInstanceOf(AbortSignal)
   })
 
-  it('still renders the back link and the operational roadmap navigation', async () => {
+  it('still renders the back link and the grouped operational navigation', async () => {
     mockTransport()
 
     renderAt('/eventos/1001')
@@ -363,11 +363,11 @@ describe('EventDetailPage', () => {
       'href',
       '/eventos',
     )
-    expect(screen.getByRole('link', { name: 'Selección de equipo' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Selección de equipo/ })).toHaveAttribute(
       'href',
       '/eventos/1001/equipo',
     )
-    expect(screen.getByRole('link', { name: 'Operación en vivo' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: /Control de salida/ })).toHaveAttribute(
       'href',
       '/eventos/1001/operacion-en-vivo',
     )

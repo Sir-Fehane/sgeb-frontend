@@ -17,7 +17,7 @@ export function EventDashboardErrorState({
   onRetry,
 }: EventDashboardErrorStateProps) {
   return (
-    <Alert tone="danger" title="No pudimos cargar el panel operativo">
+    <Alert tone="danger" title="No pudimos cargar el resumen operativo">
       <p>{errorMessage}</p>
       {onRetry ? (
         <Button

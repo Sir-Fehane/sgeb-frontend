@@ -866,7 +866,7 @@ describe('/eventos/:id/operacion-en-vivo renders the Live Operations UI inside A
     ).toBeInTheDocument()
     expect(screen.getByRole('banner')).toBeInTheDocument()
     expect(
-      await screen.findByRole('heading', { level: 2, name: 'Operación en vivo' }),
+      await screen.findByRole('heading', { level: 2, name: 'Control de salida' }),
     ).toBeInTheDocument()
     expect(
       screen.queryByRole('heading', { level: 1, name: 'Página no encontrada' }),
@@ -902,8 +902,12 @@ describe('/eventos/:id/operacion-en-vivo renders the Live Operations UI inside A
         name: 'Evento de demostración — boda',
       }),
     ).toBeInTheDocument()
+    // Event Detail's own grouped navigation legitimately has an "Operación
+    // en vivo" group heading — what must NOT leak in from the child route
+    // is its "Control de salida" page heading (the renamed participant-exit
+    // screen this route shadowing check originally guarded against).
     expect(
-      screen.queryByRole('heading', { level: 2, name: 'Operación en vivo' }),
+      screen.queryByRole('heading', { level: 2, name: 'Control de salida' }),
     ).not.toBeInTheDocument()
   })
 

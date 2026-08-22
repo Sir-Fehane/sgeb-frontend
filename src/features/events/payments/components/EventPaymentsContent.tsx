@@ -20,7 +20,7 @@ import type { PaymentFilterValue } from '@/features/events/payments/utils/paymen
 import type { EventDetailViewModel } from '@/features/events/types/event'
 
 export interface EventPaymentsContentProps {
-  /** `null` means "not found" — a fixture-lookup miss or a malformed route id, not a loading gap. Reuses `EventDetailUnavailableState`. */
+  /** `null` means "not found" — a real `SGEB-3001` 404 or a malformed route id, not a loading gap. Reuses `EventDetailUnavailableState`. */
   evento: EventDetailViewModel | null
   isLoading?: boolean
   errorMessage?: string

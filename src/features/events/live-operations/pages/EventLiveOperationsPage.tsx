@@ -24,7 +24,7 @@ function toSafeErrorMessage(error: unknown): string {
   if (isSgebApplicationError(error) || isSgebNetworkError(error)) {
     return error.message
   }
-  return 'Ocurrió un error inesperado al cargar la operación en vivo.'
+  return 'Ocurrió un error inesperado al cargar el control de salida.'
 }
 
 /**
