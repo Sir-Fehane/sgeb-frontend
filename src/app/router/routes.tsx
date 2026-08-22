@@ -371,6 +371,43 @@ export const router = createBrowserRouter([
       },
       {
         /*
+         * Usuarios (feature/admin-users-roles-audit-live) — the general
+         * account directory across all three roles, backed by the real
+         * `GET/PUT/PATCH /usuarios*` family (capitán+admin server-side).
+         * Distinct from `meseros` above (`WaitersPage`), which stays the
+         * specialized mesero-recruitment + invitation screen. `NAV_ITEMS`
+         * hides this entry from a non-capitán/admin session
+         * (`shared/components/layout/nav-items.ts`), but the route itself
+         * is registered the same as every other AppShell child — the real
+         * authorization boundary is the backend's own role middleware, not
+         * this router.
+         */
+        path: 'usuarios',
+        lazy: async () => {
+          const { UsersPage } = await import('@/features/users/pages/UsersPage')
+          return { Component: UsersPage }
+        },
+      },
+      {
+        /*
+         * Bitácora (feature/admin-users-roles-audit-live) — the real,
+         * admin-only system audit log (`GET /admin/bitacora`,
+         * `middleware.rol(['admin'])`). `AuditLogPage` itself gates the
+         * fetch by the session's `rol` claim (same UX-only pattern
+         * `ReportsPage`'s `canViewRatings` already uses) and renders a
+         * friendly "no autorizado" state for a non-admin session rather
+         * than firing a request that would always fail — `NAV_ITEMS` also
+         * hides the nav entry, but this route-level gate covers a direct
+         * URL visit too.
+         */
+        path: 'bitacora',
+        lazy: async () => {
+          const { AuditLogPage } = await import('@/features/audit-log/pages/AuditLogPage')
+          return { Component: AuditLogPage }
+        },
+      },
+      {
+        /*
          * Mi perfil (feature/app-shell-hardening) — self-service editing
          * of the four fields the pinned backend's `PUT /usuarios/me`
          * actually accepts from the subject (`ProfilePage`). Reached only

@@ -1,8 +1,10 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
+import type { OidcRole } from '@/features/oidc-client/types/userInfo'
 import { AppShell } from '@/shared/components/layout/AppShell'
 import { NAV_ITEMS } from '@/shared/components/layout/nav-items'
 
@@ -42,8 +44,26 @@ function renderAppShell(initialPath: string) {
   )
 }
 
+function authenticate(rol: OidcRole) {
+  useOidcSessionStore.getState().setAuthenticated({
+    accessToken: 'test-access-token',
+    accessTokenExpiresAt: Date.now() + 900_000,
+    user: {
+      sub: 'uuid-test-user',
+      name: 'Test User',
+      email: 'test@example.com',
+      rol,
+    },
+  })
+}
+
+beforeEach(() => {
+  useOidcSessionStore.getState().reset()
+})
+
 describe('AppShell navigation', () => {
-  it('keeps all five wireframe nav items visible, each a real, activatable link (feature/app-shell-hardening removed the two route-pending placeholders)', () => {
+  it('keeps every nav item visible to an admin session, each a real, activatable link (feature/app-shell-hardening removed the two route-pending placeholders; feature/admin-users-roles-audit-live added the two admin-console entries)', () => {
+    authenticate('admin')
     renderAppShell('/eventos')
 
     expect(screen.getAllByRole('link')).toHaveLength(NAV_ITEMS.length)
@@ -53,6 +73,21 @@ describe('AppShell navigation', () => {
       expect(link).toHaveAttribute('href', item.href)
       expect(link).not.toHaveAttribute('aria-disabled')
     }
+  })
+
+  it('shows Usuarios but hides the admin-only Bitácora entry for a capitán session', () => {
+    authenticate('capitan')
+    renderAppShell('/eventos')
+
+    expect(screen.getByRole('link', { name: 'Usuarios' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Bitácora' })).not.toBeInTheDocument()
+  })
+
+  it('hides both admin-console entries before a session is authenticated', () => {
+    renderAppShell('/eventos')
+
+    expect(screen.queryByRole('link', { name: 'Usuarios' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Bitácora' })).not.toBeInTheDocument()
   })
 
   it('marks only the active route with aria-current', () => {

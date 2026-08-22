@@ -2,10 +2,14 @@ import {
   IconCalendarEvent,
   IconChartBar,
   IconGlassFull,
+  IconHistory,
   IconLayoutDashboard,
   IconUserCheck,
+  IconUsers,
 } from '@tabler/icons-react'
 import type { ComponentType } from 'react'
+
+import type { OidcRole } from '@/features/oidc-client/types/userInfo'
 
 /**
  * The minimal prop surface `NavItem` actually passes to an icon
@@ -30,6 +34,19 @@ export interface NavItemConfig {
   label: string
   href: string
   icon: ComponentType<NavIconProps>
+  /**
+   * When present, the item is only rendered for a session whose `rol`
+   * claim is in this list (`SidebarNavList` does the filtering). Omitted
+   * entirely for every pre-existing entry below, which stay visible to
+   * both `admin` and `capitan` exactly as before — this is additive, not a
+   * retrofit. Added for the admin console (`feature/admin-users-roles-
+   * audit-live`): a UX-only convenience that hides a destination whose
+   * backing endpoint the caller's role can't reach anyway
+   * (`GET /usuarios`/`GET /roles`/`GET /usuarios/invitaciones` are
+   * capitán+admin; `GET /admin/bitacora` is admin-only server-side,
+   * `middleware.rol(['admin'])` — this never substitutes for that check).
+   */
+  roles?: readonly OidcRole[]
 }
 
 /**
@@ -94,5 +111,26 @@ export const NAV_ITEMS: readonly NavItemConfig[] = [
     label: 'Reportes',
     href: '/reportes',
     icon: IconChartBar,
+  },
+  {
+    id: 'usuarios',
+    label: 'Usuarios',
+    href: '/usuarios',
+    icon: IconUsers,
+    // `GET /usuarios` / `GET /roles` / `GET /usuarios/invitaciones`:
+    // `middleware.rol(['capitan', 'admin'])` (`start/routes.ts`) — mesero
+    // never reaches this web app anyway (docs/FrontendArchitecture.md §2),
+    // but this stays explicit rather than relying on that alone.
+    roles: ['capitan', 'admin'],
+  },
+  {
+    id: 'bitacora',
+    label: 'Bitácora',
+    href: '/bitacora',
+    icon: IconHistory,
+    // `GET /admin/bitacora`: `middleware.rol(['admin'])` only — confirmed
+    // against the pinned backend's `start/routes.ts`, admin-only, not
+    // shared with capitán like the rest of this list.
+    roles: ['admin'],
   },
 ]
