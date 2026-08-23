@@ -20,18 +20,29 @@ import { requestSgeb } from '@/shared/api/sgebClient'
  * `docs/api/openapi-sgeb.yaml` alone:
  *
  * 1. Every mutating request body in `app/modules/ordenes/validators/orden_validator.ts`
- *    and `app/modules/cubaitor/validators/cubaitor_validator.ts` uses
- *    **camelCase** (`idCubaitor`, `pinGpio`, `caudalMlSeg`,
- *    `volumenCargadoMl`, `segundosReal`, `reanudarOrdenes`) — OpenAPI
- *    documents snake_case throughout. GET query params (`estado`, `id_mesa`)
- *    stay snake_case (unaffected — this is a request-BODY-only quirk).
- * 2. `PUT .../config-dispensado/{id}` only accepts `caudalMlSeg`/`pinGpio`
- *    server-side (`configParcialValidator`) — NOT `idInsumo`/
- *    `volumenCargadoMl`, despite OpenAPI documenting both as editable here.
+ *    (`reporteValidator`) and `app/modules/cubaitor/validators/cubaitor_validator.ts`
+ *    (`configPinValidator`, `configParcialValidator`, `recargaValidator`) is
+ *    **snake_case** (`id_cubaitor`, `pin_gpio`, `caudal_ml_seg`,
+ *    `volumen_cargado_ml`, `segundos_real`, `reanudar_ordenes`) — matching
+ *    OpenAPI. A previous version of this comment claimed the opposite
+ *    (camelCase, "confirmed" against an older backend commit); that was
+ *    wrong and produced real `SGEB-2001`/"field must be defined" failures
+ *    on every pin-config create/update/recharge and manual dispensado
+ *    report — fixed at the API boundary in each function below, verified
+ *    directly against the validator source at the currently pinned
+ *    backend commit. GET query params (`estado`, `id_mesa`) were already
+ *    and remain snake_case (unaffected — this is a request-BODY-only fix).
+ * 2. `PUT .../config-dispensado/{id}`'s `configParcialValidator` also
+ *    accepts optional `id_insumo`/`volumen_cargado_ml` on the currently
+ *    pinned backend (its own comment: "Ahora también acepta id_insumo y
+ *    volumen_cargado_ml silenciosamente") — this frontend deliberately
+ *    still only exposes `caudalMlSeg`/`pinGpio` here (recalibration-only
+ *    UX, `UpdateConfigDispensadoInput`); that is a scope choice, not a
+ *    wire-casing bug, and not changed by this fix.
  * 3. `POST /orden-detalles/{id}/dispensar` does NOT return a `Dispensado` —
  *    see `types/eventCubaitor.ts`'s `DispensarResultViewModel` comment for
  *    the confirmed real (mixed-casing) shape.
- * 4. `PATCH /dispensados/{id}/reporte` request body is `{ segundosReal }`
+ * 4. `PATCH /dispensados/{id}/reporte` request body is `{ segundos_real }`
  *    ONLY — `estado` is always server-computed; OpenAPI's documented
  *    required `estado` field is silently ignored if sent.
  * 5. `GET /eventos/{id}/alertas` has an entirely different response shape
@@ -53,6 +64,8 @@ interface OrdenDetalleApiRecord {
   cantidad: number
   volumen_total_ml: number
   estado: OrdenDetalleEstado
+  /** Since v1.16 (OpenAPI `OrdenDetalle.dispensados`) — nested so the board can be rehydrated from one request after a reload. */
+  dispensados: DispensadoApiRecord[]
 }
 
 interface OrdenApiRecord {
@@ -155,6 +168,7 @@ function mapOrdenDetalle(record: OrdenDetalleApiRecord): OrdenDetalleViewModel {
     cantidad: record.cantidad,
     volumenTotalMl: record.volumen_total_ml,
     estado: record.estado,
+    dispensados: record.dispensados.map(mapDispensado),
   }
 }
 
@@ -312,7 +326,9 @@ export async function dispensarDetalle(
  * Cubaitor reports valve-close telemetry. Exposed here ONLY as a manual
  * fallback for when that automatic path fails/times out (task §23's MQTT
  * failure UX) — `segundosReal: null` mirrors the device-timeout case and
- * marks the dispensado `error` server-side (`SGEB-5006`).
+ * marks the dispensado `error` server-side (`SGEB-5006`). Request body is
+ * `{ segundos_real }` (snake_case, `reporteValidator`) — the frontend
+ * domain stays camelCase; only this boundary transforms it.
  */
 export async function reportarDispensado(
   idDispensado: number,
@@ -321,7 +337,7 @@ export async function reportarDispensado(
   const envelope = await requestSgeb<DispensadoApiRecord>({
     url: `/dispensados/${String(idDispensado)}/reporte`,
     method: 'PATCH',
-    data: { segundosReal },
+    data: { segundos_real: segundosReal },
   })
   return mapDispensado(envelope.data!)
 }
@@ -339,6 +355,7 @@ export async function fetchConfigDispensado(
   return (envelope.data ?? []).map(mapConfigDispensado)
 }
 
+/** `POST /eventos/{id}/config-dispensado` — request body is `{ id_cubaitor, id_insumo, pin_gpio, caudal_ml_seg, volumen_cargado_ml }` (snake_case, `configPinValidator`, all required). */
 export async function createConfigDispensado(
   idEvento: number,
   input: CreateConfigDispensadoInput,
@@ -347,17 +364,25 @@ export async function createConfigDispensado(
     url: `/eventos/${String(idEvento)}/config-dispensado`,
     method: 'POST',
     data: {
-      idCubaitor: input.idCubaitor,
-      idInsumo: input.idInsumo,
-      pinGpio: input.pinGpio,
-      caudalMlSeg: input.caudalMlSeg,
-      volumenCargadoMl: input.volumenCargadoMl,
+      id_cubaitor: input.idCubaitor,
+      id_insumo: input.idInsumo,
+      pin_gpio: input.pinGpio,
+      caudal_ml_seg: input.caudalMlSeg,
+      volumen_cargado_ml: input.volumenCargadoMl,
     },
   })
   return mapConfigDispensado(envelope.data!)
 }
 
-/** Recalibration only — see this file's module comment (#2): `idInsumo`/`volumenCargadoMl` are not accepted here despite OpenAPI. */
+/**
+ * Recalibration only — see this file's module comment (#2): the frontend
+ * deliberately still only exposes `caudalMlSeg`/`pinGpio` here even though
+ * the backend's `configParcialValidator` also optionally accepts
+ * `id_insumo`/`volumen_cargado_ml`. Request body is `{ caudal_ml_seg?,
+ * pin_gpio? }` (snake_case) — a key is included only when the caller
+ * actually supplied that field, same convention as `cubaitorApi.ts`'s
+ * `updateCubaitor`.
+ */
 export async function updateConfigDispensado(
   idEvento: number,
   idConfig: number,
@@ -366,7 +391,10 @@ export async function updateConfigDispensado(
   const envelope = await requestSgeb<ConfigDispensadoApiRecord>({
     url: `/eventos/${String(idEvento)}/config-dispensado/${String(idConfig)}`,
     method: 'PUT',
-    data: input,
+    data: {
+      ...(input.caudalMlSeg === undefined ? {} : { caudal_ml_seg: input.caudalMlSeg }),
+      ...(input.pinGpio === undefined ? {} : { pin_gpio: input.pinGpio }),
+    },
   })
   return mapConfigDispensado(envelope.data!)
 }
@@ -381,7 +409,7 @@ export async function deactivateConfigDispensado(
   })
 }
 
-/** `PATCH .../config-dispensado/{id}/recarga` — the operational counterpart of an empty-bottle pause: replaces the physical bottle, resets both `volumenCargadoMl`/`volumenDisponibleMl`, and (by default) reactivates orders that were `pausada_por_insumo` waiting on this pin. */
+/** `PATCH .../config-dispensado/{id}/recarga` — the operational counterpart of an empty-bottle pause: replaces the physical bottle, resets both `volumenCargadoMl`/`volumenDisponibleMl`, and (by default) reactivates orders that were `pausada_por_insumo` waiting on this pin. Request body is `{ volumen_cargado_ml, reanudar_ordenes? }` (snake_case, `recargaValidator`). */
 export async function recargarConfigDispensado(
   idEvento: number,
   idConfig: number,
@@ -394,7 +422,10 @@ export async function recargarConfigDispensado(
   }>({
     url: `/eventos/${String(idEvento)}/config-dispensado/${String(idConfig)}/recarga`,
     method: 'PATCH',
-    data: { volumenCargadoMl, reanudarOrdenes },
+    data: {
+      volumen_cargado_ml: volumenCargadoMl,
+      reanudar_ordenes: reanudarOrdenes,
+    },
   })
   const data = envelope.data as {
     config: ConfigDispensadoApiRecord

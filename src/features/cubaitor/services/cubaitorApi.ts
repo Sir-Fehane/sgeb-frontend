@@ -8,13 +8,19 @@ import type {
 import { requestSgeb } from '@/shared/api/sgebClient'
 
 /**
- * CONFIRMED WIRE-CASING MISMATCH — same pattern as `features/menu`'s
- * `menuApi.ts` (see that file's module comment): request bodies here are
- * **camelCase** (`numPins`, `hostIp`), confirmed directly against
- * `app/modules/cubaitor/validators/cubaitor_validator.ts` and
- * `tests/functional/api_barra.spec.ts` on the pinned backend, not
- * `docs/api/openapi-sgeb.yaml`'s documented snake_case. Read responses stay
- * snake_case (Lucid serialization).
+ * CONFIRMED WIRE CASING — `POST /cubaitors` and `PUT /cubaitors/{id}`
+ * request bodies are **snake_case** (`num_pins`, `host_ip`), matching both
+ * `app/modules/cubaitor/validators/cubaitor_validator.ts`
+ * (`cubaitorValidator`/`cubaitorParcialValidator`) on the pinned backend
+ * AND `docs/api/openapi-sgeb.yaml`'s documented shape — unlike some other
+ * mutating endpoints in this API (see e.g. `features/events/cubaitor`'s own
+ * module comment), this one does NOT use camelCase. A previous version of
+ * this comment claimed the opposite; that was wrong and caused a real
+ * `SGEB-2001`/"the num_pins field must be defined" failure on every
+ * create/update — verified directly against the validator source, not
+ * assumed. `estado` (update-only) is unaffected — already snake_case-safe
+ * since it has no casing to transform. Read responses stay snake_case
+ * (Lucid serialization), as always.
  */
 
 interface CubaitorApiRecord {
@@ -78,8 +84,8 @@ export async function createCubaitor(
     data: {
       nombre: input.nombre,
       mac: input.mac,
-      numPins: input.numPins,
-      ...(input.hostIp === undefined ? {} : { hostIp: input.hostIp }),
+      num_pins: input.numPins,
+      ...(input.hostIp === undefined ? {} : { host_ip: input.hostIp }),
     },
   })
   return mapCubaitor(envelope.data!)
@@ -93,7 +99,12 @@ export async function updateCubaitor(
   const envelope = await requestSgeb<CubaitorApiRecord>({
     url: `/cubaitors/${String(idCubaitor)}`,
     method: 'PUT',
-    data: input,
+    data: {
+      ...(input.nombre === undefined ? {} : { nombre: input.nombre }),
+      ...(input.numPins === undefined ? {} : { num_pins: input.numPins }),
+      ...(input.hostIp === undefined ? {} : { host_ip: input.hostIp }),
+      ...(input.estado === undefined ? {} : { estado: input.estado }),
+    },
   })
   return mapCubaitor(envelope.data!)
 }

@@ -111,6 +111,35 @@ describe('EventDashboardContent — SGEB-0004 partial success', () => {
   })
 })
 
+describe('EventDashboardContent — barra dispensados', () => {
+  it('surfaces dispensados_por_estado with friendly labels', () => {
+    renderContent({
+      dashboard: {
+        ...FULL_DASHBOARD,
+        barra: {
+          ...FULL_DASHBOARD.barra!,
+          dispensadosPorEstado: { ok: 10, parcial: 2, error: 1, pausado_por_insumo: 3 },
+        },
+      },
+    })
+
+    expect(screen.getByText('Correctos')).toBeInTheDocument()
+    expect(screen.getByText('Parciales')).toBeInTheDocument()
+    expect(screen.getByText('Pausados por insumo')).toBeInTheDocument()
+  })
+
+  it('shows an empty state when no dispensados exist yet', () => {
+    renderContent({
+      dashboard: {
+        ...FULL_DASHBOARD,
+        barra: { ...FULL_DASHBOARD.barra!, dispensadosPorEstado: {} },
+      },
+    })
+
+    expect(screen.getByText('Sin dispensados todavía.')).toBeInTheDocument()
+  })
+})
+
 describe('EventDashboardContent — deep links', () => {
   it('links the Servicio section to the Solicitudes screen', () => {
     renderContent()

@@ -55,6 +55,7 @@ describe('fetchOrdenesEvento', () => {
               cantidad: 2,
               volumen_total_ml: 700,
               estado: 'pendiente',
+              dispensados: [],
             },
           ],
         },
@@ -79,9 +80,66 @@ describe('fetchOrdenesEvento', () => {
           cantidad: 2,
           volumenTotalMl: 700,
           estado: 'pendiente',
+          dispensados: [],
         },
       ],
     })
+  })
+
+  it("maps a detail's nested dispensados[] (v1.16) — the durable reload-reconstruction source, snake_case → camelCase", async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0000', message: 'ok' },
+      data: [
+        {
+          id_orden: 501,
+          id_mesa: 7,
+          id_participacion: 20,
+          estado: 'en_preparacion',
+          creada_en: '2026-08-21T20:00:00Z',
+          entregada_en: null,
+          detalles: [
+            {
+              id_detalle: 1,
+              id_orden: 501,
+              id_bebida: 9,
+              id_envase: 3,
+              cantidad: 2,
+              volumen_total_ml: 700,
+              estado: 'dispensada',
+              dispensados: [
+                {
+                  id_dispensado: 900,
+                  id_detalle: 1,
+                  id_config: 5,
+                  volumen_solicitado_ml: 45,
+                  segundos_calculado: 2.9,
+                  segundos_real: null,
+                  volumen_real_estimado_ml: null,
+                  estado: 'ok',
+                  timestamp: '2026-08-21T20:01:00Z',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    })
+
+    const [orden] = await fetchOrdenesEvento(1001)
+
+    expect(orden?.detalles[0]?.dispensados).toEqual([
+      {
+        idDispensado: 900,
+        idDetalle: 1,
+        idConfig: 5,
+        volumenSolicitadoMl: 45,
+        segundosCalculado: 2.9,
+        segundosReal: null,
+        volumenRealEstimadoMl: null,
+        estado: 'ok',
+        timestamp: '2026-08-21T20:01:00Z',
+      },
+    ])
   })
 })
 
@@ -148,7 +206,7 @@ describe('dispensarDetalle', () => {
 })
 
 describe('reportarDispensado', () => {
-  it('PATCHes /dispensados/{id}/reporte with exactly { segundosReal } — camelCase, and never sends `estado` (always server-computed)', async () => {
+  it('PATCHes /dispensados/{id}/reporte with exactly { segundos_real } — snake_case (reporteValidator), regression test for the SGEB-2001 casing bug, and never sends `estado` (always server-computed)', async () => {
     vi.mocked(requestSgeb).mockResolvedValue({
       result: { code: 'SGEB-0000', message: 'ok' },
       data: {
@@ -171,11 +229,11 @@ describe('reportarDispensado', () => {
     expect(requestSgeb).toHaveBeenCalledWith({
       url: '/dispensados/900/reporte',
       method: 'PATCH',
-      data: { segundosReal: 2.9 },
+      data: { segundos_real: 2.9 },
     })
   })
 
-  it('supports a null segundosReal (device-timeout fallback)', async () => {
+  it('supports a null segundos_real (device-timeout fallback) — the validator requires the key to be present even though the value is nullable', async () => {
     vi.mocked(requestSgeb).mockResolvedValue({
       result: { code: 'SGEB-0000', message: 'ok' },
       data: {
@@ -196,13 +254,13 @@ describe('reportarDispensado', () => {
     expect(requestSgeb).toHaveBeenCalledWith({
       url: '/dispensados/900/reporte',
       method: 'PATCH',
-      data: { segundosReal: null },
+      data: { segundos_real: null },
     })
   })
 })
 
 describe('createConfigDispensado', () => {
-  it("POSTs with camelCase fields — confirmed against the pinned backend's configPinValidator", async () => {
+  it("POSTs with snake_case fields — matches the pinned backend's configPinValidator, regression test for SGEB-2001 'field must be defined' on every field", async () => {
     vi.mocked(requestSgeb).mockResolvedValue({
       result: { code: 'SGEB-0001', message: 'creado' },
       data: {
@@ -231,18 +289,18 @@ describe('createConfigDispensado', () => {
       url: '/eventos/1001/config-dispensado',
       method: 'POST',
       data: {
-        idCubaitor: 1,
-        idInsumo: 9,
-        pinGpio: 12,
-        caudalMlSeg: 15.5,
-        volumenCargadoMl: 1000,
+        id_cubaitor: 1,
+        id_insumo: 9,
+        pin_gpio: 12,
+        caudal_ml_seg: 15.5,
+        volumen_cargado_ml: 1000,
       },
     })
   })
 })
 
 describe('updateConfigDispensado', () => {
-  it('sends only caudalMlSeg/pinGpio — the pinned backend does not accept idInsumo/volumenCargadoMl here despite OpenAPI', async () => {
+  it('PUTs only caudal_ml_seg (snake_case) when the caller supplies only that field', async () => {
     vi.mocked(requestSgeb).mockResolvedValue({
       result: { code: 'SGEB-0000', message: 'ok' },
       data: {
@@ -264,13 +322,68 @@ describe('updateConfigDispensado', () => {
     expect(requestSgeb).toHaveBeenCalledWith({
       url: '/eventos/1001/config-dispensado/5',
       method: 'PUT',
-      data: { caudalMlSeg: 16 },
+      data: { caudal_ml_seg: 16 },
     })
+  })
+
+  it('PUTs only pin_gpio (snake_case) when the caller supplies only that field', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0000', message: 'ok' },
+      data: {
+        id_config: 5,
+        id_evento: 1001,
+        id_cubaitor: 1,
+        id_insumo: 9,
+        pin_gpio: 14,
+        caudal_ml_seg: 15.5,
+        volumen_cargado_ml: 1000,
+        volumen_disponible_ml: 800,
+        ultima_calibracion: '2026-08-21T19:30:00Z',
+        activo: true,
+      },
+    })
+
+    await updateConfigDispensado(1001, 5, { pinGpio: 14 })
+
+    expect(requestSgeb).toHaveBeenCalledWith({
+      url: '/eventos/1001/config-dispensado/5',
+      method: 'PUT',
+      data: { pin_gpio: 14 },
+    })
+  })
+
+  it('PUTs both fields (snake_case) when the caller supplies both, and omits neither as undefined', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0000', message: 'ok' },
+      data: {
+        id_config: 5,
+        id_evento: 1001,
+        id_cubaitor: 1,
+        id_insumo: 9,
+        pin_gpio: 14,
+        caudal_ml_seg: 16,
+        volumen_cargado_ml: 1000,
+        volumen_disponible_ml: 800,
+        ultima_calibracion: '2026-08-21T19:30:00Z',
+        activo: true,
+      },
+    })
+
+    await updateConfigDispensado(1001, 5, { caudalMlSeg: 16, pinGpio: 14 })
+
+    expect(requestSgeb).toHaveBeenCalledWith({
+      url: '/eventos/1001/config-dispensado/5',
+      method: 'PUT',
+      data: { caudal_ml_seg: 16, pin_gpio: 14 },
+    })
+    const call = vi.mocked(requestSgeb).mock.calls[0]?.[0]
+    expect(call?.data).not.toHaveProperty('id_insumo')
+    expect(call?.data).not.toHaveProperty('volumen_cargado_ml')
   })
 })
 
 describe('recargarConfigDispensado', () => {
-  it('maps the confirmed nested { config, detalles_reanudados } wrapper — not a bare ConfigDispensado', async () => {
+  it('PATCHes with { volumen_cargado_ml, reanudar_ordenes } — snake_case (recargaValidator), regression test for SGEB-2001, and maps the confirmed nested { config, detalles_reanudados } wrapper — not a bare ConfigDispensado', async () => {
     vi.mocked(requestSgeb).mockResolvedValue({
       result: { code: 'SGEB-0000', message: 'ok' },
       data: {
@@ -295,10 +408,39 @@ describe('recargarConfigDispensado', () => {
     expect(requestSgeb).toHaveBeenCalledWith({
       url: '/eventos/1001/config-dispensado/5/recarga',
       method: 'PATCH',
-      data: { volumenCargadoMl: 1000, reanudarOrdenes: true },
+      data: { volumen_cargado_ml: 1000, reanudar_ordenes: true },
     })
     expect(result.detallesReanudados).toBe(3)
     expect(result.config.idConfig).toBe(5)
+  })
+
+  it('sends an explicit reanudar_ordenes: false when the caller opts out', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0000', message: 'ok' },
+      data: {
+        config: {
+          id_config: 5,
+          id_evento: 1001,
+          id_cubaitor: 1,
+          id_insumo: 9,
+          pin_gpio: 12,
+          caudal_ml_seg: 15.5,
+          volumen_cargado_ml: 1000,
+          volumen_disponible_ml: 1000,
+          ultima_calibracion: '2026-08-21T19:00:00Z',
+          activo: true,
+        },
+        detalles_reanudados: 0,
+      },
+    })
+
+    await recargarConfigDispensado(1001, 5, 1000, false)
+
+    expect(requestSgeb).toHaveBeenCalledWith({
+      url: '/eventos/1001/config-dispensado/5/recarga',
+      method: 'PATCH',
+      data: { volumen_cargado_ml: 1000, reanudar_ordenes: false },
+    })
   })
 })
 

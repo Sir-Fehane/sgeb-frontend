@@ -1,5 +1,4 @@
 import type {
-  DispensarResultViewModel,
   OrdenEstado,
   OrdenViewModel,
 } from '@/features/events/cubaitor/types/eventCubaitor'
@@ -31,7 +30,7 @@ export interface OrdenesBoardProps {
   dispensarStatus: Record<number, boolean>
   dispensarError: Record<number, string>
   onDispensar: (idDetalle: number) => void
-  ultimosResultados: Record<number, DispensarResultViewModel>
+  configPinById: ReadonlyMap<number, number>
   reportarStatus: Record<number, boolean>
   reportarError: Record<number, string>
   onReportar: (idDispensado: number, segundosReal: number | null) => void
@@ -53,7 +52,7 @@ export function OrdenesBoard({
   dispensarStatus,
   dispensarError,
   onDispensar,
-  ultimosResultados,
+  configPinById,
   reportarStatus,
   reportarError,
   onReportar,
@@ -100,7 +99,7 @@ export function OrdenesBoard({
                 dispensarStatus={dispensarStatus}
                 dispensarError={dispensarError}
                 onDispensar={onDispensar}
-                ultimosResultados={ultimosResultados}
+                configPinById={configPinById}
                 reportarStatus={reportarStatus}
                 reportarError={reportarError}
                 onReportar={onReportar}

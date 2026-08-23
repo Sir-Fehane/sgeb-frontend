@@ -45,6 +45,16 @@ export interface OrdenDetalleViewModel {
   /** Frozen at order creation — changing the envase's catalog volume later never retroactively changes this. */
   volumenTotalMl: number
   estado: OrdenDetalleEstado
+  /**
+   * Valve openings for this line, nested by the backend since v1.16
+   * specifically so the frontend can rebuild the Cubaitor board after a
+   * reload without an extra request per detail — this, not the `dispensar`
+   * mutation's response, is the durable source of truth for dispensing
+   * state. `segundosReal === null` means the Cubaitor has not yet reported
+   * back (or the report failed) and the manual fallback (`reportarDispensado`)
+   * still applies.
+   */
+  dispensados: readonly DispensadoViewModel[]
 }
 
 export interface OrdenViewModel {

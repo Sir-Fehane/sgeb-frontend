@@ -37,6 +37,41 @@ function EstadoBreakdown({ porEstado }: { porEstado: Record<string, number> }) {
   )
 }
 
+/** `Dispensado.estado` → friendly label — captain-facing wording per task, never the raw MQTT/device state. */
+const DISPENSADO_ESTADO_LABEL: Record<string, string> = {
+  ok: 'Correctos',
+  parcial: 'Parciales',
+  error: 'Error',
+  pausado_por_insumo: 'Pausados por insumo',
+}
+
+/** `barra.dispensadosPorEstado` breakdown, with friendly labels for the known states — an unrecognized key still renders under its raw name rather than being dropped. */
+function DispensadosPorEstadoBreakdown({
+  porEstado,
+}: {
+  porEstado: Record<string, number>
+}) {
+  const entries = Object.entries(porEstado)
+  if (entries.length === 0) {
+    return (
+      <Text size="sm" className="text-muted-foreground">
+        Sin dispensados todavía.
+      </Text>
+    )
+  }
+  return (
+    <>
+      {entries.map(([estado, count]) => (
+        <EventDashboardStat
+          key={estado}
+          label={DISPENSADO_ESTADO_LABEL[estado] ?? estado}
+          value={count}
+        />
+      ))}
+    </>
+  )
+}
+
 export interface EventDashboardResumenSectionProps {
   idEvento: number
   resumen: EventDashboardResumenViewModel | null
@@ -184,6 +219,7 @@ export function EventDashboardBarraSection({
           />
           <EventDashboardStat label="Entregadas" value={barra.entregadas} />
           <EventDashboardStat label="Canceladas" value={barra.canceladas} />
+          <DispensadosPorEstadoBreakdown porEstado={barra.dispensadosPorEstado} />
         </>
       ) : null}
     </EventDashboardSectionCard>

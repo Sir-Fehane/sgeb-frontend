@@ -2,7 +2,8 @@ import { useState } from 'react'
 
 import {
   ORDEN_TRANSICIONES_PERMITIDAS,
-  type DispensarResultViewModel,
+  type DispensadoEstado,
+  type DispensadoViewModel,
   type OrdenDetalleViewModel,
   type OrdenEstado,
   type OrdenViewModel,
@@ -37,6 +38,21 @@ const DETALLE_ESTADO_LABEL: Record<OrdenDetalleViewModel['estado'], string> = {
   pausada_por_insumo: 'Pausada',
 }
 
+const DISPENSADO_ESTADO_LABEL: Record<DispensadoEstado, string> = {
+  ok: 'Correcto',
+  parcial: 'Parcial',
+  error: 'Error',
+  pausado_por_insumo: 'Pausado por insumo',
+}
+
+const DISPENSADO_ESTADO_TONE: Record<DispensadoEstado, 'success' | 'warning' | 'danger'> =
+  {
+    ok: 'success',
+    parcial: 'warning',
+    error: 'danger',
+    pausado_por_insumo: 'danger',
+  }
+
 interface DetalleRowProps {
   detalle: OrdenDetalleViewModel
   bebidaNombre: string
@@ -44,7 +60,7 @@ interface DetalleRowProps {
   dispensando: boolean
   dispensarError: string | undefined
   onDispensar: () => void
-  ultimoResultado: DispensarResultViewModel | undefined
+  configPinById: ReadonlyMap<number, number>
   reportando: Record<number, boolean>
   reportarError: Record<number, string>
   onReportar: (idDispensado: number, segundosReal: number | null) => void
@@ -57,7 +73,7 @@ function DetalleRow({
   dispensando,
   dispensarError,
   onDispensar,
-  ultimoResultado,
+  configPinById,
   reportando,
   reportarError,
   onReportar,
@@ -91,42 +107,68 @@ function DetalleRow({
         </Text>
       ) : null}
 
-      {ultimoResultado
-        ? ultimoResultado.instrucciones.map((instruccion) => (
-            <ManualReportRow
-              key={instruccion.idDispensado}
-              instruccion={instruccion}
-              reportando={reportando[instruccion.idDispensado] ?? false}
-              error={reportarError[instruccion.idDispensado]}
-              onReportar={(segundosReal) =>
-                onReportar(instruccion.idDispensado, segundosReal)
-              }
-            />
-          ))
-        : null}
+      {detalle.dispensados.length > 0 ? (
+        <ul className="flex flex-col gap-2">
+          {detalle.dispensados.map((dispensado) =>
+            dispensado.segundosReal === null ? (
+              <ManualReportRow
+                key={dispensado.idDispensado}
+                dispensado={dispensado}
+                pinGpio={configPinById.get(dispensado.idConfig)}
+                reportando={reportando[dispensado.idDispensado] ?? false}
+                error={reportarError[dispensado.idDispensado]}
+                onReportar={(segundosReal) =>
+                  onReportar(dispensado.idDispensado, segundosReal)
+                }
+              />
+            ) : (
+              <DispensadoResultRow
+                key={dispensado.idDispensado}
+                dispensado={dispensado}
+              />
+            ),
+          )}
+        </ul>
+      ) : null}
     </li>
   )
 }
 
+function DispensadoResultRow({ dispensado }: { dispensado: DispensadoViewModel }) {
+  return (
+    <div className="bg-muted/40 flex flex-wrap items-center justify-between gap-2 rounded-md p-2">
+      <Text size="sm" className="text-muted-foreground">
+        {dispensado.volumenRealEstimadoMl ?? dispensado.volumenSolicitadoMl} ml ·{' '}
+        {dispensado.segundosReal?.toFixed(1)} s
+      </Text>
+      <Badge tone={DISPENSADO_ESTADO_TONE[dispensado.estado]}>
+        {DISPENSADO_ESTADO_LABEL[dispensado.estado]}
+      </Badge>
+    </div>
+  )
+}
+
 function ManualReportRow({
-  instruccion,
+  dispensado,
+  pinGpio,
   reportando,
   error,
   onReportar,
 }: {
-  instruccion: DispensarResultViewModel['instrucciones'][number]
+  dispensado: DispensadoViewModel
+  pinGpio: number | undefined
   reportando: boolean
   error: string | undefined
   onReportar: (segundosReal: number | null) => void
 }) {
-  const [segundos, setSegundos] = useState(instruccion.segundos)
+  const [segundos, setSegundos] = useState(dispensado.segundosCalculado)
 
   return (
     <div className="bg-muted/40 flex flex-col gap-2 rounded-md p-2">
       <Text size="sm" className="text-muted-foreground">
-        Enviado al Cubaitor: pin {instruccion.pinGpio}, {instruccion.volumenMl} ml, ~
-        {instruccion.segundos.toFixed(1)} s. Si el dispositivo no confirma
-        automáticamente, reporta el resultado real aquí.
+        Enviado al Cubaitor: {pinGpio !== undefined ? `pin ${String(pinGpio)}, ` : ''}
+        {dispensado.volumenSolicitadoMl} ml, ~{dispensado.segundosCalculado.toFixed(1)} s.
+        Si el dispositivo no confirma automáticamente, reporta el resultado real aquí.
       </Text>
       <div className="flex flex-wrap items-center gap-2">
         <Input
@@ -178,7 +220,7 @@ export interface OrdenCardProps {
   dispensarStatus: Record<number, boolean>
   dispensarError: Record<number, string>
   onDispensar: (idDetalle: number) => void
-  ultimosResultados: Record<number, DispensarResultViewModel>
+  configPinById: ReadonlyMap<number, number>
   reportarStatus: Record<number, boolean>
   reportarError: Record<number, string>
   onReportar: (idDispensado: number, segundosReal: number | null) => void
@@ -195,7 +237,7 @@ export function OrdenCard({
   dispensarStatus,
   dispensarError,
   onDispensar,
-  ultimosResultados,
+  configPinById,
   reportarStatus,
   reportarError,
   onReportar,
@@ -232,7 +274,7 @@ export function OrdenCard({
               dispensando={dispensarStatus[detalle.idDetalle] ?? false}
               dispensarError={dispensarError[detalle.idDetalle]}
               onDispensar={() => onDispensar(detalle.idDetalle)}
-              ultimoResultado={ultimosResultados[detalle.idDetalle]}
+              configPinById={configPinById}
               reportando={reportarStatus}
               reportarError={reportarError}
               onReportar={onReportar}

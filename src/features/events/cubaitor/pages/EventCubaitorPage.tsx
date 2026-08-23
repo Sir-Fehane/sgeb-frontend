@@ -8,16 +8,14 @@ import { ConfigDispensadoSection } from '@/features/events/cubaitor/components/C
 import { EventCubaitorAlertasBanner } from '@/features/events/cubaitor/components/EventCubaitorAlertasBanner'
 import { OrdenesBoard } from '@/features/events/cubaitor/components/OrdenesBoard'
 import { useAlertasEventoQuery } from '@/features/events/cubaitor/queries/useAlertasEventoQuery'
+import { useConfigDispensadoQuery } from '@/features/events/cubaitor/queries/useConfigDispensadoQuery'
 import { useOrdenesEventoQuery } from '@/features/events/cubaitor/queries/useOrdenesEventoQuery'
 import {
   useCambiarEstadoOrdenMutation,
   useDispensarMutation,
   useReportarDispensadoMutation,
 } from '@/features/events/cubaitor/queries/useOrdenMutations'
-import type {
-  DispensarResultViewModel,
-  OrdenEstado,
-} from '@/features/events/cubaitor/types/eventCubaitor'
+import type { OrdenEstado } from '@/features/events/cubaitor/types/eventCubaitor'
 import { useEventDetailQuery } from '@/features/events/queries/useEventDetailQuery'
 import { isEventoNotFoundError } from '@/features/events/services/eventsApi'
 import { parseEventId } from '@/features/events/utils/parseEventId'
@@ -65,6 +63,7 @@ export function EventCubaitorPage() {
     filtroEstado ? { estado: filtroEstado } : {},
   )
   const alertasQuery = useAlertasEventoQuery(idEvento)
+  const configQuery = useConfigDispensadoQuery(idEvento)
 
   const cambiarEstadoMutation = useCambiarEstadoOrdenMutation(idEvento ?? -1)
   const dispensarMutation = useDispensarMutation(idEvento ?? -1)
@@ -78,9 +77,6 @@ export function EventCubaitorPage() {
   const [ordenActionError, setOrdenActionError] = useState<Record<number, string>>({})
   const [dispensarStatus, setDispensarStatus] = useState<Record<number, boolean>>({})
   const [dispensarError, setDispensarError] = useState<Record<number, string>>({})
-  const [ultimosResultados, setUltimosResultados] = useState<
-    Record<number, DispensarResultViewModel>
-  >({})
   const [reportarStatus, setReportarStatus] = useState<Record<number, boolean>>({})
   const [reportarError, setReportarError] = useState<Record<number, string>>({})
 
@@ -123,9 +119,8 @@ export function EventCubaitorPage() {
       return next
     })
     dispensarMutation.mutate(idDetalle, {
-      onSuccess: (result) => {
+      onSuccess: () => {
         setDispensarStatus((previous) => ({ ...previous, [idDetalle]: false }))
-        setUltimosResultados((previous) => ({ ...previous, [idDetalle]: result }))
       },
       onError: (error) => {
         setDispensarStatus((previous) => ({ ...previous, [idDetalle]: false }))
@@ -177,6 +172,9 @@ export function EventCubaitorPage() {
   )
   const envasesById = new Map(
     (envasesQuery.data ?? []).map((e) => [e.idEnvase, e.nombre]),
+  )
+  const configPinById = new Map(
+    (configQuery.data ?? []).map((c) => [c.idConfig, c.pinGpio]),
   )
 
   return (
@@ -237,7 +235,7 @@ export function EventCubaitorPage() {
               dispensarStatus={dispensarStatus}
               dispensarError={dispensarError}
               onDispensar={handleDispensar}
-              ultimosResultados={ultimosResultados}
+              configPinById={configPinById}
               reportarStatus={reportarStatus}
               reportarError={reportarError}
               onReportar={handleReportar}

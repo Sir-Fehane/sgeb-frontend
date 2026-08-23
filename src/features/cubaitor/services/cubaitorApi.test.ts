@@ -16,7 +16,7 @@ beforeEach(() => {
 })
 
 describe('createCubaitor', () => {
-  it("POSTs /cubaitors with camelCase `numPins`/`hostIp` — confirmed against the pinned backend, not OpenAPI's documented snake_case", async () => {
+  it("POSTs /cubaitors with snake_case `num_pins`/`host_ip` — matches the pinned backend's cubaitorValidator and OpenAPI, regression test for SGEB-2001 'the num_pins field must be defined'", async () => {
     vi.mocked(requestSgeb).mockResolvedValue({
       result: { code: 'SGEB-0001', message: 'creado' },
       data: {
@@ -39,7 +39,7 @@ describe('createCubaitor', () => {
     expect(requestSgeb).toHaveBeenCalledWith({
       url: '/cubaitors',
       method: 'POST',
-      data: { nombre: 'Barra 1', mac: 'aa:bb:cc:dd:ee:ff', numPins: 8 },
+      data: { nombre: 'Barra 1', mac: 'aa:bb:cc:dd:ee:ff', num_pins: 8 },
     })
     expect(result).toEqual({
       idCubaitor: 1,
@@ -52,7 +52,40 @@ describe('createCubaitor', () => {
     })
   })
 
-  it('omits hostIp from the request body entirely when not provided, rather than sending undefined', async () => {
+  it('sends host_ip (snake_case) when provided', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0001', message: 'creado' },
+      data: {
+        id_cubaitor: 1,
+        nombre: 'Barra 1',
+        mac: 'AA:BB:CC:DD:EE:FF',
+        host_ip: '192.168.1.20',
+        num_pins: 8,
+        estado: 'activo',
+        ultima_conexion: null,
+      },
+    })
+
+    await createCubaitor({
+      nombre: 'Barra 1',
+      mac: 'aa:bb:cc:dd:ee:ff',
+      numPins: 8,
+      hostIp: '192.168.1.20',
+    })
+
+    expect(requestSgeb).toHaveBeenCalledWith({
+      url: '/cubaitors',
+      method: 'POST',
+      data: {
+        nombre: 'Barra 1',
+        mac: 'aa:bb:cc:dd:ee:ff',
+        num_pins: 8,
+        host_ip: '192.168.1.20',
+      },
+    })
+  })
+
+  it('omits host_ip from the request body entirely when not provided, rather than sending undefined', async () => {
     vi.mocked(requestSgeb).mockResolvedValue({
       result: { code: 'SGEB-0001', message: 'creado' },
       data: {
@@ -69,6 +102,7 @@ describe('createCubaitor', () => {
     await createCubaitor({ nombre: 'Barra 1', mac: 'aa:bb:cc:dd:ee:ff', numPins: 8 })
 
     const call = vi.mocked(requestSgeb).mock.calls[0]?.[0]
+    expect(call?.data).not.toHaveProperty('host_ip')
     expect(call?.data).not.toHaveProperty('hostIp')
   })
 })
@@ -94,6 +128,85 @@ describe('updateCubaitor', () => {
       url: '/cubaitors/1',
       method: 'PUT',
       data: { nombre: 'Barra renombrada' },
+    })
+  })
+
+  it('PUTs num_pins (snake_case) — regression test for SGEB-2001 on update', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0000', message: 'ok' },
+      data: {
+        id_cubaitor: 1,
+        nombre: 'Barra 1',
+        mac: 'AA:BB:CC:DD:EE:FF',
+        host_ip: null,
+        num_pins: 4,
+        estado: 'activo',
+        ultima_conexion: null,
+      },
+    })
+
+    await updateCubaitor(1, { numPins: 4 })
+
+    expect(requestSgeb).toHaveBeenCalledWith({
+      url: '/cubaitors/1',
+      method: 'PUT',
+      data: { num_pins: 4 },
+    })
+  })
+
+  it('PUTs host_ip (snake_case), including an explicit null to clear it', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0000', message: 'ok' },
+      data: {
+        id_cubaitor: 1,
+        nombre: 'Barra 1',
+        mac: 'AA:BB:CC:DD:EE:FF',
+        host_ip: null,
+        num_pins: 8,
+        estado: 'activo',
+        ultima_conexion: null,
+      },
+    })
+
+    await updateCubaitor(1, { hostIp: null })
+
+    expect(requestSgeb).toHaveBeenCalledWith({
+      url: '/cubaitors/1',
+      method: 'PUT',
+      data: { host_ip: null },
+    })
+  })
+
+  it('combines nombre, num_pins, host_ip and estado in one snake_case body when all are provided', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0000', message: 'ok' },
+      data: {
+        id_cubaitor: 1,
+        nombre: 'Barra renombrada',
+        mac: 'AA:BB:CC:DD:EE:FF',
+        host_ip: '192.168.1.20',
+        num_pins: 4,
+        estado: 'mantenimiento',
+        ultima_conexion: null,
+      },
+    })
+
+    await updateCubaitor(1, {
+      nombre: 'Barra renombrada',
+      numPins: 4,
+      hostIp: '192.168.1.20',
+      estado: 'mantenimiento',
+    })
+
+    expect(requestSgeb).toHaveBeenCalledWith({
+      url: '/cubaitors/1',
+      method: 'PUT',
+      data: {
+        nombre: 'Barra renombrada',
+        num_pins: 4,
+        host_ip: '192.168.1.20',
+        estado: 'mantenimiento',
+      },
     })
   })
 })
