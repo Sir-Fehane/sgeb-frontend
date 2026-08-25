@@ -44,15 +44,15 @@ function envelope(data: unknown) {
   return { result: { code: 'SGEB-0000', message: 'ok' }, data }
 }
 
-function authenticate() {
+function authenticate(rol: 'admin' | 'capitan' | 'mesero' = 'admin') {
   useOidcSessionStore.getState().setAuthenticated({
     accessToken: 'test-access-token',
     accessTokenExpiresAt: Date.now() + 900_000,
     user: {
       sub: CURRENT_USER_UUID,
-      name: 'Admin Test',
-      email: 'admin@example.com',
-      rol: 'admin',
+      name: 'Test User',
+      email: 'test@example.com',
+      rol,
     },
   })
 }
@@ -60,12 +60,21 @@ function authenticate() {
 beforeEach(() => {
   vi.mocked(requestSgeb).mockReset()
   useOidcSessionStore.getState().reset()
+  authenticate('admin')
 })
 
 interface MockOverrides {
   users?: UsuarioApiRecord[]
   onUpdate?: (uuid: string, body: Record<string, unknown>) => unknown
   onSetActive?: (uuid: string, body: Record<string, unknown>) => unknown
+}
+
+function invitacionEnvelope(body: Record<string, unknown>) {
+  return envelope({
+    correo: body.correo,
+    deeplink: 'https://sgeb.example.com/registro?token=abc123',
+    expira_en: '2026-08-28T10:00:00',
+  })
 }
 
 function mockBaseRequests(overrides: MockOverrides = {}) {
@@ -113,6 +122,9 @@ function mockBaseRequests(overrides: MockOverrides = {}) {
         return Promise.resolve(envelope(overrides.onSetActive(uuid, body)))
       }
       return Promise.resolve(envelope({ ...USER_RECORD, ...body }))
+    }
+    if (config.url === '/usuarios/invitaciones' && method === 'POST') {
+      return Promise.resolve(invitacionEnvelope(config.data as Record<string, unknown>))
     }
     return Promise.reject(
       new Error(`Unexpected request: ${method} ${String(config.url)}`),
@@ -274,5 +286,91 @@ describe('UsersPage', () => {
     await screen.findByText('María López García')
     const link = screen.getByRole('link', { name: /Invitar mesero/ })
     expect(link).toHaveAttribute('href', '/meseros')
+  })
+
+  it('shows the forbidden state, and never fetches GET /usuarios, for a capitán session — "Usuarios" is admin-only on this frontend even though the backend still permits a capitán to call it', async () => {
+    authenticate('capitan')
+    mockBaseRequests()
+    renderPage()
+
+    expect(
+      await screen.findByText('No tienes permiso para ver esta sección'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('María López García')).not.toBeInTheDocument()
+    expect(requestSgeb).not.toHaveBeenCalledWith(
+      expect.objectContaining({ url: '/usuarios' }),
+    )
+  })
+
+  it('shows the forbidden state, and never fetches GET /usuarios, for a mesero session', async () => {
+    authenticate('mesero')
+    mockBaseRequests()
+    renderPage()
+
+    expect(
+      await screen.findByText('No tienes permiso para ver esta sección'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('María López García')).not.toBeInTheDocument()
+    expect(requestSgeb).not.toHaveBeenCalledWith(
+      expect.objectContaining({ url: '/usuarios' }),
+    )
+  })
+
+  it('disables "Invitar capitán o admin" until GET /roles resolves, so the dialog never opens with an empty role picker', async () => {
+    authenticate('admin')
+    vi.mocked(requestSgeb).mockImplementation((config) => {
+      if (config.url === '/usuarios') {
+        return Promise.resolve(envelopeList([USER_RECORD]))
+      }
+      if (config.url === '/roles') {
+        return new Promise(() => undefined)
+      }
+      return Promise.reject(new Error(`Unexpected request: ${String(config.url)}`))
+    })
+
+    renderPage()
+
+    await screen.findByText('María López García')
+    expect(screen.getByRole('button', { name: /Invitar capitán o admin/ })).toBeDisabled()
+  })
+
+  it('an admin session invites a capitán/admin via the real POST /usuarios/invitaciones, then shows the one-time deeplink', async () => {
+    authenticate('admin')
+    mockBaseRequests()
+    const user = userEvent.setup()
+    renderPage()
+
+    await screen.findByText('María López García')
+    await user.click(screen.getByRole('button', { name: /Invitar capitán o admin/ }))
+
+    const dialog = screen.getByRole('dialog', { name: 'Invitar capitán o administrador' })
+    const rolSelect = within(dialog).getByLabelText(/^Rol/)
+    expect(
+      within(dialog).queryByRole('option', { name: 'Mesero' }),
+    ).not.toBeInTheDocument()
+    await user.selectOptions(rolSelect, 'Capitán')
+    await user.type(within(dialog).getByLabelText(/^Nombre/), 'Carlos')
+    await user.type(within(dialog).getByLabelText(/^Apellido paterno/), 'Ruiz')
+    await user.type(within(dialog).getByLabelText(/^Correo/), 'carlos.ruiz@example.com')
+    await user.click(within(dialog).getByRole('button', { name: 'Enviar invitación' }))
+
+    await waitFor(() => {
+      expect(requestSgeb).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: '/usuarios/invitaciones',
+          method: 'POST',
+          data: {
+            idRolDestino: 2,
+            nombre: 'Carlos',
+            apellidoPaterno: 'Ruiz',
+            correo: 'carlos.ruiz@example.com',
+          },
+        }),
+      )
+    })
+    expect(await screen.findByText('Invitación enviada')).toBeInTheDocument()
+    expect(
+      screen.getByDisplayValue('https://sgeb.example.com/registro?token=abc123'),
+    ).toBeInTheDocument()
   })
 })

@@ -75,11 +75,11 @@ describe('AppShell navigation', () => {
     }
   })
 
-  it('shows Usuarios but hides the admin-only Bitácora entry for a capitán session', () => {
+  it('hides both admin-only entries (Usuarios, Bitácora) for a capitán session — "Usuarios" is product-scoped to admin alone, even though the backend still permits a capitán to call GET /usuarios', () => {
     authenticate('capitan')
     renderAppShell('/eventos')
 
-    expect(screen.getByRole('link', { name: 'Usuarios' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Usuarios' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Bitácora' })).not.toBeInTheDocument()
   })
 

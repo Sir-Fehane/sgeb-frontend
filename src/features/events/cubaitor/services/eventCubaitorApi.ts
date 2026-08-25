@@ -39,15 +39,19 @@ import { requestSgeb } from '@/shared/api/sgebClient'
  *    still only exposes `caudalMlSeg`/`pinGpio` here (recalibration-only
  *    UX, `UpdateConfigDispensadoInput`); that is a scope choice, not a
  *    wire-casing bug, and not changed by this fix.
- * 3. `POST /orden-detalles/{id}/dispensar` does NOT return a `Dispensado` —
+ * 3. `POST /orden-detalles/{id}/dispensar` returns `data: Dispensado[]` —
  *    see `types/eventCubaitor.ts`'s `DispensarResultViewModel` comment for
- *    the confirmed real (mixed-casing) shape.
+ *    why this is no longer the bespoke wrapper an earlier backend commit
+ *    used to return.
  * 4. `PATCH /dispensados/{id}/reporte` request body is `{ segundos_real }`
  *    ONLY — `estado` is always server-computed; OpenAPI's documented
  *    required `estado` field is silently ignored if sent.
  * 5. `GET /eventos/{id}/alertas` has an entirely different response shape
  *    than OpenAPI's `AlertaOperativa` — see `types/eventCubaitor.ts`'s
- *    `AlertaViewModel` comment.
+ *    `AlertaViewModel` comment. It is ALSO a bare array (`data:
+ *    AlertaOperativa[]`), not the `{alertas, total, ordenes_pausadas,
+ *    severidad_maxima}` wrapper an earlier backend commit returned — see
+ *    `AlertasEventoViewModel`'s comment.
  * 6. `PATCH .../config-dispensado/{id}/recarga` and `PATCH
  *    /insumos/{id}/estado` both return a nested wrapper object
  *    (`{ config, detalles_reanudados }` / `{ insumo, ordenes_pausadas }`),
@@ -103,23 +107,6 @@ interface DispensadoApiRecord {
   timestamp: string
 }
 
-interface DispensarInstruccionApiRecord {
-  id_dispensado: number
-  pin_gpio: number
-  volumen_ml: number
-  segundos: number
-}
-
-/** The real `dispensar` response — see this file's module comment (#3). */
-interface DispensarResultApiRecord {
-  id_detalle: number
-  idEvento: number
-  idOrden: number
-  idMesa: number
-  estadoOrden: OrdenEstado
-  instrucciones: DispensarInstruccionApiRecord[]
-}
-
 type AlertaApiRecord =
   | {
       tipo: 'botella_vacia'
@@ -151,13 +138,6 @@ type AlertaApiRecord =
       segundos_sin_reportar: number | null
       nota: string
     }
-
-interface AlertasApiRecord {
-  alertas: AlertaApiRecord[]
-  total: number
-  ordenes_pausadas: number
-  severidad_maxima: 'alta' | 'media' | null
-}
 
 function mapOrdenDetalle(record: OrdenDetalleApiRecord): OrdenDetalleViewModel {
   return {
@@ -296,28 +276,15 @@ export async function cambiarEstadoOrden(
   return mapOrden(envelope.data!)
 }
 
-/** `POST /orden-detalles/{id}/dispensar` — triggers a REAL physical dispense (server computes seconds/ml, publishes the MQTT command). If any ingredient's configured pin lacks enough volume, NOTHING dispenses and the whole order pauses (`SGEB-4008`/`SGEB-4009`) — surfaced to the caller as a `SgebApplicationError`, never silently retried. See `types/eventCubaitor.ts`'s `DispensarResultViewModel` for why this response is not a `Dispensado`. */
+/** `POST /orden-detalles/{id}/dispensar` — triggers a REAL physical dispense (server computes seconds/ml, publishes the MQTT command). If any ingredient's configured pin lacks enough volume, NOTHING dispenses and the whole order pauses (`SGEB-4008`/`SGEB-4009`) — surfaced to the caller as a `SgebApplicationError`, never silently retried. Response is `data: Dispensado[]` — see `types/eventCubaitor.ts`'s `DispensarResultViewModel` comment. */
 export async function dispensarDetalle(
   idDetalle: number,
 ): Promise<DispensarResultViewModel> {
-  const envelope = await requestSgeb<DispensarResultApiRecord>({
+  const envelope = await requestSgeb<DispensadoApiRecord[]>({
     url: `/orden-detalles/${String(idDetalle)}/dispensar`,
     method: 'POST',
   })
-  const record = envelope.data!
-  return {
-    idDetalle: record.id_detalle,
-    idEvento: record.idEvento,
-    idOrden: record.idOrden,
-    idMesa: record.idMesa,
-    estadoOrden: record.estadoOrden,
-    instrucciones: record.instrucciones.map((i) => ({
-      idDispensado: i.id_dispensado,
-      pinGpio: i.pin_gpio,
-      volumenMl: i.volumen_ml,
-      segundos: i.segundos,
-    })),
-  }
+  return (envelope.data ?? []).map(mapDispensado)
 }
 
 /**
@@ -439,20 +406,23 @@ export async function recargarConfigDispensado(
 
 // ─────────────────────────────────────────────────────────────── alertas
 
-/** `GET /eventos/{id}/alertas` — see `types/eventCubaitor.ts`'s `AlertaViewModel` comment: derived live, no persisted alert lifecycle to "resolve." */
+/** `GET /eventos/{id}/alertas` — see `types/eventCubaitor.ts`'s `AlertaViewModel`/`AlertasEventoViewModel` comments: derived live, no persisted alert lifecycle to "resolve," and the response is now a bare array (`total`/`severidadMaxima` are derived here, `ordenesPausadas` is gone — never fabricated). */
 export async function fetchAlertasEvento(
   idEvento: number,
   signal?: AbortSignal,
 ): Promise<AlertasEventoViewModel> {
-  const envelope = await requestSgeb<AlertasApiRecord>({
+  const envelope = await requestSgeb<AlertaApiRecord[]>({
     url: `/eventos/${String(idEvento)}/alertas`,
     ...(signal ? { signal } : {}),
   })
-  const data = envelope.data!
+  const alertas = (envelope.data ?? []).map(mapAlerta)
   return {
-    alertas: data.alertas.map(mapAlerta),
-    total: data.total,
-    ordenesPausadas: data.ordenes_pausadas,
-    severidadMaxima: data.severidad_maxima,
+    alertas,
+    total: alertas.length,
+    severidadMaxima: alertas.some((a) => a.severidad === 'alta')
+      ? 'alta'
+      : alertas.length > 0
+        ? 'media'
+        : null,
   }
 }

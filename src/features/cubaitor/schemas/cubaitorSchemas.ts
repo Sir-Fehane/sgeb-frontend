@@ -14,7 +14,11 @@ export const CUBAITOR_ESTADOS = ['activo', 'inactivo', 'mantenimiento'] as const
  * making it optional-but-ignored.
  */
 export const createCubaitorSchema = z.object({
-  nombre: z.string().trim().min(2, 'Ingresa al menos 2 caracteres.').max(50),
+  nombre: z
+    .string()
+    .trim()
+    .min(2, 'Ingresa al menos 2 caracteres.')
+    .max(40, 'No puede superar 40 caracteres.'),
   mac: z
     .string()
     .trim()
@@ -43,7 +47,12 @@ export const createCubaitorSchema = z.object({
 export type CreateCubaitorFormValues = z.infer<typeof createCubaitorSchema>
 
 export const updateCubaitorSchema = z.object({
-  nombre: z.string().trim().min(2, 'Ingresa al menos 2 caracteres.').max(50).optional(),
+  nombre: z
+    .string()
+    .trim()
+    .min(2, 'Ingresa al menos 2 caracteres.')
+    .max(40, 'No puede superar 40 caracteres.')
+    .optional(),
   numPins: z
     .number({ error: 'Ingresa el número de pines.' })
     .int('El número de pines debe ser un entero.')

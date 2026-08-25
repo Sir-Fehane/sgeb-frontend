@@ -169,20 +169,33 @@ describe('cambiarEstadoOrden', () => {
 })
 
 describe('dispensarDetalle', () => {
-  it('maps the CONFIRMED real (mixed-casing) response shape — NOT a Dispensado, contra OpenAPI', async () => {
+  it('maps the confirmed real response shape — data: Dispensado[], not the old bespoke wrapper', async () => {
     vi.mocked(requestSgeb).mockResolvedValue({
       result: { code: 'SGEB-0001', message: 'creado' },
-      data: {
-        id_detalle: 1,
-        idEvento: 1001,
-        idOrden: 501,
-        idMesa: 7,
-        estadoOrden: 'en_preparacion',
-        instrucciones: [
-          { id_dispensado: 900, pin_gpio: 12, volumen_ml: 45, segundos: 2.9 },
-          { id_dispensado: 901, pin_gpio: 13, volumen_ml: 250, segundos: 10 },
-        ],
-      },
+      data: [
+        {
+          id_dispensado: 900,
+          id_detalle: 1,
+          id_config: 12,
+          volumen_solicitado_ml: 45,
+          segundos_calculado: 2.9,
+          segundos_real: null,
+          volumen_real_estimado_ml: null,
+          estado: 'ok',
+          timestamp: '2026-08-25T10:00:00.000Z',
+        },
+        {
+          id_dispensado: 901,
+          id_detalle: 1,
+          id_config: 13,
+          volumen_solicitado_ml: 250,
+          segundos_calculado: 10,
+          segundos_real: null,
+          volumen_real_estimado_ml: null,
+          estado: 'ok',
+          timestamp: '2026-08-25T10:00:00.000Z',
+        },
+      ],
     })
 
     const result = await dispensarDetalle(1)
@@ -191,17 +204,30 @@ describe('dispensarDetalle', () => {
       url: '/orden-detalles/1/dispensar',
       method: 'POST',
     })
-    expect(result).toEqual({
-      idDetalle: 1,
-      idEvento: 1001,
-      idOrden: 501,
-      idMesa: 7,
-      estadoOrden: 'en_preparacion',
-      instrucciones: [
-        { idDispensado: 900, pinGpio: 12, volumenMl: 45, segundos: 2.9 },
-        { idDispensado: 901, pinGpio: 13, volumenMl: 250, segundos: 10 },
-      ],
-    })
+    expect(result).toEqual([
+      {
+        idDispensado: 900,
+        idDetalle: 1,
+        idConfig: 12,
+        volumenSolicitadoMl: 45,
+        segundosCalculado: 2.9,
+        segundosReal: null,
+        volumenRealEstimadoMl: null,
+        estado: 'ok',
+        timestamp: '2026-08-25T10:00:00.000Z',
+      },
+      {
+        idDispensado: 901,
+        idDetalle: 1,
+        idConfig: 13,
+        volumenSolicitadoMl: 250,
+        segundosCalculado: 10,
+        segundosReal: null,
+        volumenRealEstimadoMl: null,
+        estado: 'ok',
+        timestamp: '2026-08-25T10:00:00.000Z',
+      },
+    ])
   })
 })
 
@@ -445,35 +471,30 @@ describe('recargarConfigDispensado', () => {
 })
 
 describe('fetchAlertasEvento', () => {
-  it("maps the confirmed real alertas shape — entirely different from OpenAPI's AlertaOperativa schema", async () => {
+  it("maps the confirmed real alertas shape — a bare array (not the {alertas, total, ordenes_pausadas, severidad_maxima} wrapper), entirely different fields from OpenAPI's AlertaOperativa schema", async () => {
     vi.mocked(requestSgeb).mockResolvedValue({
       result: { code: 'SGEB-0000', message: 'ok' },
-      data: {
-        alertas: [
-          {
-            tipo: 'botella_vacia',
-            codigo: 'SGEB-4009',
-            severidad: 'alta',
-            id_config: 5,
-            pin_gpio: 12,
-            id_insumo: 9,
-            insumo: 'Ron',
-            volumen_disponible_ml: 0,
-          },
-          {
-            tipo: 'cubaitor_sin_conexion',
-            codigo: 'SGEB-5003',
-            severidad: 'alta',
-            id_cubaitor: 1,
-            nombre: 'Barra 1',
-            segundos_sin_reportar: null,
-            nota: 'El evento continúa con dispensado manual (RNF-13).',
-          },
-        ],
-        total: 2,
-        ordenes_pausadas: 1,
-        severidad_maxima: 'alta',
-      },
+      data: [
+        {
+          tipo: 'botella_vacia',
+          codigo: 'SGEB-4009',
+          severidad: 'alta',
+          id_config: 5,
+          pin_gpio: 12,
+          id_insumo: 9,
+          insumo: 'Ron',
+          volumen_disponible_ml: 0,
+        },
+        {
+          tipo: 'cubaitor_sin_conexion',
+          codigo: 'SGEB-5003',
+          severidad: 'alta',
+          id_cubaitor: 1,
+          nombre: 'Barra 1',
+          segundos_sin_reportar: null,
+          nota: 'El evento continúa con dispensado manual (RNF-13).',
+        },
+      ],
     })
 
     const result = await fetchAlertasEvento(1001)
@@ -501,8 +522,18 @@ describe('fetchAlertasEvento', () => {
         },
       ],
       total: 2,
-      ordenesPausadas: 1,
       severidadMaxima: 'alta',
     })
+  })
+
+  it('derives total: 0 and severidadMaxima: null from an empty array', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0002', message: 'sin resultados' },
+      data: [],
+    })
+
+    const result = await fetchAlertasEvento(1001)
+
+    expect(result).toEqual({ alertas: [], total: 0, severidadMaxima: null })
   })
 })

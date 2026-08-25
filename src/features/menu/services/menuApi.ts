@@ -15,18 +15,21 @@ import type {
 import { requestSgeb } from '@/shared/api/sgebClient'
 
 /**
- * CONFIRMED WIRE-CASING MISMATCH (direct inspection of the pinned backend,
- * `app/modules/menu/validators/menu_validator.ts` +
- * `tests/functional/api_barra.spec.ts`, not `docs/api/openapi-sgeb.yaml`
- * alone): every mutating request body (POST/PUT/PATCH) in this module uses
- * **camelCase** field names (`volumenMl`, `idInsumo`, `tipoPorcion`,
- * `ordenServido`) — OpenAPI documents snake_case for all of them. Read
- * responses (Lucid model serialization) ARE snake_case, matching OpenAPI.
- * This file is the one place that boundary is crossed: every `...Input`
- * type above stays camelCase (matching this app's own view-model
- * convention), and every function below builds the literal camelCase wire
- * body by hand rather than trusting a generic case-conversion helper — see
- * this branch's report for the full backend-gap writeup.
+ * WIRE CASING — envase/receta request bodies are **snake_case**
+ * (`volumen_ml`, `id_insumo`, `tipo_porcion`, `orden_servido`), matching
+ * both `app/modules/menu/validators/menu_validator.ts`
+ * (`envaseValidator`/`envaseParcialValidator`/`recetaValidator`) on the
+ * pinned backend AND `docs/api/openapi-sgeb.yaml`'s documented shape. A
+ * previous version of this comment claimed the opposite (camelCase,
+ * "confirmed" against an older backend commit) — that backend commit
+ * predated `3261d02` ("fix(cubaitor): align endpoints and validators with
+ * OpenAPI spec"), which flipped these two validators to snake_case; the
+ * stale claim produced real `SGEB-2001`/"field must be defined" failures on
+ * every envase create/update and recipe define/update. Fixed at the API
+ * boundary in each function below, verified directly against the validator
+ * source at the currently pinned backend commit. Every `...Input` type
+ * above stays camelCase (this app's own view-model convention) — only the
+ * wire body transforms.
  */
 
 interface RecetaIngredienteApiRecord {
@@ -231,7 +234,14 @@ export async function definirReceta(
   const envelope = await requestSgeb<BebidaApiRecord>({
     url: `/bebidas/${String(idBebida)}/receta`,
     method: 'PUT',
-    data: { ingredientes },
+    data: {
+      ingredientes: ingredientes.map((i) => ({
+        id_insumo: i.idInsumo,
+        tipo_porcion: i.tipoPorcion,
+        valor: i.valor,
+        orden_servido: i.ordenServido,
+      })),
+    },
   })
   return mapBebida(envelope.data!)
 }
@@ -259,7 +269,7 @@ export async function createEnvase(input: CreateEnvaseInput): Promise<EnvaseView
   const envelope = await requestSgeb<EnvaseApiRecord>({
     url: '/envases',
     method: 'POST',
-    data: { nombre: input.nombre, volumenMl: input.volumenMl },
+    data: { nombre: input.nombre, volumen_ml: input.volumenMl },
   })
   return mapEnvase(envelope.data!)
 }
@@ -272,7 +282,10 @@ export async function updateEnvase(
   const envelope = await requestSgeb<EnvaseApiRecord>({
     url: `/envases/${String(idEnvase)}`,
     method: 'PUT',
-    data: input,
+    data: {
+      ...(input.nombre === undefined ? {} : { nombre: input.nombre }),
+      ...(input.volumenMl === undefined ? {} : { volumen_ml: input.volumenMl }),
+    },
   })
   return mapEnvase(envelope.data!)
 }

@@ -2,7 +2,7 @@
  * UI domain types for the global Cubaitor device fleet — device identity,
  * registration, and health, independent of any specific event. Confirmed
  * against the pinned backend
- * (`sgeb-backend@2c41367f6d5d87b49fbd6d4682d52ee39203b631`,
+ * (`sgeb-backend@1fa2e933d72a0619fa7f7b095c5a7a3d1e99969f`,
  * `app/modules/cubaitor/`).
  *
  * Scope split (task §4/§21): a `Cubaitor` row has NO event association at

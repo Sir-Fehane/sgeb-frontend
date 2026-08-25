@@ -1,4 +1,4 @@
-import { SgebNetworkError } from '@/shared/api/sgebApiError'
+import { isSgebApplicationError, SgebNetworkError } from '@/shared/api/sgebApiError'
 import { requestSgeb } from '@/shared/api/sgebClient'
 
 /**
@@ -97,4 +97,109 @@ export async function updateMiPerfil(
     throw new SgebNetworkError('No pudimos interpretar la respuesta del servidor.')
   }
   return mapUsuarioToMiPerfil(envelope.data)
+}
+
+// ─────────────────────────────────────────────────────── datos bancarios
+
+/**
+ * Wire shape of `GET`/`POST /usuarios/me/datos-bancarios` — confirmed
+ * against `DatosBancarios`'s own `@column` declarations
+ * (`app/modules/identidad/models/datos_bancarios.ts`). `clabe` is ALWAYS
+ * masked server-side before it serializes (e.g. `"1234…5678"`) — the full
+ * 18-digit value never leaves the server once saved, so it can never be
+ * pre-filled back into a form; registering again means typing the whole
+ * CLABE from scratch, same as changing a password.
+ */
+export interface DatosBancariosApiRecord {
+  id_datos: number
+  clabe: string
+  banco: string
+  titular_cuenta: string
+  activo: boolean
+}
+
+export interface MisDatosBancariosViewModel {
+  idDatos: number
+  clabeEnmascarada: string
+  banco: string
+  titularCuenta: string
+  activo: boolean
+}
+
+function mapDatosBancarios(record: DatosBancariosApiRecord): MisDatosBancariosViewModel {
+  return {
+    idDatos: record.id_datos,
+    clabeEnmascarada: record.clabe,
+    banco: record.banco,
+    titularCuenta: record.titular_cuenta,
+    activo: record.activo,
+  }
+}
+
+const DATOS_BANCARIOS_NOT_FOUND_CODE = 'SGEB-3001'
+
+/**
+ * True for the specific, deterministic "no CLABE registered yet" outcome
+ * `UsuarioService.obtenerDatosBancarios` throws — as opposed to any other
+ * `SgebApplicationError`/`SgebNetworkError`. The caller uses this to render
+ * the registration form directly instead of a generic error state, same
+ * convention as `features/events/services/eventsApi.ts`'s
+ * `isEventoNotFoundError`.
+ */
+export function isDatosBancariosNoRegistradosError(error: unknown): boolean {
+  return isSgebApplicationError(error) && error.code === DATOS_BANCARIOS_NOT_FOUND_CODE
+}
+
+/**
+ * Fetches the authenticated user's own active bank data through
+ * `GET /usuarios/me/datos-bancarios`. Rejects with a `SgebApplicationError`
+ * (`SGEB-3001`) when none is registered yet — see
+ * `isDatosBancariosNoRegistradosError`; never resolved to `null` here so a
+ * real transport failure and "not registered" stay distinguishable to the
+ * caller.
+ */
+export async function fetchMisDatosBancarios(
+  signal?: AbortSignal,
+): Promise<MisDatosBancariosViewModel> {
+  const envelope = await requestSgeb<DatosBancariosApiRecord>({
+    url: '/usuarios/me/datos-bancarios',
+    ...(signal ? { signal } : {}),
+  })
+  if (envelope.data === null) {
+    throw new SgebNetworkError('No pudimos interpretar la respuesta del servidor.')
+  }
+  return mapDatosBancarios(envelope.data)
+}
+
+/**
+ * `POST /usuarios/me/datos-bancarios` request body — exact field set
+ * confirmed against the pinned backend's `datosBancariosValidator`
+ * (`app/modules/identidad/validators/usuario_validator.ts`), camelCase
+ * (unlike the menu/cubaitor snake_case boundaries elsewhere in this app —
+ * this validator genuinely accepts `titularCuenta` as-is).
+ */
+export interface RegistrarMisDatosBancariosRequest {
+  clabe: string
+  banco: string
+  titularCuenta: string
+}
+
+/**
+ * Registers (or replaces) the authenticated user's own bank data. The
+ * previous active record is deactivated server-side, never deleted
+ * (`UsuarioService.registrarDatosBancarios`'s own comment: historical
+ * `PAGO` rows keep their reference to the snapshot they were paid against).
+ */
+export async function registrarMisDatosBancarios(
+  request: RegistrarMisDatosBancariosRequest,
+): Promise<MisDatosBancariosViewModel> {
+  const envelope = await requestSgeb<DatosBancariosApiRecord>({
+    url: '/usuarios/me/datos-bancarios',
+    method: 'POST',
+    data: request,
+  })
+  if (envelope.data === null) {
+    throw new SgebNetworkError('No pudimos interpretar la respuesta del servidor.')
+  }
+  return mapDatosBancarios(envelope.data)
 }

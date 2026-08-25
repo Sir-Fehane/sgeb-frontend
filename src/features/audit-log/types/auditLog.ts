@@ -46,7 +46,8 @@ export type KnownAuditLogEntityType = (typeof KNOWN_AUDIT_LOG_ENTITY_TYPES)[numb
 export interface AuditLogEntryViewModel {
   idBitacora: number
   tipoEntidad: string
-  idEntidad: number
+  /** `null` for a movement with no single target entity (e.g. `INVITACION`'s `crear` action, which logs before the row's own id would be meaningful) — confirmed nullable on `MovimientoBitacora.idEntidad` (`app/modules/admin/models/movimiento_bitacora.ts`), never coerced. */
+  idEntidad: number | null
   accion: AuditLogAction
   /** `null` for a system/automatic movement (e.g. a Cubaitor job) — never a missing-data placeholder. */
   uuidUsuarioResponsable: string | null

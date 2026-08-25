@@ -2,7 +2,7 @@
  * UI domain types for the event-scoped bar/Cubaitor operational surface —
  * live orders, dispensing, per-event pin configuration, and operational
  * alerts. Confirmed against the pinned backend
- * (`sgeb-backend@2c41367f6d5d87b49fbd6d4682d52ee39203b631`,
+ * (`sgeb-backend@1fa2e933d72a0619fa7f7b095c5a7a3d1e99969f`,
  * `app/modules/ordenes/` + `app/modules/cubaitor/`'s event-scoped surface),
  * not `docs/api/openapi-sgeb.yaml` alone — see `services/eventCubaitorApi.ts`'s
  * module comment for the full list of confirmed mismatches.
@@ -99,26 +99,22 @@ export interface DispensadoViewModel {
 
 /**
  * The confirmed real response shape of `POST
- * /orden-detalles/{id}/dispensar` — NOT a `Dispensado` (OpenAPI documents
- * it as one; the pinned backend's `OrdenService.procesarDetalle` returns a
- * different, mixed-casing shape entirely: the physical instructions sent to
- * the Cubaitor over MQTT, one entry per recipe ingredient/pin). A detail
- * with a 2-ingredient recipe (e.g. alcohol + mixer) produces TWO entries in
- * `instrucciones`, confirmed by the backend's own functional test.
+ * /orden-detalles/{id}/dispensar` — `data: Dispensado[]`, one entry per
+ * recipe ingredient/pin (a detail with a 2-ingredient recipe, e.g. alcohol +
+ * mixer, produces TWO entries). Prior to backend commit `3261d02`
+ * ("fix(cubaitor): align endpoints and validators with OpenAPI spec"),
+ * `OrdenService.procesarDetalle` returned a bespoke, mixed-casing wrapper
+ * (`{idDetalle, idEvento, idOrden, idMesa, estadoOrden, instrucciones}`);
+ * that shape no longer exists — the endpoint now returns the plain
+ * `Dispensado` rows it created, same shape as `OrdenDetalleViewModel`'s own
+ * nested `dispensados` and `reportarDispensado`'s response. The order/event
+ * context (`idEvento`/`idOrden`/`idMesa`/`estadoOrden`) this bespoke shape
+ * used to carry is simply gone from the response — never fabricate it here;
+ * callers needing that context re-fetch the order (`useDispensarMutation`
+ * already invalidates the orders/dashboard queries on success instead of
+ * reading this return value).
  */
-export interface DispensarResultViewModel {
-  idDetalle: number
-  idEvento: number
-  idOrden: number
-  idMesa: number
-  estadoOrden: OrdenEstado
-  instrucciones: readonly {
-    idDispensado: number
-    pinGpio: number
-    volumenMl: number
-    segundos: number
-  }[]
-}
+export type DispensarResultViewModel = readonly DispensadoViewModel[]
 
 export interface ConfigDispensadoViewModel {
   idConfig: number
@@ -168,6 +164,13 @@ export type AlertaTipo = 'botella_vacia' | 'botella_baja' | 'cubaitor_sin_conexi
  * add an "atender/resolver alerta" action anywhere: there is nothing to
  * mark resolved, the alert simply stops appearing once the underlying
  * condition (e.g. a recharge) is fixed.
+ *
+ * As of backend commit `3261d02` ("fix(cubaitor): align endpoints and
+ * validators with OpenAPI spec"), `CubaitorController.alertas` returns the
+ * bare `alertas` array directly (`responder.lista(ctx, r.alertas)`) instead
+ * of the `{alertas, total, ordenes_pausadas, severidad_maxima}` wrapper an
+ * earlier backend commit used to send — `CubaitorService.alertas` still
+ * computes all four internally, but only the array crosses the wire now.
  */
 export type AlertaViewModel =
   | {
@@ -201,9 +204,19 @@ export type AlertaViewModel =
       nota: string
     }
 
+/**
+ * `total`/`severidadMaxima` are derived client-side from `alertas` using
+ * the exact same rule `CubaitorService.alertas` applies server-side
+ * (`total = alertas.length`; `severidadMaxima = 'alta'` if any alert is
+ * `'alta'`, else `'media'` if any alert exists, else `null`) — safe because
+ * the array IS the full, current list. There is no `ordenesPausadas` field:
+ * the backend still computes it internally but no longer returns it on this
+ * endpoint, and it cannot be derived from `alertas` alone (a paused order
+ * does not always correspond one-to-one with an alert here) — fabricating a
+ * count would be worse than omitting it.
+ */
 export interface AlertasEventoViewModel {
   alertas: readonly AlertaViewModel[]
   total: number
-  ordenesPausadas: number
   severidadMaxima: 'alta' | 'media' | null
 }

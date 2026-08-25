@@ -10,7 +10,7 @@ import { requestSgeb } from '@/shared/api/sgebClient'
 interface MovimientoBitacoraApiRecord {
   id_bitacora: number
   tipo_entidad: string
-  id_entidad: number
+  id_entidad: number | null
   accion: AuditLogAction
   uuid_usuario_responsable: string | null
   detalle: string

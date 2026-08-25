@@ -117,11 +117,14 @@ export const NAV_ITEMS: readonly NavItemConfig[] = [
     label: 'Usuarios',
     href: '/usuarios',
     icon: IconUsers,
-    // `GET /usuarios` / `GET /roles` / `GET /usuarios/invitaciones`:
-    // `middleware.rol(['capitan', 'admin'])` (`start/routes.ts`) — mesero
-    // never reaches this web app anyway (docs/FrontendArchitecture.md §2),
-    // but this stays explicit rather than relying on that alone.
-    roles: ['capitan', 'admin'],
+    // The backend's own `middleware.rol(['capitan', 'admin'])` (`start/
+    // routes.ts`) still permits a `capitan` to call `GET /usuarios` — this
+    // is a FRONTEND-ONLY narrowing on top of that, not a backend change:
+    // "Usuarios" (staff invitations, user management, admin actions) is
+    // product-scoped to `admin` alone. `UsersPage`'s own `canView` gate
+    // backs this up for a direct `/usuarios` visit — see that file's
+    // comment.
+    roles: ['admin'],
   },
   {
     id: 'bitacora',

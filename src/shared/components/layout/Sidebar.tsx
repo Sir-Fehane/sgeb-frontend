@@ -12,12 +12,22 @@ export interface SidebarProps {
 /**
  * Persistent desktop sidebar (`lg:` and up). Below that breakpoint this
  * is hidden entirely in favor of `MobileNavDrawer` — see `AppShell`.
+ *
+ * Capped to `h-screen` and pinned with `sticky top-0` so its own height
+ * never depends on how tall `NAV_ITEMS` or the main content area get —
+ * without that cap, a flex child's `overflow-y-auto` never actually
+ * engages (it has no bounded height to overflow against), so a long nav
+ * list — or a tall page — would grow this whole aside instead of
+ * scrolling internally, pushing the collapse button below the viewport.
+ * `min-h-0` on the `<nav>` is the other half of that fix: a flex item's
+ * default `min-height: auto` would otherwise still refuse to shrink below
+ * its content size even inside a height-capped parent.
  */
 export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
   return (
     <aside
       className={cn(
-        'border-border bg-card hidden shrink-0 flex-col border-r transition-[width] duration-200 lg:flex',
+        'border-border bg-card sticky top-0 hidden h-screen shrink-0 flex-col border-r transition-[width] duration-200 lg:flex',
         collapsed ? 'w-20' : 'w-64',
       )}
     >
@@ -30,11 +40,14 @@ export function Sidebar({ collapsed, onToggleCollapsed }: SidebarProps) {
         )}
       </div>
 
-      <nav aria-label="Navegación principal" className="flex-1 overflow-y-auto px-3 py-4">
+      <nav
+        aria-label="Navegación principal"
+        className="min-h-0 flex-1 overflow-y-auto px-3 py-4"
+      >
         <SidebarNavList collapsed={collapsed} />
       </nav>
 
-      <div className="border-border border-t p-3">
+      <div className="border-border shrink-0 border-t p-3">
         <button
           type="button"
           onClick={onToggleCollapsed}

@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ProfilePage } from '@/features/account/pages/ProfilePage'
 import type { UsuarioApiRecord } from '@/features/account/services/usuariosApi'
 import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
+import type { OidcRole } from '@/features/oidc-client/types/userInfo'
 import { SgebApplicationError, SgebNetworkError } from '@/shared/api/sgebApiError'
 import { requestSgeb } from '@/shared/api/sgebClient'
 
@@ -27,14 +28,18 @@ function envelope(data: UsuarioApiRecord) {
   return { result: { code: 'SGEB-0000', message: 'ok' }, data }
 }
 
-beforeEach(() => {
-  vi.mocked(requestSgeb).mockReset()
-  useOidcSessionStore.getState().reset()
+function authenticateAs(rol: OidcRole) {
   useOidcSessionStore.getState().setAuthenticated({
     accessToken: 'test-access-token',
     accessTokenExpiresAt: Date.now() + 900_000,
-    user: { sub: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', rol: 'capitan' },
+    user: { sub: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', rol },
   })
+}
+
+beforeEach(() => {
+  vi.mocked(requestSgeb).mockReset()
+  useOidcSessionStore.getState().reset()
+  authenticateAs('capitan')
 })
 
 function renderPage() {
@@ -159,5 +164,61 @@ describe('ProfilePage', () => {
     expect(
       await screen.findByText('No pudimos comunicarnos con el servidor.'),
     ).toBeInTheDocument()
+  })
+})
+
+describe('ProfilePage — bank data visibility', () => {
+  it('shows the Datos bancarios section for a mesero session', async () => {
+    authenticateAs('mesero')
+    vi.mocked(requestSgeb).mockImplementation((config) => {
+      if (config.url === '/usuarios/me') {
+        return Promise.resolve(envelope(RECORD))
+      }
+      if (config.url === '/usuarios/me/datos-bancarios') {
+        return Promise.reject(
+          new SgebApplicationError(404, {
+            code: 'SGEB-3001',
+            message: 'No encontramos la información solicitada.',
+          }),
+        )
+      }
+      return Promise.reject(new Error(`Unexpected request: ${String(config.url)}`))
+    })
+
+    renderPage()
+
+    expect(await screen.findByText('Datos bancarios')).toBeInTheDocument()
+    expect(
+      await screen.findByText('Aún no registras tus datos bancarios.'),
+    ).toBeInTheDocument()
+    expect(requestSgeb).toHaveBeenCalledWith(
+      expect.objectContaining({ url: '/usuarios/me/datos-bancarios' }),
+    )
+  })
+
+  it('never shows the Datos bancarios section, and never fetches it, for a capitán session', async () => {
+    authenticateAs('capitan')
+    vi.mocked(requestSgeb).mockResolvedValue(envelope(RECORD))
+
+    renderPage()
+
+    await screen.findByDisplayValue('Ana')
+    expect(screen.queryByText('Datos bancarios')).not.toBeInTheDocument()
+    expect(requestSgeb).not.toHaveBeenCalledWith(
+      expect.objectContaining({ url: '/usuarios/me/datos-bancarios' }),
+    )
+  })
+
+  it('never shows the Datos bancarios section, and never fetches it, for an admin session', async () => {
+    authenticateAs('admin')
+    vi.mocked(requestSgeb).mockResolvedValue(envelope(RECORD))
+
+    renderPage()
+
+    await screen.findByDisplayValue('Ana')
+    expect(screen.queryByText('Datos bancarios')).not.toBeInTheDocument()
+    expect(requestSgeb).not.toHaveBeenCalledWith(
+      expect.objectContaining({ url: '/usuarios/me/datos-bancarios' }),
+    )
   })
 })

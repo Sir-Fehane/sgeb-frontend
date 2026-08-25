@@ -1,10 +1,10 @@
 /**
  * UI domain types for the global menu catalog — Insumos, Bebidas (+ recetas),
  * Envases. Confirmed against the pinned backend
- * (`sgeb-backend@2c41367f6d5d87b49fbd6d4682d52ee39203b631`,
- * `app/modules/menu/`), not `docs/api/openapi-sgeb.yaml` alone: see
- * `services/menuApi.ts`'s module comment for the confirmed request-body
- * casing mismatch this feature works around.
+ * (`sgeb-backend@1fa2e933d72a0619fa7f7b095c5a7a3d1e99969f`,
+ * `app/modules/menu/`) — request bodies are snake_case, matching
+ * `docs/api/openapi-sgeb.yaml`; see `services/menuApi.ts`'s module comment
+ * for the wire-casing boundary.
  *
  * Scope: this catalog is GLOBAL, not event-scoped (`Insumo`/`Bebida`/
  * `Envase` carry no `id_evento`). Event-scoped dispensing configuration

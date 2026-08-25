@@ -3,6 +3,19 @@ import { Link } from 'react-router-dom'
 
 import { Button, Text } from '@/shared/components'
 
+export interface UsersPageHeaderProps {
+  /**
+   * Only true for an `admin` session (`InvitacionesController.crear`'s own
+   * role gate: a `capitan` may only invite `mesero`, so this button would
+   * otherwise fail with `SGEB-1004`). `undefined`/omitted renders nothing,
+   * same as leaving `onInviteStaff` unset.
+   */
+  canInviteStaff?: boolean
+  onInviteStaff?: () => void
+  /** Disabled only while the invitable roles (`GET /roles`) haven't resolved yet — see `UsersPage`, same pattern `WaitersPageHeader`'s `isInviteDisabled` already uses. */
+  isInviteStaffDisabled?: boolean
+}
+
 /**
  * No heading is rendered here — `AppShell`'s `Topbar` already renders
  * "Usuarios" as the page's `<h1>`, same convention as `WaitersPageHeader`.
@@ -12,24 +25,40 @@ import { Button, Text } from '@/shared/components'
  * in this branch's report) unless a separate invitation is issued for the
  * same correo — and the invitations flow rejects an email that already has
  * an account (`SSO-2005`). Onboarding stays exclusively through
- * Invitaciones, so this links there instead of duplicating a broken create
- * path. Invitaciones only ever issues `mesero` invitations today
- * (`features/waiters` — see this branch's report for why a generalized
- * role-picker invite isn't built here), so the link is framed accordingly
- * rather than implying it covers every role.
+ * Invitaciones: "Invitar mesero" links to `/meseros` (`features/waiters`,
+ * the only place that flow lives); "Invitar capitán o admin" (admin-only,
+ * `canInviteStaff`) opens `InviteStaffDialog` right here instead of
+ * duplicating the mesero-only form — see `UsersPage.tsx`'s wiring.
  */
-export function UsersPageHeader() {
+export function UsersPageHeader({
+  canInviteStaff = false,
+  onInviteStaff,
+  isInviteStaffDisabled = false,
+}: UsersPageHeaderProps) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-4">
       <Text size="sm" className="text-muted-foreground">
         Consulta y administra las cuentas del sistema.
       </Text>
-      <Button asChild variant="outline">
-        <Link to="/meseros">
-          <IconUserPlus aria-hidden="true" />
-          Invitar mesero
-        </Link>
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        {canInviteStaff ? (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isInviteStaffDisabled}
+            onClick={onInviteStaff}
+          >
+            <IconUserPlus aria-hidden="true" />
+            Invitar capitán o admin
+          </Button>
+        ) : null}
+        <Button asChild variant="outline">
+          <Link to="/meseros">
+            <IconUserPlus aria-hidden="true" />
+            Invitar mesero
+          </Link>
+        </Button>
+      </div>
     </div>
   )
 }

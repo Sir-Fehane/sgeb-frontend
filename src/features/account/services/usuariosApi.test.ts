@@ -2,10 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   fetchMiPerfil,
+  fetchMisDatosBancarios,
+  isDatosBancariosNoRegistradosError,
+  registrarMisDatosBancarios,
   updateMiPerfil,
+  type DatosBancariosApiRecord,
   type UsuarioApiRecord,
 } from '@/features/account/services/usuariosApi'
-import { SgebNetworkError } from '@/shared/api/sgebApiError'
+import { SgebApplicationError, SgebNetworkError } from '@/shared/api/sgebApiError'
 import { requestSgeb } from '@/shared/api/sgebClient'
 
 vi.mock('@/shared/api/sgebClient', () => ({
@@ -100,5 +104,103 @@ describe('updateMiPerfil', () => {
     await expect(updateMiPerfil({ nombre: 'Ana' })).rejects.toBeInstanceOf(
       SgebNetworkError,
     )
+  })
+})
+
+const BANK_RECORD: DatosBancariosApiRecord = {
+  id_datos: 1,
+  clabe: '0123…5678',
+  banco: 'BBVA',
+  titular_cuenta: 'Ana Torres',
+  activo: true,
+}
+
+describe('fetchMisDatosBancarios', () => {
+  it('requests GET /usuarios/me/datos-bancarios with the signal, mapped from the wire shape', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0000', message: 'ok' },
+      data: BANK_RECORD,
+    })
+    const controller = new AbortController()
+
+    const result = await fetchMisDatosBancarios(controller.signal)
+
+    expect(requestSgeb).toHaveBeenCalledWith({
+      url: '/usuarios/me/datos-bancarios',
+      signal: controller.signal,
+    })
+    expect(result).toEqual({
+      idDatos: 1,
+      clabeEnmascarada: '0123…5678',
+      banco: 'BBVA',
+      titularCuenta: 'Ana Torres',
+      activo: true,
+    })
+  })
+
+  it('propagates the SGEB-3001 "not registered" application error unchanged, never resolving to null', async () => {
+    const error = new SgebApplicationError(404, {
+      code: 'SGEB-3001',
+      message: 'No encontramos la información solicitada.',
+    })
+    vi.mocked(requestSgeb).mockRejectedValue(error)
+
+    await expect(fetchMisDatosBancarios()).rejects.toBe(error)
+  })
+})
+
+describe('isDatosBancariosNoRegistradosError', () => {
+  it('is true only for a SgebApplicationError carrying SGEB-3001', () => {
+    expect(
+      isDatosBancariosNoRegistradosError(
+        new SgebApplicationError(404, { code: 'SGEB-3001', message: 'x' }),
+      ),
+    ).toBe(true)
+    expect(
+      isDatosBancariosNoRegistradosError(
+        new SgebApplicationError(422, { code: 'SGEB-2005', message: 'x' }),
+      ),
+    ).toBe(false)
+    expect(isDatosBancariosNoRegistradosError(new SgebNetworkError('x'))).toBe(false)
+  })
+})
+
+describe('registrarMisDatosBancarios', () => {
+  it('POSTs /usuarios/me/datos-bancarios with exactly the given body', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0001', message: 'creado' },
+      data: BANK_RECORD,
+    })
+
+    await registrarMisDatosBancarios({
+      clabe: '012345678901234567',
+      banco: 'BBVA',
+      titularCuenta: 'Ana Torres',
+    })
+
+    expect(requestSgeb).toHaveBeenCalledWith({
+      url: '/usuarios/me/datos-bancarios',
+      method: 'POST',
+      data: {
+        clabe: '012345678901234567',
+        banco: 'BBVA',
+        titularCuenta: 'Ana Torres',
+      },
+    })
+  })
+
+  it('throws a SgebNetworkError if the envelope carries null data on success (defensive guard)', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0001', message: 'creado' },
+      data: null,
+    })
+
+    await expect(
+      registrarMisDatosBancarios({
+        clabe: '012345678901234567',
+        banco: 'BBVA',
+        titularCuenta: 'Ana Torres',
+      }),
+    ).rejects.toBeInstanceOf(SgebNetworkError)
   })
 })

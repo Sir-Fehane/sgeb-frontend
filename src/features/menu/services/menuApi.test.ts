@@ -7,6 +7,7 @@ import {
   definirReceta,
   fetchBebidas,
   fetchInsumos,
+  updateEnvase,
   updateInsumoEstado,
 } from '@/features/menu/services/menuApi'
 import { requestSgeb } from '@/shared/api/sgebClient'
@@ -105,7 +106,7 @@ describe('fetchInsumos', () => {
 })
 
 describe('createEnvase', () => {
-  it("POSTs /envases with camelCase `volumenMl` — confirmed against the pinned backend, not OpenAPI's documented `volumen_ml`", async () => {
+  it('POSTs /envases with snake_case `volumen_ml` — matching the pinned backend validator and OpenAPI', async () => {
     vi.mocked(requestSgeb).mockResolvedValue({
       result: { code: 'SGEB-0001', message: 'creado' },
       data: { id_envase: 5, nombre: 'Vaso Normal', volumen_ml: 350, activo: true },
@@ -116,7 +117,24 @@ describe('createEnvase', () => {
     expect(requestSgeb).toHaveBeenCalledWith({
       url: '/envases',
       method: 'POST',
-      data: { nombre: 'Vaso Normal', volumenMl: 350 },
+      data: { nombre: 'Vaso Normal', volumen_ml: 350 },
+    })
+  })
+})
+
+describe('updateEnvase', () => {
+  it('PUTs /envases/{id} with snake_case `volumen_ml`, including only the fields supplied', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0000', message: 'ok' },
+      data: { id_envase: 5, nombre: 'Vaso Normal', volumen_ml: 400, activo: true },
+    })
+
+    await updateEnvase(5, { volumenMl: 400 })
+
+    expect(requestSgeb).toHaveBeenCalledWith({
+      url: '/envases/5',
+      method: 'PUT',
+      data: { volumen_ml: 400 },
     })
   })
 })
@@ -145,7 +163,7 @@ describe('createBebida', () => {
 })
 
 describe('definirReceta', () => {
-  it('PUTs /bebidas/{id}/receta with camelCase ingredient fields, and maps the full Bebida response', async () => {
+  it('PUTs /bebidas/{id}/receta with snake_case ingredient fields, and maps the full Bebida response', async () => {
     vi.mocked(requestSgeb).mockResolvedValue({
       result: { code: 'SGEB-0000', message: 'ok' },
       data: {
@@ -176,7 +194,7 @@ describe('definirReceta', () => {
       method: 'PUT',
       data: {
         ingredientes: [
-          { idInsumo: 1, tipoPorcion: 'FIJO_ML', valor: 45, ordenServido: 1 },
+          { id_insumo: 1, tipo_porcion: 'FIJO_ML', valor: 45, orden_servido: 1 },
         ],
       },
     })
