@@ -112,21 +112,28 @@ function NoChecklistInstantiated({
         Este mesero aún no tiene un checklist de montaje instanciado.
       </Text>
       <div className="flex flex-wrap items-center gap-2">
-        {templates.length > 1 ? (
-          <Select
-            aria-label={`Plantilla de checklist para ${nombreParticipante}`}
-            value={selectedIdChecklist ?? ''}
-            disabled={isInstantiating}
-            onChange={(event) => setSelectedIdChecklist(Number(event.target.value))}
-            className="w-auto"
-          >
-            {templates.map((template) => (
-              <option key={template.idChecklist} value={template.idChecklist}>
-                {template.nombre}
-              </option>
-            ))}
-          </Select>
-        ) : null}
+        {/*
+         * Always rendered — even for exactly one template — so the
+         * captain can always see (and, if there is more than one, choose)
+         * which template "Asignar checklist" will instantiate, instead of
+         * a bare button naming nothing. Mirrors
+         * `EventMontageAssignmentSection`'s own inline `Select` + `Button`
+         * pattern for choosing a mesa, rather than introducing a new
+         * dialog-based selection UX into this row.
+         */}
+        <Select
+          aria-label={`Plantilla de checklist para ${nombreParticipante}`}
+          value={selectedIdChecklist ?? ''}
+          disabled={isInstantiating}
+          onChange={(event) => setSelectedIdChecklist(Number(event.target.value))}
+          className="w-auto"
+        >
+          {templates.map((template) => (
+            <option key={template.idChecklist} value={template.idChecklist}>
+              {template.nombre}
+            </option>
+          ))}
+        </Select>
         <Button
           type="button"
           variant="outline"

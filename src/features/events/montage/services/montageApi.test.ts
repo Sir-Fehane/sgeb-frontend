@@ -317,8 +317,19 @@ describe('approveChecklistInstancia', () => {
   })
 })
 
+/**
+ * Regression coverage for the real, reproduced bug: this function used to
+ * send the request body as snake_case `id_checklist`, but
+ * `checklist_validator.ts`'s `instanciarValidator` on the pinned backend
+ * validates the raw JSON key `idChecklist` (camelCase) — confirmed no
+ * case-conversion middleware exists in the backend, same asymmetry as
+ * `checklistsApi.ts`'s `cantidadEsperada`. A missing `idChecklist` key
+ * fails VineJS's `required` rule, surfaced as `SGEB-2001` with
+ * `errores_campos: [{ field: 'idChecklist', rule: 'required' }]` — exactly
+ * the error this bug produced end to end.
+ */
 describe('instantiateChecklist', () => {
-  it('POSTs /participaciones/{id}/checklist-instancias with { id_checklist }', async () => {
+  it('POSTs /participaciones/{id}/checklist-instancias with { idChecklist } (camelCase, never id_checklist)', async () => {
     vi.mocked(requestSgeb).mockResolvedValue({
       result: { code: 'SGEB-0001', message: 'creado' },
       data: {
@@ -336,9 +347,29 @@ describe('instantiateChecklist', () => {
     expect(requestSgeb).toHaveBeenCalledWith({
       url: '/participaciones/5002/checklist-instancias',
       method: 'POST',
-      data: { id_checklist: 1 },
+      data: { idChecklist: 1 },
     })
     expect(result.id_instancia).toBe(9001)
+  })
+
+  it('never sends snake_case id_checklist in the request body', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0001', message: 'creado' },
+      data: {
+        id_instancia: 9001,
+        id_participacion: 5002,
+        id_checklist: 1,
+        completado: false,
+        fecha: '2026-08-01T00:00:00',
+        respuestas: [],
+      },
+    })
+
+    await instantiateChecklist(5002, 1)
+
+    const [config] = vi.mocked(requestSgeb).mock.calls[0]!
+    expect(config.data).not.toHaveProperty('id_checklist')
+    expect(config.data).toHaveProperty('idChecklist', 1)
   })
 
   it('returns the same instance on a repeated call — idempotent, no duplicate-instance assumption client-side', async () => {

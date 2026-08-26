@@ -109,6 +109,24 @@ const MONTAJE_TEMPLATE: ChecklistApiRecord = {
   ],
 }
 
+/** A second, distinct `montaje` template — used only by the "multiple templates" selection test below; every other test in this file keeps the single-`MONTAJE_TEMPLATE` default. */
+const MONTAJE_TEMPLATE_2: ChecklistApiRecord = {
+  id_checklist: 2,
+  nombre: 'Montaje de barra',
+  tipo: 'montaje',
+  activo: true,
+  items: [
+    {
+      id_item: 3,
+      id_checklist: 2,
+      descripcion: 'Surtir hielo',
+      cantidad_esperada: 1,
+      orden: 1,
+      activo: true,
+    },
+  ],
+}
+
 function participacion(
   overrides: Partial<ParticipacionApiRecord> & { id_participacion: number },
 ): ParticipacionApiRecord {
@@ -271,7 +289,24 @@ function fakeTransport(
     }
     if (instanciaMatch && config.method === 'POST') {
       const idParticipacion = Number(instanciaMatch[1])
-      const idChecklist = (config.data as { id_checklist: number }).id_checklist
+      // Mirrors the REAL pinned backend's `instanciarValidator`
+      // (`checklist_validator.ts`: `vine.object({ idChecklist:
+      // vine.number().positive() })`) — camelCase, and rejects exactly
+      // like the real `SGEB-2001` when the key is missing/not a number,
+      // instead of silently accepting whatever casing the request sends.
+      // This is what makes this fixture an actual regression guard for
+      // the reproduced "sent id_checklist instead of idChecklist" bug —
+      // a wrongly-cased request would fail here the same way it failed
+      // against the real backend, not just against a lenient stub.
+      const idChecklist = (config.data as { idChecklist?: unknown }).idChecklist
+      if (typeof idChecklist !== 'number') {
+        return Promise.reject(
+          new SgebApplicationError(400, {
+            code: 'SGEB-2001',
+            message: 'Faltan datos obligatorios. Completa los campos marcados.',
+          }),
+        )
+      }
       const existing = (instancias[idParticipacion] ?? []).find(
         (i) => i.id_checklist === idChecklist,
       )
@@ -464,7 +499,20 @@ describe('EventMontagePage', () => {
     expect(screen.getByText(/checklist de montaje instanciado/)).toBeInTheDocument()
   })
 
-  it('offers an "Asignar checklist" action for a participant with no instance, and POSTs /participaciones/{id}/checklist-instancias (Phase 6, idempotent instantiation)', async () => {
+  /**
+   * Regression coverage for the real, reproduced bug: this POST used to
+   * send `{ id_checklist: ... }` (snake_case), which the pinned backend's
+   * `instanciarValidator` rejects as `SGEB-2001` ("Faltan datos
+   * obligatorios") because it validates the raw camelCase key
+   * `idChecklist`. This drives the exact real `Evento -> Montaje` UI (not
+   * `EventMontageChecklistSection` in isolation): renders the page,
+   * clicks the real "Asignar checklist" button, and asserts the exact
+   * request body — this test fails if the body ever omits `idChecklist`
+   * or reintroduces `id_checklist`, both by the strict `toHaveBeenCalledWith`
+   * below and because `fakeTransport`'s POST handler now rejects a
+   * malformed body exactly like the real backend (see its own comment).
+   */
+  it('offers an "Asignar checklist" action for a participant with no instance, and POSTs { idChecklist } — never id_checklist (Phase 6, idempotent instantiation)', async () => {
     fakeTransport(1001, {
       participaciones: [participacion({ id_participacion: 5003 })],
       instancias: { 5003: [] },
@@ -484,7 +532,7 @@ describe('EventMontagePage', () => {
       expect(requestSgeb).toHaveBeenCalledWith({
         url: '/participaciones/5003/checklist-instancias',
         method: 'POST',
-        data: { id_checklist: 1 },
+        data: { idChecklist: 1 },
       })
     })
 
@@ -526,6 +574,67 @@ describe('EventMontagePage', () => {
           config.method === 'POST',
       )
     expect(postCalls).toHaveLength(1)
+  })
+
+  it("shows the single available template's name in a visible selector, not a bare unnamed button", async () => {
+    fakeTransport(1001, {
+      participaciones: [participacion({ id_participacion: 5003 })],
+      instancias: { 5003: [] },
+    })
+
+    renderAt('/eventos/1001/montaje')
+
+    const row = (await screen.findByText('Juan Pérez')).closest('li') as HTMLElement
+    const select = within(row).getByRole('combobox', {
+      name: 'Plantilla de checklist para Juan Pérez',
+    })
+    expect(select).toHaveValue('1')
+    expect(
+      within(select).getByRole('option', { name: 'Montaje de estación' }),
+    ).toBeInTheDocument()
+  })
+
+  /**
+   * Regression coverage: with more than one `montaje` template in the
+   * catalog, the captain must be able to pick which one to instantiate —
+   * the mutation must never silently default to array index 0 without the
+   * captain's own choice being reflected in the request.
+   */
+  it("lets the captain choose among multiple templates, and sends the selected one's idChecklist", async () => {
+    fakeTransport(1001, {
+      participaciones: [participacion({ id_participacion: 5003 })],
+      instancias: { 5003: [] },
+      templates: [MONTAJE_TEMPLATE, MONTAJE_TEMPLATE_2],
+    })
+
+    renderAt('/eventos/1001/montaje')
+
+    const row = (await screen.findByText('Juan Pérez')).closest('li') as HTMLElement
+    const select = within(row).getByRole('combobox', {
+      name: 'Plantilla de checklist para Juan Pérez',
+    })
+    expect(
+      within(select).getByRole('option', { name: 'Montaje de estación' }),
+    ).toBeInTheDocument()
+    expect(
+      within(select).getByRole('option', { name: 'Montaje de barra' }),
+    ).toBeInTheDocument()
+
+    const user = userEvent.setup()
+    await user.selectOptions(select, '2')
+    await user.click(
+      within(row).getByRole('button', {
+        name: 'Asignar checklist de montaje a Juan Pérez',
+      }),
+    )
+
+    await waitFor(() => {
+      expect(requestSgeb).toHaveBeenCalledWith({
+        url: '/participaciones/5003/checklist-instancias',
+        method: 'POST',
+        data: { idChecklist: 2 },
+      })
+    })
   })
 
   /**

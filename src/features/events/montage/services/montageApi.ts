@@ -232,6 +232,18 @@ export function buildMontageChecklist(
  * participation/template pair returns the same existing instance rather
  * than creating a duplicate, so a caller never needs to guard against
  * double-submission client-side beyond the normal in-flight disable.
+ *
+ * WIRE CASING — the request body key is **camelCase** `idChecklist`, same
+ * asymmetry as `checklistsApi.ts`'s item `cantidadEsperada`: confirmed
+ * directly against `checklist_validator.ts`'s `instanciarValidator`
+ * (`vine.object({ idChecklist: vine.number().positive() })`), which
+ * validates the raw JSON key `idChecklist` — `docs/api/openapi-sgeb.yaml`
+ * documents `id_checklist` (snake_case) for this one endpoint, which does
+ * not match the real backend and previously produced a reproduced,
+ * real `SGEB-2001` ("Faltan datos obligatorios") with
+ * `errores_campos: [{ field: 'idChecklist', rule: 'required' }]` — fixed
+ * here, not in the OpenAPI doc (out of scope: frontend-only fix, backend
+ * source is the contract authority per this branch's own rules).
  */
 export async function instantiateChecklist(
   idParticipacion: number,
@@ -240,7 +252,7 @@ export async function instantiateChecklist(
   const envelope = await requestSgeb<ChecklistInstanciaApiRecord>({
     url: `/participaciones/${String(idParticipacion)}/checklist-instancias`,
     method: 'POST',
-    data: { id_checklist: idChecklist },
+    data: { idChecklist },
   })
   if (envelope.data === null) {
     throw new SgebNetworkError('No pudimos interpretar la respuesta del servidor.')
