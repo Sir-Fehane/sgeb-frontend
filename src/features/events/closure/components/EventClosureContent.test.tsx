@@ -181,17 +181,25 @@ describe('EventClosureContent — readiness, ready fixture', () => {
   })
 })
 
-describe('EventClosureContent — cleanup contract gap', () => {
-  it('shows restrained informational copy, with no interactive controls', () => {
+describe('EventClosureContent — cleanup / exit checklist pointer', () => {
+  it('shows restrained copy plus a real link to Control de salida, with no local mutation control', () => {
     renderContent()
 
     expect(screen.getByText('Verificación de limpieza')).toBeInTheDocument()
     const cleanupSection = screen.getByText('Verificación de limpieza').closest('section')
+    // The one real control is a navigation link (rendered via `Button asChild`,
+    // so its accessible role is `link`, not `button`) — no checkbox, no
+    // local mutation control lives on this event-level rollup screen; the
+    // interactive assign/monitor/approve UI lives on Control de salida
+    // (`LiveOperationsClosureChecklistSection`), not duplicated here.
     expect(within(cleanupSection!).queryAllByRole('button')).toHaveLength(0)
     expect(within(cleanupSection!).queryAllByRole('checkbox')).toHaveLength(0)
+    expect(
+      within(cleanupSection!).getByRole('link', { name: 'Ir a Control de salida' }),
+    ).toHaveAttribute('href', `/eventos/${String(EVENTO.idEvento)}/operacion-en-vivo`)
   })
 
-  it('never exposes a cleanup mutation action', () => {
+  it('never exposes a local cleanup mutation action', () => {
     renderContent()
 
     for (const forbidden of [

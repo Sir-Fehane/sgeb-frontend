@@ -41,9 +41,9 @@ export interface EventClosureContentProps {
 
 /**
  * The reusable presentational composition — header + readiness diagnostic
- * + finalize action + cleanup contract-gap notice + merma reports + merma
- * form, or exactly one of loading / error / unavailable, selected purely
- * from props. Still no payment calculation, no payment mutation, no W-08
+ * + finalize action + cleanup/exit-checklist pointer + merma reports +
+ * merma form, or exactly one of loading / error / unavailable, selected
+ * purely from props. Still no payment calculation, no payment mutation, no W-08
  * anywhere in this composition — see this feature's README. Event
  * finalization (`en_curso → finalizado`) is the one state-machine mutation
  * this composition now owns, via `EventClosureFinalizeSection` — see that
@@ -107,7 +107,7 @@ export function EventClosureContent({
         </Button>
       ) : null}
 
-      <EventClosureCleanupSection />
+      <EventClosureCleanupSection idEvento={evento.idEvento} />
 
       <EventClosureWasteReportsSection reports={mermaReports} />
 

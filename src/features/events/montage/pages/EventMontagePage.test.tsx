@@ -182,6 +182,7 @@ function pendingInstancia(idParticipacion: number): ChecklistInstanciaApiRecord 
     id_participacion: idParticipacion,
     id_checklist: 1,
     completado: false,
+    aprobado_en: null,
     fecha: '2026-08-01T00:00:00',
     respuestas: [
       {
@@ -208,6 +209,7 @@ function completedInstancia(idParticipacion: number): ChecklistInstanciaApiRecor
     id_participacion: idParticipacion,
     id_checklist: 1,
     completado: true,
+    aprobado_en: null,
     fecha: '2026-08-01T00:00:00',
     respuestas: [
       {
@@ -318,6 +320,7 @@ function fakeTransport(
         id_participacion: idParticipacion,
         id_checklist: idChecklist,
         completado: false,
+        aprobado_en: null,
         fecha: '2026-08-20T00:00:00',
         respuestas: [],
       }

@@ -147,6 +147,7 @@ describe('fetchChecklistInstancias', () => {
       id_participacion: 5002,
       id_checklist: 1,
       completado: false,
+      aprobado_en: null,
       fecha: '2026-08-01T00:00:00',
       respuestas: [],
     }
@@ -196,6 +197,7 @@ describe('buildMontageChecklist', () => {
       id_participacion: 5002,
       id_checklist: 1,
       completado: false,
+      aprobado_en: null,
       fecha: '2026-08-01T00:00:00',
       respuestas: [
         { id_respuesta: 1, id_instancia: 9001, id_item: 10, cantidad: 1, hecho: true },

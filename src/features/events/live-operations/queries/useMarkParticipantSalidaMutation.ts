@@ -1,7 +1,11 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 
 import { closureQueryKeys } from '@/features/events/closure/queries/closureQueryKeys'
-import { markParticipantSalida } from '@/features/events/live-operations/services/liveOperationsApi'
+import {
+  isExitChecklistNotReadyError,
+  markParticipantSalida,
+} from '@/features/events/live-operations/services/liveOperationsApi'
+import { montageQueryKeys } from '@/features/events/montage/queries/montageQueryKeys'
 import { teamSelectionQueryKeys } from '@/features/events/team-selection/queries/teamSelectionQueryKeys'
 
 /**
@@ -39,6 +43,20 @@ import { teamSelectionQueryKeys } from '@/features/events/team-selection/queries
  * responsibility as `useSelectParticipantMutation`: the caller passes
  * `mutate(idParticipacion, { onSuccess, onError })` and owns duplicate-
  * submit guarding / row-level pending and error UI itself.
+ *
+ * On a `SGEB-4027` failure specifically (`isExitChecklistNotReadyError`) —
+ * "salida rejected: exit checklist missing/incomplete/unapproved" — this
+ * also invalidates that participant's checklist-instancia query
+ * (`montageQueryKeys.checklistInstancias`, the same key
+ * `LiveOperationsClosureChecklistSection`'s data flows through). The
+ * frontend gate (`isClosureChecklistApprovedForSalida`) should normally
+ * keep the button disabled before this call is even attempted, so a real
+ * `SGEB-4027` here means the checklist state the row was rendering was
+ * stale — another captain/mesero changed it after this row's last fetch.
+ * Resyncing on exactly this failure, rather than leaving the row to keep
+ * showing outdated "ready" state until some unrelated refetch happens,
+ * is what makes the error message ("está pendiente de aprobación" etc.)
+ * make sense to the captain instead of contradicting what they just saw.
  */
 export function useMarkParticipantSalidaMutation(idEvento: number) {
   const queryClient = useQueryClient()
@@ -52,6 +70,13 @@ export function useMarkParticipantSalidaMutation(idEvento: number) {
       void queryClient.invalidateQueries({
         queryKey: closureQueryKeys.readiness(idEvento),
       })
+    },
+    onError: (error, idParticipacion) => {
+      if (isExitChecklistNotReadyError(error)) {
+        void queryClient.invalidateQueries({
+          queryKey: montageQueryKeys.checklistInstancias(idParticipacion),
+        })
+      }
     },
   })
 }

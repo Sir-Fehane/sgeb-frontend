@@ -60,20 +60,20 @@ describe('createInsumo', () => {
 })
 
 describe('updateInsumoEstado', () => {
-  it('PATCHes /insumos/{id}/estado and maps the confirmed nested { insumo, ordenes_pausadas } wrapper — not a bare Insumo', async () => {
+  it('PATCHes /insumos/{id}/estado and maps the confirmed BARE Insumo response — not a nested { insumo, ordenes_pausadas } wrapper. Regression test: the backend applies the estado change successfully and returns the resource directly; assuming a nested wrapper here previously threw a TypeError on `undefined.insumo` and surfaced as a false "Ocurrió un error inesperado."', async () => {
     vi.mocked(requestSgeb).mockResolvedValue({
-      result: { code: 'SGEB-0000', message: 'ok' },
+      result: {
+        code: 'SGEB-0000',
+        message: 'INSUMO id=1 → agotado. 3 detalles pausados.',
+      },
       data: {
-        insumo: {
-          id_insumo: 1,
-          nombre: 'Ron',
-          tipo: 'alcohol',
-          unidad: 'ml',
-          costo: 250,
-          estado: 'agotado',
-          activo: true,
-        },
-        ordenes_pausadas: 3,
+        id_insumo: 1,
+        nombre: 'Ron',
+        tipo: 'alcohol',
+        unidad: 'ml',
+        costo: 250,
+        estado: 'agotado',
+        activo: true,
       },
     })
 
@@ -84,8 +84,8 @@ describe('updateInsumoEstado', () => {
       method: 'PATCH',
       data: { estado: 'agotado' },
     })
-    expect(result.ordenesPausadas).toBe(3)
-    expect(result.insumo.estado).toBe('agotado')
+    expect(result.estado).toBe('agotado')
+    expect(result.idInsumo).toBe(1)
   })
 })
 

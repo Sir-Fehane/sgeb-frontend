@@ -3,11 +3,15 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
+import type { ChecklistTemplateViewModel } from '@/features/checklists/types/checklists'
 import {
   LiveOperationsContent,
   type LiveOperationsContentProps,
 } from '@/features/events/live-operations/components/LiveOperationsContent'
-import type { LiveOperationsParticipantViewModel } from '@/features/events/live-operations/types/liveOperations'
+import type {
+  ClosureChecklistViewModel,
+  LiveOperationsParticipantViewModel,
+} from '@/features/events/live-operations/types/liveOperations'
 import type { EventDetailViewModel } from '@/features/events/types/event'
 
 const EVENTO: EventDetailViewModel = {
@@ -61,20 +65,53 @@ const SALIDA: LiveOperationsParticipantViewModel = {
   estado: 'salida',
 }
 
+/**
+ * A `vinculo` participant whose exit checklist is complete and approved —
+ * the one state where "Dar salida" is actually enabled under the pinned
+ * backend's `SGEB-4027` gate. Used by tests below whose real subject is
+ * state-machine/row-status behavior (click wiring, marking/error disable),
+ * not checklist gating itself — those need a participant the button is
+ * genuinely clickable for.
+ */
+const APPROVED_CHECKLIST: ClosureChecklistViewModel = {
+  idChecklistInstancia: 901,
+  idChecklist: 30,
+  nombre: 'Checklist de salida — salón',
+  status: 'approved',
+  aprobadoEn: '2026-08-26T20:00:00.000Z',
+  pendientes: 0,
+  items: [
+    {
+      idItem: 300,
+      descripcion: 'Recoger mantelería',
+      cantidadEsperada: 1,
+      cantidad: 1,
+      hecho: true,
+    },
+  ],
+}
+
+const VINCULADO_LISTO: LiveOperationsParticipantViewModel = {
+  ...VINCULADO,
+  closureChecklist: APPROVED_CHECKLIST,
+}
+
 function renderContent(props: Partial<LiveOperationsContentProps> = {}) {
   const onMarkSalida = props.onMarkSalida ?? vi.fn()
+  const onApproveClosureChecklist = props.onApproveClosureChecklist ?? vi.fn()
   render(
     <MemoryRouter>
       <LiveOperationsContent
         evento={EVENTO}
-        participants={[APARTADO, ASIGNADO, VINCULADO, SALIDA]}
+        participants={[APARTADO, ASIGNADO, VINCULADO_LISTO, SALIDA]}
         rowStatuses={{}}
         onMarkSalida={onMarkSalida}
+        onApproveClosureChecklist={onApproveClosureChecklist}
         {...props}
       />
     </MemoryRouter>,
   )
-  return { onMarkSalida }
+  return { onMarkSalida, onApproveClosureChecklist }
 }
 
 describe('LiveOperationsContent — header', () => {
@@ -247,19 +284,190 @@ describe('LiveOperationsContent — loading / error / unavailable', () => {
 })
 
 describe('LiveOperationsContent — out-of-scope boundaries', () => {
-  it('never renders a finalize-event, payment, montage, or comanda action', () => {
+  it('never renders a finalize-event, payment, montage table-assignment, or comanda action', () => {
     renderContent()
 
     for (const forbidden of [
       'Finalizar evento',
       'Calcular pagos',
       'Marcar pagado',
-      'Aprobar checklist',
       'Asignar mesa',
       'Subir comanda',
     ]) {
       expect(screen.queryByText(forbidden)).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: forbidden })).not.toBeInTheDocument()
     }
+  })
+})
+
+const CIERRE_TEMPLATE: ChecklistTemplateViewModel = {
+  idChecklist: 30,
+  nombre: 'Checklist de salida — salón',
+  tipo: 'cierre',
+  activo: true,
+  items: [
+    {
+      idItem: 300,
+      descripcion: 'Recoger mantelería',
+      cantidadEsperada: 1,
+      orden: 1,
+      activo: true,
+    },
+  ],
+}
+
+const PENDING_CHECKLIST: ClosureChecklistViewModel = {
+  idChecklistInstancia: 900,
+  idChecklist: 30,
+  nombre: 'Checklist de salida — salón',
+  status: 'pending',
+  aprobadoEn: null,
+  pendientes: 1,
+  items: [
+    {
+      idItem: 300,
+      descripcion: 'Recoger mantelería',
+      cantidadEsperada: 1,
+      cantidad: 0,
+      hecho: false,
+    },
+  ],
+}
+
+const COMPLETED_CHECKLIST: ClosureChecklistViewModel = {
+  ...PENDING_CHECKLIST,
+  status: 'completed',
+  pendientes: 0,
+  items: [
+    {
+      idItem: 300,
+      descripcion: 'Recoger mantelería',
+      cantidadEsperada: 1,
+      cantidad: 1,
+      hecho: true,
+    },
+  ],
+}
+
+describe('LiveOperationsContent — exit checklist gates "Dar salida" (SGEB-4027)', () => {
+  it('offers "Asignar checklist" for a vinculo participant with no exit checklist yet, and disables "Dar salida" with a reason', () => {
+    renderContent({
+      participants: [VINCULADO],
+      availableClosureChecklistTemplates: [CIERRE_TEMPLATE],
+      onInstantiateClosureChecklist: vi.fn(),
+    })
+
+    expect(
+      screen.getByRole('button', {
+        name: `Asignar checklist de salida a ${VINCULADO.nombre}`,
+      }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: `Dar salida a ${VINCULADO.nombre}` }),
+    ).toBeDisabled()
+    expect(
+      screen.getByText('Asigna un checklist de salida antes de registrar la salida.'),
+    ).toBeInTheDocument()
+  })
+
+  it('calls onInstantiateClosureChecklist with the selected template when "Asignar checklist" is clicked', async () => {
+    const user = userEvent.setup()
+    const onInstantiateClosureChecklist = vi.fn()
+    renderContent({
+      participants: [VINCULADO],
+      availableClosureChecklistTemplates: [CIERRE_TEMPLATE],
+      onInstantiateClosureChecklist,
+    })
+
+    await user.click(
+      screen.getByRole('button', {
+        name: `Asignar checklist de salida a ${VINCULADO.nombre}`,
+      }),
+    )
+
+    expect(onInstantiateClosureChecklist).toHaveBeenCalledWith({
+      idParticipacion: VINCULADO.idParticipacion,
+      idChecklist: CIERRE_TEMPLATE.idChecklist,
+    })
+  })
+
+  it('disables "Dar salida" with a reason when the exit checklist is pending (incomplete)', () => {
+    renderContent({
+      participants: [{ ...VINCULADO, closureChecklist: PENDING_CHECKLIST }],
+    })
+
+    expect(
+      screen.getByText('El mesero debe completar su checklist de salida.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: `Dar salida a ${VINCULADO.nombre}` }),
+    ).toBeDisabled()
+  })
+
+  it('disables "Dar salida" with a reason when the exit checklist is complete but not yet approved', () => {
+    renderContent({
+      participants: [{ ...VINCULADO, closureChecklist: COMPLETED_CHECKLIST }],
+    })
+
+    expect(
+      screen.getByText('El checklist de salida está pendiente de aprobación.'),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: `Dar salida a ${VINCULADO.nombre}` }),
+    ).toBeDisabled()
+  })
+
+  it('offers "Aprobar checklist" once the exit checklist is completed', async () => {
+    const user = userEvent.setup()
+    const onApproveClosureChecklist = vi.fn()
+    renderContent({
+      participants: [{ ...VINCULADO, closureChecklist: COMPLETED_CHECKLIST }],
+      onApproveClosureChecklist,
+    })
+
+    await user.click(
+      screen.getByRole('button', {
+        name: `Aprobar checklist de salida de ${VINCULADO.nombre}`,
+      }),
+    )
+
+    expect(onApproveClosureChecklist).toHaveBeenCalledWith({
+      idParticipacion: VINCULADO.idParticipacion,
+      idChecklistInstancia: COMPLETED_CHECKLIST.idChecklistInstancia,
+    })
+  })
+
+  it('enables "Dar salida" once the real, persisted checklist status is "approved" — no local approvalStatus flag needed', () => {
+    renderContent({
+      participants: [VINCULADO_LISTO],
+    })
+
+    expect(screen.getByText('Checklist de salida aprobado')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', {
+        name: `Aprobar checklist de salida de ${VINCULADO.nombre}`,
+      }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: `Dar salida a ${VINCULADO.nombre}` }),
+    ).not.toBeDisabled()
+  })
+
+  it('gates "Dar salida" per participant based on real checklist status — only the approved one is enabled', () => {
+    renderContent({
+      participants: [
+        { ...VINCULADO, idParticipacion: 6000 },
+        { ...VINCULADO, idParticipacion: 6001, closureChecklist: PENDING_CHECKLIST },
+        { ...VINCULADO, idParticipacion: 6002, closureChecklist: COMPLETED_CHECKLIST },
+        { ...VINCULADO, idParticipacion: 6003, closureChecklist: APPROVED_CHECKLIST },
+      ],
+    })
+
+    const buttons = screen.getAllByRole('button', { name: /^Dar salida a/ })
+    expect(buttons).toHaveLength(4)
+    expect(buttons[0]).toBeDisabled()
+    expect(buttons[1]).toBeDisabled()
+    expect(buttons[2]).toBeDisabled()
+    expect(buttons[3]).not.toBeDisabled()
   })
 })

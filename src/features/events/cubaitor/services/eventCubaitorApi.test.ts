@@ -409,23 +409,23 @@ describe('updateConfigDispensado', () => {
 })
 
 describe('recargarConfigDispensado', () => {
-  it('PATCHes with { volumen_cargado_ml, reanudar_ordenes } — snake_case (recargaValidator), regression test for SGEB-2001, and maps the confirmed nested { config, detalles_reanudados } wrapper — not a bare ConfigDispensado', async () => {
+  it('PATCHes with { volumen_cargado_ml, reanudar_ordenes } — snake_case (recargaValidator), regression test for SGEB-2001, and maps the confirmed BARE ConfigDispensado response — not a nested { config, detalles_reanudados } wrapper. Regression test: the backend recharges successfully and returns the resource directly; assuming a nested wrapper here previously threw a TypeError on `undefined.config` and surfaced as a false "Ocurrió un error inesperado."', async () => {
     vi.mocked(requestSgeb).mockResolvedValue({
-      result: { code: 'SGEB-0000', message: 'ok' },
+      result: {
+        code: 'SGEB-0000',
+        message: 'CONFIG_DISPENSADO id=5 recargada. 3 detalles reanudados.',
+      },
       data: {
-        config: {
-          id_config: 5,
-          id_evento: 1001,
-          id_cubaitor: 1,
-          id_insumo: 9,
-          pin_gpio: 12,
-          caudal_ml_seg: 15.5,
-          volumen_cargado_ml: 1000,
-          volumen_disponible_ml: 1000,
-          ultima_calibracion: '2026-08-21T19:00:00Z',
-          activo: true,
-        },
-        detalles_reanudados: 3,
+        id_config: 5,
+        id_evento: 1001,
+        id_cubaitor: 1,
+        id_insumo: 9,
+        pin_gpio: 12,
+        caudal_ml_seg: 15.5,
+        volumen_cargado_ml: 1000,
+        volumen_disponible_ml: 1000,
+        ultima_calibracion: '2026-08-21T19:00:00Z',
+        activo: true,
       },
     })
 
@@ -436,27 +436,24 @@ describe('recargarConfigDispensado', () => {
       method: 'PATCH',
       data: { volumen_cargado_ml: 1000, reanudar_ordenes: true },
     })
-    expect(result.detallesReanudados).toBe(3)
-    expect(result.config.idConfig).toBe(5)
+    expect(result.idConfig).toBe(5)
+    expect(result.volumenDisponibleMl).toBe(1000)
   })
 
   it('sends an explicit reanudar_ordenes: false when the caller opts out', async () => {
     vi.mocked(requestSgeb).mockResolvedValue({
       result: { code: 'SGEB-0000', message: 'ok' },
       data: {
-        config: {
-          id_config: 5,
-          id_evento: 1001,
-          id_cubaitor: 1,
-          id_insumo: 9,
-          pin_gpio: 12,
-          caudal_ml_seg: 15.5,
-          volumen_cargado_ml: 1000,
-          volumen_disponible_ml: 1000,
-          ultima_calibracion: '2026-08-21T19:00:00Z',
-          activo: true,
-        },
-        detalles_reanudados: 0,
+        id_config: 5,
+        id_evento: 1001,
+        id_cubaitor: 1,
+        id_insumo: 9,
+        pin_gpio: 12,
+        caudal_ml_seg: 15.5,
+        volumen_cargado_ml: 1000,
+        volumen_disponible_ml: 1000,
+        ultima_calibracion: '2026-08-21T19:00:00Z',
+        activo: true,
       },
     })
 

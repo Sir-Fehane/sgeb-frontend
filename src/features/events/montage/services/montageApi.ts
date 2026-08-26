@@ -57,12 +57,27 @@ export interface ChecklistRespuestaApiRecord {
  * Wire shape of `GET /participaciones/{id_participacion}/checklist-instancias`
  * (`ChecklistInstancia` schema, array). `completado` is server-computed —
  * never declared by this or any captain-facing client.
+ *
+ * `aprobado_en` — nullable ISO timestamp, added by the pinned backend
+ * (migration `1800000017_checklist_instancia_aprobacion`) as the one
+ * persisted approval column shared by all three checklist types. `null`
+ * until `PATCH /checklist-instancias/{id}/aprobar` succeeds; non-null
+ * afterward, for the instance's whole lifetime — this is now the only
+ * authoritative way to answer "was this approved", replacing the old
+ * inference from `Participacion.checklist_ok` (montaje-only) or from a
+ * transient `checklist:cambio` payload. Present on every instance
+ * regardless of its template's `tipo`; `buildMontageChecklist` still derives
+ * montage's own `'approved'` status from `checklistOk` rather than this
+ * field (unchanged — see that function's own comment), but
+ * `buildClosureChecklist` (`features/events/live-operations`) reads it
+ * directly, since `checklist_ok` was never set for a `cierre` template.
  */
 export interface ChecklistInstanciaApiRecord {
   id_instancia: number
   id_participacion: number
   id_checklist: number
   completado: boolean
+  aprobado_en: string | null
   fecha: string
   respuestas: ChecklistRespuestaApiRecord[]
 }

@@ -3,10 +3,20 @@ import { useParams } from 'react-router-dom'
 
 import { LiveOperationsContent } from '@/features/events/live-operations/components/LiveOperationsContent'
 import { useMarkParticipantSalidaMutation } from '@/features/events/live-operations/queries/useMarkParticipantSalidaMutation'
+import { useClosureChecklistTemplatesQuery } from '@/features/events/live-operations/queries/useClosureChecklistTemplatesQuery'
+import { useInstantiateClosureChecklistMutation } from '@/features/events/live-operations/queries/useInstantiateClosureChecklistMutation'
+import { useApproveClosureChecklistMutation } from '@/features/events/live-operations/queries/useApproveClosureChecklistMutation'
+import { buildClosureChecklist } from '@/features/events/live-operations/services/liveOperationsApi'
 import type {
+  ApproveClosureChecklistRequest,
+  ClosureChecklistApprovalStatus,
+  ClosureChecklistInstantiationStatus,
+  InstantiateClosureChecklistRequest,
+  LiveOperationsParticipantViewModel,
   LiveOperationsRowStatus,
   MarkParticipantSalidaRequest,
 } from '@/features/events/live-operations/types/liveOperations'
+import { useMontageChecklistInstanciaQueries } from '@/features/events/montage/queries/useMontageChecklistInstanciaQueries'
 import { useEventDetailQuery } from '@/features/events/queries/useEventDetailQuery'
 import { isEventoNotFoundError } from '@/features/events/services/eventsApi'
 import { useTeamSelectionParticipantsQuery } from '@/features/events/team-selection/queries/useTeamSelectionParticipantsQuery'
@@ -61,6 +71,24 @@ function toSafeErrorMessage(error: unknown): string {
  * exit action — never a mirror of server data. On success, the mutation
  * invalidates the roster query (and Closure's readiness query); the real
  * refetch is what actually moves the row to its terminal presentation.
+ *
+ * **Exit checklist ("Verificación de limpieza") wiring** — reuses montage's
+ * own live machinery rather than duplicating it: `useMontageChecklistInstanciaQueries`
+ * (the `GET /participaciones/{id}/checklist-instancias` fan-out, not
+ * montaje-specific at the API layer) joined against
+ * `useClosureChecklistTemplatesQuery` (`GET /checklists?tipo=cierre`) via
+ * `buildClosureChecklist`. Deliberately NOT folded into this page's
+ * top-level `isLoading`/`errorMessage` gate, unlike montage's equivalent
+ * page: a template-catalog or checklist-read hiccup degrades this specific
+ * row to "no instance yet" rather than surfacing a page-wide error for one
+ * participant's secondary query. This checklist gates checkout now (the
+ * pinned backend authority's `SGEB-4027`, see `types/liveOperations.ts`'s
+ * `ClosureChecklistViewModel` comment) — so "treat a failed/pending
+ * checklist read as no instance" is no longer a merely-cosmetic
+ * degradation: `isClosureChecklistApprovedForSalida` reads that same
+ * `undefined` as "not satisfied" and correctly keeps "Dar salida" disabled
+ * for that row until the read succeeds, rather than either blocking the
+ * whole page or (worse) silently allowing checkout past a data hiccup.
  */
 export function EventLiveOperationsPage() {
   const { id } = useParams<{ id: string }>()
@@ -71,10 +99,29 @@ export function EventLiveOperationsPage() {
   const participantsQuery = useTeamSelectionParticipantsQuery(idEvento)
   const markSalidaMutation = useMarkParticipantSalidaMutation(idEvento ?? -1)
 
+  const closureTemplatesQuery = useClosureChecklistTemplatesQuery(idEvento)
+  const participationIds = participantsQuery.data?.map((p) => p.idParticipacion) ?? []
+  const closureChecklistInstanciaQueries =
+    useMontageChecklistInstanciaQueries(participationIds)
+  const instantiateClosureChecklistMutation = useInstantiateClosureChecklistMutation()
+  const approveClosureChecklistMutation = useApproveClosureChecklistMutation()
+
   const [rowStatuses, setRowStatuses] = useState<Record<number, LiveOperationsRowStatus>>(
     {},
   )
   const [rowErrors, setRowErrors] = useState<Record<number, string>>({})
+
+  const [closureChecklistApprovalStatuses, setClosureChecklistApprovalStatuses] =
+    useState<Record<number, ClosureChecklistApprovalStatus>>({})
+  const [closureChecklistApproveErrors, setClosureChecklistApproveErrors] = useState<
+    Record<number, string>
+  >({})
+  const [
+    closureChecklistInstantiationStatuses,
+    setClosureChecklistInstantiationStatuses,
+  ] = useState<Record<number, ClosureChecklistInstantiationStatus>>({})
+  const [closureChecklistInstantiateErrors, setClosureChecklistInstantiateErrors] =
+    useState<Record<number, string>>({})
 
   const notFound = idEvento === null || isEventoNotFoundError(eventDetailQuery.error)
   const evento = notFound ? null : (eventDetailQuery.data ?? null)
@@ -131,15 +178,138 @@ export function EventLiveOperationsPage() {
     })
   }
 
+  function handleInstantiateClosureChecklist({
+    idParticipacion,
+    idChecklist,
+  }: InstantiateClosureChecklistRequest) {
+    if (closureChecklistInstantiationStatuses[idParticipacion] === 'instantiating') {
+      return
+    }
+
+    setClosureChecklistInstantiationStatuses((previous) => ({
+      ...previous,
+      [idParticipacion]: 'instantiating',
+    }))
+    setClosureChecklistInstantiateErrors((previous) => {
+      if (!(idParticipacion in previous)) {
+        return previous
+      }
+      const next = { ...previous }
+      delete next[idParticipacion]
+      return next
+    })
+
+    instantiateClosureChecklistMutation.mutate(
+      { idParticipacion, idChecklist },
+      {
+        onSuccess: () => {
+          setClosureChecklistInstantiationStatuses((previous) => ({
+            ...previous,
+            [idParticipacion]: 'idle',
+          }))
+        },
+        onError: (error) => {
+          setClosureChecklistInstantiationStatuses((previous) => ({
+            ...previous,
+            [idParticipacion]: 'error',
+          }))
+          setClosureChecklistInstantiateErrors((previous) => ({
+            ...previous,
+            [idParticipacion]: toSafeErrorMessage(error),
+          }))
+        },
+      },
+    )
+  }
+
+  function handleApproveClosureChecklist({
+    idParticipacion,
+    idChecklistInstancia,
+  }: ApproveClosureChecklistRequest) {
+    if (closureChecklistApprovalStatuses[idParticipacion] === 'approving') {
+      return
+    }
+
+    setClosureChecklistApprovalStatuses((previous) => ({
+      ...previous,
+      [idParticipacion]: 'approving',
+    }))
+    setClosureChecklistApproveErrors((previous) => {
+      if (!(idParticipacion in previous)) {
+        return previous
+      }
+      const next = { ...previous }
+      delete next[idParticipacion]
+      return next
+    })
+
+    approveClosureChecklistMutation.mutate(
+      { idParticipacion, idChecklistInstancia },
+      {
+        onSuccess: () => {
+          // Back to 'idle', not a local 'approved' — approval now persists
+          // (`aprobado_en`), so the mutation's own invalidation
+          // (`useApproveClosureChecklistMutation`) triggers a refetch and
+          // the real `ClosureChecklistViewModel.status === 'approved'` is
+          // what actually moves the badge, not this local flag.
+          setClosureChecklistApprovalStatuses((previous) => ({
+            ...previous,
+            [idParticipacion]: 'idle',
+          }))
+        },
+        onError: (error) => {
+          setClosureChecklistApprovalStatuses((previous) => ({
+            ...previous,
+            [idParticipacion]: 'error',
+          }))
+          setClosureChecklistApproveErrors((previous) => ({
+            ...previous,
+            [idParticipacion]: toSafeErrorMessage(error),
+          }))
+        },
+      },
+    )
+  }
+
+  const closureTemplatesById = new Map(
+    (closureTemplatesQuery.data ?? []).map((template) => [
+      template.idChecklist,
+      template,
+    ]),
+  )
+
+  const participants: LiveOperationsParticipantViewModel[] = (
+    participantsQuery.data ?? []
+  ).map((participant, index) => {
+    const closureChecklist = buildClosureChecklist(
+      closureChecklistInstanciaQueries[index]?.data ?? [],
+      closureTemplatesById,
+    )
+    return {
+      idParticipacion: participant.idParticipacion,
+      nombre: participant.nombre,
+      puesto: participant.puesto,
+      estado: participant.estado,
+      ...(closureChecklist ? { closureChecklist } : {}),
+    }
+  })
+
   return (
     <LiveOperationsContent
       evento={evento}
       isLoading={isLoading}
       {...(errorMessage ? { errorMessage } : {})}
       onRetry={handleRetry}
-      participants={participantsQuery.data ?? []}
+      participants={participants}
       rowStatuses={rowStatuses}
       rowErrorMessages={rowErrors}
+      closureChecklistApprovalStatuses={closureChecklistApprovalStatuses}
+      closureChecklistApproveErrorMessages={closureChecklistApproveErrors}
+      onApproveClosureChecklist={handleApproveClosureChecklist}
+      availableClosureChecklistTemplates={closureTemplatesQuery.data ?? []}
+      closureChecklistInstantiationStatuses={closureChecklistInstantiationStatuses}
+      closureChecklistInstantiateErrorMessages={closureChecklistInstantiateErrors}
+      onInstantiateClosureChecklist={handleInstantiateClosureChecklist}
       onMarkSalida={handleMarkSalida}
     />
   )

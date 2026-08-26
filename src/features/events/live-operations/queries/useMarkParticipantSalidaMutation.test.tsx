@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { closureQueryKeys } from '@/features/events/closure/queries/closureQueryKeys'
 import { useMarkParticipantSalidaMutation } from '@/features/events/live-operations/queries/useMarkParticipantSalidaMutation'
+import { montageQueryKeys } from '@/features/events/montage/queries/montageQueryKeys'
 import { teamSelectionQueryKeys } from '@/features/events/team-selection/queries/teamSelectionQueryKeys'
 import type { ParticipacionApiRecord } from '@/features/events/team-selection/services/teamSelectionApi'
 import { SgebApplicationError } from '@/shared/api/sgebApiError'
@@ -135,6 +136,32 @@ describe('useMarkParticipantSalidaMutation', () => {
 
     expect(result.current.error).toBe(error)
     expect(invalidateSpy).not.toHaveBeenCalled()
+  })
+
+  it("on SGEB-4027 (exit checklist not ready), resyncs that participant's checklist-instancia query — the frontend gate should have prevented this, so the checklist state the row rendered was stale", async () => {
+    const error = new SgebApplicationError(409, {
+      code: 'SGEB-4027',
+      message:
+        'Antes de registrar la salida, completa y haz que tu capitán apruebe el checklist de cierre.',
+    })
+    vi.mocked(requestSgeb).mockRejectedValue(error)
+    const queryClient = new QueryClient()
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+
+    const { result } = renderHook(() => useMarkParticipantSalidaMutation(1001), {
+      wrapper: createWrapper(queryClient),
+    })
+
+    result.current.mutate(5001)
+
+    await waitFor(() => {
+      expect(result.current.isError).toBe(true)
+    })
+
+    expect(result.current.error).toBe(error)
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: montageQueryKeys.checklistInstancias(5001),
+    })
   })
 
   it('surfaces a SGEB-1004 unauthorized error without invalidating any cache', async () => {

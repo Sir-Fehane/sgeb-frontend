@@ -157,27 +157,34 @@ export async function updateInsumo(
   return mapInsumo(envelope.data!)
 }
 
-export interface UpdateInsumoEstadoResult {
-  insumo: InsumoViewModel
-  /** Confirmed non-OpenAPI response field (`menu_controller.ts`'s `cambiarEstadoInsumo`): a nested `{ insumo, ordenes_pausadas }` wrapper, not a bare `Insumo`. Marking `agotado` pauses every pending order line depending on this insumo. */
-  ordenesPausadas: number
-}
-
-/** `PATCH /insumos/{id}/estado` — the operational toggle the bar uses without touching the Cubaitor. */
+/**
+ * `PATCH /insumos/{id}/estado` — the operational toggle the bar uses
+ * without touching the Cubaitor. Marking `agotado` pauses every pending
+ * order line depending on this insumo; marking it back `disponible` is the
+ * "reload the stock" action.
+ *
+ * The response `data` is the **bare** `Insumo` resource
+ * (`menu_controller.ts`'s `cambiarEstadoInsumo`:
+ * `responder.ok(ctx, r.insumo, ...)`). How many order lines were paused is
+ * NOT in the JSON body — it only appears inside the non-machine-readable
+ * `technical_message` string. A previous version of this function assumed a
+ * nested `{ insumo, ordenes_pausadas }` wrapper here — that was wrong and
+ * caused this call to dereference `undefined.insumo` and throw, even though
+ * the backend applied the estado change successfully (see this branch's
+ * final report for the full write-up). Callers that need to know about
+ * paused orders should rely on the realtime `orden:cambio`/`alerta:insumo`
+ * events, not this return value.
+ */
 export async function updateInsumoEstado(
   idInsumo: number,
   estado: InsumoEstado,
-): Promise<UpdateInsumoEstadoResult> {
-  const envelope = await requestSgeb<{
-    insumo: InsumoApiRecord
-    ordenes_pausadas: number
-  }>({
+): Promise<InsumoViewModel> {
+  const envelope = await requestSgeb<InsumoApiRecord>({
     url: `/insumos/${String(idInsumo)}/estado`,
     method: 'PATCH',
     data: { estado },
   })
-  const data = envelope.data as { insumo: InsumoApiRecord; ordenes_pausadas: number }
-  return { insumo: mapInsumo(data.insumo), ordenesPausadas: data.ordenes_pausadas }
+  return mapInsumo(envelope.data!)
 }
 
 /** `DELETE /insumos/{id}` — logical deactivation (`estado='inactivo'`). Rejected (409) if the insumo is in an active bebida's recipe (`SGEB-4016`) or configured on a live event's pin (`SGEB-4017`) — surfaced to the caller as `SgebApplicationError`, never swallowed here. */

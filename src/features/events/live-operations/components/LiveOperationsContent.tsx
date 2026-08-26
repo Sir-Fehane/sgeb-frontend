@@ -1,3 +1,4 @@
+import type { ChecklistTemplateViewModel } from '@/features/checklists/types/checklists'
 import { EventDetailSection } from '@/features/events/components/EventDetailSection'
 import { EventDetailUnavailableState } from '@/features/events/components/EventDetailUnavailableState'
 import type { EventDetailViewModel } from '@/features/events/types/event'
@@ -6,6 +7,10 @@ import { LiveOperationsHeader } from '@/features/events/live-operations/componen
 import { LiveOperationsLoadingState } from '@/features/events/live-operations/components/LiveOperationsLoadingState'
 import { LiveOperationsParticipantList } from '@/features/events/live-operations/components/LiveOperationsParticipantList'
 import type {
+  ApproveClosureChecklistRequest,
+  ClosureChecklistApprovalStatus,
+  ClosureChecklistInstantiationStatus,
+  InstantiateClosureChecklistRequest,
   LiveOperationsParticipantViewModel,
   LiveOperationsRowStatus,
   MarkParticipantSalidaRequest,
@@ -21,6 +26,17 @@ export interface LiveOperationsContentProps {
   rowStatuses: Readonly<Record<number, LiveOperationsRowStatus>>
   rowErrorMessages?: Readonly<Record<number, string>>
   onMarkSalida: (request: MarkParticipantSalidaRequest) => void
+  closureChecklistApprovalStatuses?: Readonly<
+    Record<number, ClosureChecklistApprovalStatus>
+  >
+  closureChecklistApproveErrorMessages?: Readonly<Record<number, string>>
+  onApproveClosureChecklist: (request: ApproveClosureChecklistRequest) => void
+  availableClosureChecklistTemplates?: readonly ChecklistTemplateViewModel[]
+  closureChecklistInstantiationStatuses?: Readonly<
+    Record<number, ClosureChecklistInstantiationStatus>
+  >
+  closureChecklistInstantiateErrorMessages?: Readonly<Record<number, string>>
+  onInstantiateClosureChecklist?: (request: InstantiateClosureChecklistRequest) => void
 }
 
 /**
@@ -42,6 +58,13 @@ export function LiveOperationsContent({
   rowStatuses,
   rowErrorMessages,
   onMarkSalida,
+  closureChecklistApprovalStatuses,
+  closureChecklistApproveErrorMessages,
+  onApproveClosureChecklist,
+  availableClosureChecklistTemplates,
+  closureChecklistInstantiationStatuses,
+  closureChecklistInstantiateErrorMessages,
+  onInstantiateClosureChecklist,
 }: LiveOperationsContentProps) {
   if (isLoading) {
     return <LiveOperationsLoadingState />
@@ -65,6 +88,23 @@ export function LiveOperationsContent({
           rowStatuses={rowStatuses}
           {...(rowErrorMessages ? { rowErrorMessages } : {})}
           onMarkSalida={onMarkSalida}
+          {...(closureChecklistApprovalStatuses
+            ? { closureChecklistApprovalStatuses }
+            : {})}
+          {...(closureChecklistApproveErrorMessages
+            ? { closureChecklistApproveErrorMessages }
+            : {})}
+          onApproveClosureChecklist={onApproveClosureChecklist}
+          {...(availableClosureChecklistTemplates
+            ? { availableClosureChecklistTemplates }
+            : {})}
+          {...(closureChecklistInstantiationStatuses
+            ? { closureChecklistInstantiationStatuses }
+            : {})}
+          {...(closureChecklistInstantiateErrorMessages
+            ? { closureChecklistInstantiateErrorMessages }
+            : {})}
+          {...(onInstantiateClosureChecklist ? { onInstantiateClosureChecklist } : {})}
         />
       </EventDetailSection>
     </div>

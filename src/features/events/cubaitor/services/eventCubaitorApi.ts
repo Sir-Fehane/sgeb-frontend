@@ -9,7 +9,6 @@ import type {
   OrdenDetalleViewModel,
   OrdenEstado,
   OrdenViewModel,
-  RecargarConfigDispensadoResult,
   UpdateConfigDispensadoInput,
 } from '@/features/events/cubaitor/types/eventCubaitor'
 import { requestSgeb } from '@/shared/api/sgebClient'
@@ -52,10 +51,19 @@ import { requestSgeb } from '@/shared/api/sgebClient'
  *    AlertaOperativa[]`), not the `{alertas, total, ordenes_pausadas,
  *    severidad_maxima}` wrapper an earlier backend commit returned — see
  *    `AlertasEventoViewModel`'s comment.
- * 6. `PATCH .../config-dispensado/{id}/recarga` and `PATCH
- *    /insumos/{id}/estado` both return a nested wrapper object
- *    (`{ config, detalles_reanudados }` / `{ insumo, ordenes_pausadas }`),
- *    never a bare resource — mapped explicitly below.
+ * 6. `PATCH .../config-dispensado/{id}/recarga` returns the **bare**
+ *    `ConfigDispensado` resource (`cubaitor_controller.ts`'s
+ *    `recargar`: `responder.ok(ctx, r.config, ...)` — the "Punto 5"
+ *    comment there says this explicitly). `detalles_reanudados` is NOT
+ *    in the JSON body; it only appears inside the human-readable
+ *    `technical_message` string, which is not a stable machine field.
+ *    A previous version of this file assumed a nested
+ *    `{ config, detalles_reanudados }` wrapper here — that was wrong and
+ *    caused `recargarConfigDispensado` to dereference `undefined.config`
+ *    and throw, even though the backend recharge succeeded (see this
+ *    branch's final report for the full write-up). `PATCH
+ *    /insumos/{id}/estado` has the identical bare-resource shape — see
+ *    `features/menu/services/menuApi.ts`'s module comment.
  *
  * See this branch's final report for the full backend-gap writeup.
  */
@@ -376,17 +384,27 @@ export async function deactivateConfigDispensado(
   })
 }
 
-/** `PATCH .../config-dispensado/{id}/recarga` — the operational counterpart of an empty-bottle pause: replaces the physical bottle, resets both `volumenCargadoMl`/`volumenDisponibleMl`, and (by default) reactivates orders that were `pausada_por_insumo` waiting on this pin. Request body is `{ volumen_cargado_ml, reanudar_ordenes? }` (snake_case, `recargaValidator`). */
+/**
+ * `PATCH .../config-dispensado/{id}/recarga` — the operational counterpart
+ * of an empty-bottle pause: replaces the physical bottle, resets both
+ * `volumenCargadoMl`/`volumenDisponibleMl`, and (by default) reactivates
+ * orders that were `pausada_por_insumo` waiting on this pin. Request body is
+ * `{ volumen_cargado_ml, reanudar_ordenes? }` (snake_case, `recargaValidator`).
+ *
+ * The response `data` is the **bare** `ConfigDispensado` resource — the
+ * backend does not return how many orders were reactivated (that count only
+ * appears in the non-machine-readable `technical_message`). Callers that
+ * need the reactivated-order count should rely on the query invalidation in
+ * `useRecargarConfigDispensadoMutation` (which refetches the órdenes domain)
+ * or the realtime `orden:cambio` event, not this return value.
+ */
 export async function recargarConfigDispensado(
   idEvento: number,
   idConfig: number,
   volumenCargadoMl: number,
   reanudarOrdenes = true,
-): Promise<RecargarConfigDispensadoResult> {
-  const envelope = await requestSgeb<{
-    config: ConfigDispensadoApiRecord
-    detalles_reanudados: number
-  }>({
+): Promise<ConfigDispensadoViewModel> {
+  const envelope = await requestSgeb<ConfigDispensadoApiRecord>({
     url: `/eventos/${String(idEvento)}/config-dispensado/${String(idConfig)}/recarga`,
     method: 'PATCH',
     data: {
@@ -394,14 +412,7 @@ export async function recargarConfigDispensado(
       reanudar_ordenes: reanudarOrdenes,
     },
   })
-  const data = envelope.data as {
-    config: ConfigDispensadoApiRecord
-    detalles_reanudados: number
-  }
-  return {
-    config: mapConfigDispensado(data.config),
-    detallesReanudados: data.detalles_reanudados,
-  }
+  return mapConfigDispensado(envelope.data!)
 }
 
 // ─────────────────────────────────────────────────────────────── alertas

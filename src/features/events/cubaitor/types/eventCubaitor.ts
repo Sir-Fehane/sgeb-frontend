@@ -139,16 +139,10 @@ export interface CreateConfigDispensadoInput {
   volumenCargadoMl: number
 }
 
-/** Confirmed real support surface for `PUT .../config-dispensado/{id}` — recalibration ONLY. `idInsumo`/`volumenCargadoMl` are documented by OpenAPI as editable here but the pinned backend's validator does not accept them; changing the insumo means removing and re-adding the pin, and reloading volume is `recargar` (below), which also reactivates paused orders. */
+/** Confirmed real support surface for `PUT .../config-dispensado/{id}` — recalibration ONLY. `idInsumo`/`volumenCargadoMl` are documented by OpenAPI as editable here but the pinned backend's validator does not accept them; changing the insumo means removing and re-adding the pin, and reloading volume is `recargar`, which also reactivates paused orders and returns the bare `ConfigDispensadoViewModel` (see `services/eventCubaitorApi.ts`'s `recargarConfigDispensado`). */
 export interface UpdateConfigDispensadoInput {
   caudalMlSeg?: number
   pinGpio?: number
-}
-
-export interface RecargarConfigDispensadoResult {
-  config: ConfigDispensadoViewModel
-  /** How many previously `pausada_por_insumo` order details this recharge reactivated. */
-  detallesReanudados: number
 }
 
 export type AlertaTipo = 'botella_vacia' | 'botella_baja' | 'cubaitor_sin_conexion'
