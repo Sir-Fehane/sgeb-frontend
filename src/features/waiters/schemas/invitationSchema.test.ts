@@ -35,7 +35,37 @@ describe('invitationFormSchema', () => {
     ).toBe(false)
   })
 
-  it('has no telefono field at all — the real backend validator does not accept one', () => {
-    expect('telefono' in invitationFormSchema.shape).toBe(false)
+  it('accepts a valid submission with telefono omitted — the real backend validator treats it as optional', () => {
+    expect(invitationFormSchema.safeParse(VALID).success).toBe(true)
+  })
+
+  it('accepts a valid submission with telefono present', () => {
+    expect(
+      invitationFormSchema.safeParse({ ...VALID, telefono: '8711234567' }).success,
+    ).toBe(true)
+  })
+
+  it('accepts a telefono with a leading + — mirrors the real backend TELEFONO pattern', () => {
+    expect(
+      invitationFormSchema.safeParse({ ...VALID, telefono: '+528711234567' }).success,
+    ).toBe(true)
+  })
+
+  it('rejects a telefono with fewer than 10 digits', () => {
+    expect(invitationFormSchema.safeParse({ ...VALID, telefono: '12345' }).success).toBe(
+      false,
+    )
+  })
+
+  it('rejects a telefono with more than 15 digits', () => {
+    expect(
+      invitationFormSchema.safeParse({ ...VALID, telefono: '1234567890123456' }).success,
+    ).toBe(false)
+  })
+
+  it('rejects a telefono with non-digit characters', () => {
+    expect(
+      invitationFormSchema.safeParse({ ...VALID, telefono: '871-123-4567' }).success,
+    ).toBe(false)
   })
 })

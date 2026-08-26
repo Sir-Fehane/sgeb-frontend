@@ -98,6 +98,7 @@ export function WaitersPage() {
       apellidoPaterno: values.apellidoPaterno,
       ...(values.apellidoMaterno ? { apellidoMaterno: values.apellidoMaterno } : {}),
       correo: values.correo,
+      ...(values.telefono ? { telefono: values.telefono } : {}),
     })
     setInviteOpen(false)
     setDeeplinkResult(result)

@@ -58,6 +58,7 @@ const INVITATION_RECORD: InvitacionApiRecord = {
   apellido_paterno: 'Gómez',
   apellido_materno: null,
   correo: 'pedro.gomez@example.com',
+  telefono: null,
   estado: 'pendiente',
   expira_en: '2026-08-08T09:00:00',
   id_usuario_creado: null,
@@ -255,7 +256,7 @@ describe('WaitersPage', () => {
     )
   })
 
-  it('sends the real POST /usuarios/invitaciones request with the resolved mesero role id and no phone field, then shows the one-time deeplink', async () => {
+  it('sends the real POST /usuarios/invitaciones request with the resolved mesero role id and no telefono when left blank, then shows the one-time deeplink', async () => {
     mockBaseRequests()
     const user = userEvent.setup()
     renderPage()
@@ -288,6 +289,73 @@ describe('WaitersPage', () => {
     expect(
       screen.getByDisplayValue('mx.mediocres.sgeb://registro?token=fake-token'),
     ).toBeInTheDocument()
+  })
+
+  it('renders the optional Teléfono field in the invite dialog', async () => {
+    mockBaseRequests()
+    const user = userEvent.setup()
+    renderPage()
+
+    const inviteButton = await screen.findByRole('button', { name: 'Invitar mesero' })
+    await waitFor(() => expect(inviteButton).toBeEnabled())
+    await user.click(inviteButton)
+
+    expect(screen.getByLabelText(/^Teléfono/)).toBeInTheDocument()
+  })
+
+  it('sends the exact telefono field when provided, matching the backend TELEFONO format', async () => {
+    mockBaseRequests()
+    const user = userEvent.setup()
+    renderPage()
+
+    const inviteButton = await screen.findByRole('button', { name: 'Invitar mesero' })
+    await waitFor(() => expect(inviteButton).toBeEnabled())
+    await user.click(inviteButton)
+
+    await user.type(screen.getByLabelText(/^Nombre/), 'Pedro')
+    await user.type(screen.getByLabelText(/^Apellido paterno/), 'Gómez')
+    await user.type(screen.getByLabelText(/^Correo/), 'pedro.gomez@example.com')
+    await user.type(screen.getByLabelText(/^Teléfono/), '8711234567')
+    await user.click(screen.getByRole('button', { name: 'Enviar invitación' }))
+
+    await waitFor(() => {
+      expect(requestSgeb).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: '/usuarios/invitaciones',
+          method: 'POST',
+          data: {
+            idRolDestino: 3,
+            nombre: 'Pedro',
+            apellidoPaterno: 'Gómez',
+            correo: 'pedro.gomez@example.com',
+            telefono: '8711234567',
+          },
+        }),
+      )
+    })
+  })
+
+  it('rejects an invalid telefono client-side and never submits the request', async () => {
+    mockBaseRequests()
+    const user = userEvent.setup()
+    renderPage()
+
+    const inviteButton = await screen.findByRole('button', { name: 'Invitar mesero' })
+    await waitFor(() => expect(inviteButton).toBeEnabled())
+    await user.click(inviteButton)
+
+    await user.type(screen.getByLabelText(/^Nombre/), 'Pedro')
+    await user.type(screen.getByLabelText(/^Apellido paterno/), 'Gómez')
+    await user.type(screen.getByLabelText(/^Correo/), 'pedro.gomez@example.com')
+    await user.type(screen.getByLabelText(/^Teléfono/), '123')
+    await user.click(screen.getByRole('button', { name: 'Enviar invitación' }))
+
+    expect(
+      await screen.findByText('Ingresa un teléfono válido (10 a 15 dígitos).'),
+    ).toBeInTheDocument()
+    expect(requestSgeb).not.toHaveBeenCalledWith(
+      expect.objectContaining({ url: '/usuarios/invitaciones', method: 'POST' }),
+    )
   })
 
   it('shows a safe backend error inside the dialog on a failed invitation (e.g. SSO-4001) without closing it', async () => {

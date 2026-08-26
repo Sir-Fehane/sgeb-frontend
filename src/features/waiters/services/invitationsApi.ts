@@ -13,7 +13,10 @@ import type {
  * own `@column` declarations (`app/modules/identidad/models/invitacion.ts`).
  * `id_emisor`/`token_hash` never serialize (`serializeAs: null`) — the
  * server never exposes who sent it or any form of the token, even hashed
- * (`InvitacionService.listar`'s own comment).
+ * (`InvitacionService.listar`'s own comment). `telefono` serializes as-is
+ * (no `serializeAs` override, like `nombre`/`correo`) — present here for
+ * contract accuracy, but `WaitersInviteForm`'s scope is only submitting it,
+ * not displaying it back from this list.
  */
 export interface InvitacionApiRecord {
   id_invitacion: number
@@ -22,6 +25,7 @@ export interface InvitacionApiRecord {
   apellido_paterno: string
   apellido_materno: string | null
   correo: string
+  telefono: string | null
   estado: InvitationStatus
   expira_en: string
   id_usuario_creado: number | null

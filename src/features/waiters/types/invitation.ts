@@ -27,13 +27,16 @@ export interface InvitationViewModel {
 /**
  * `POST /usuarios/invitaciones` request body — exact field set confirmed
  * against the pinned backend's `crearValidator`
- * (`invitaciones_controller.ts`). No `telefono` field: unlike the W-04
- * wireframe (phone-only), the real, live validator has no phone field at
- * all — see `schemas/invitationSchema.ts`. `idRolDestino` is resolved by
- * the caller from the real `GET /roles` catalog (`services/rolesApi.ts`),
- * matching `nombre === 'mesero'` — never a hardcoded id, even though the
- * seed order (`database/migrations/1800000001_create_usuarios_y_roles.ts`)
- * happens to be stable.
+ * (`invitaciones_controller.ts`). `telefono` is optional, matching the
+ * backend column added in `ba55bea`
+ * (`database/migrations/1800000016_invitacion_telefono.ts`): hay meseros
+ * que se invitan solo por correo, so it's only included when the caller
+ * provides one — see `schemas/invitationSchema.ts`. `idRolDestino` is
+ * resolved by the caller from the real `GET /roles` catalog
+ * (`services/rolesApi.ts`), matching `nombre === 'mesero'` — never a
+ * hardcoded id, even though the seed order
+ * (`database/migrations/1800000001_create_usuarios_y_roles.ts`) happens to
+ * be stable.
  */
 export interface CreateInvitationRequest {
   idRolDestino: number
@@ -41,6 +44,7 @@ export interface CreateInvitationRequest {
   apellidoPaterno: string
   apellidoMaterno?: string | null
   correo: string
+  telefono?: string | null
 }
 
 /**

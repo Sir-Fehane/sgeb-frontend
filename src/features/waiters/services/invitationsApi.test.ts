@@ -24,6 +24,7 @@ const RECORD: InvitacionApiRecord = {
   apellido_paterno: 'Gómez',
   apellido_materno: null,
   correo: 'pedro.gomez@example.com',
+  telefono: null,
   estado: 'pendiente',
   expira_en: '2026-08-08T09:00:00',
   id_usuario_creado: null,
@@ -101,7 +102,7 @@ describe('createInvitation', () => {
     })
   })
 
-  it("never sends a telefono field — confirmed against the pinned backend's crearValidator (invitaciones_controller.ts), which has no phone field at all; a phone number can only be set later, after the invited person's account exists, via PUT /usuarios/{uuid} or PUT /usuarios/me", async () => {
+  it("omits telefono when the caller doesn't provide one — the pinned backend's crearValidator treats it as optional (ba55bea)", async () => {
     vi.mocked(requestSgeb).mockResolvedValue(
       envelope({
         correo: 'pedro.gomez@example.com',
@@ -122,6 +123,36 @@ describe('createInvitation', () => {
       unknown
     >
     expect(sentData).not.toHaveProperty('telefono')
+  })
+
+  it('sends the exact telefono field when the caller provides one', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue(
+      envelope({
+        correo: 'pedro.gomez@example.com',
+        deeplink: 'mx.mediocres.sgeb://registro?token=abc',
+        expira_en: '2026-08-08T09:00:00',
+      }),
+    )
+
+    await createInvitation({
+      idRolDestino: 3,
+      nombre: 'Pedro',
+      apellidoPaterno: 'Gómez',
+      correo: 'pedro.gomez@example.com',
+      telefono: '8711234567',
+    })
+
+    expect(requestSgeb).toHaveBeenCalledWith({
+      url: '/usuarios/invitaciones',
+      method: 'POST',
+      data: {
+        idRolDestino: 3,
+        nombre: 'Pedro',
+        apellidoPaterno: 'Gómez',
+        correo: 'pedro.gomez@example.com',
+        telefono: '8711234567',
+      },
+    })
   })
 })
 

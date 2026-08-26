@@ -25,8 +25,9 @@ export interface WaitersInviteFormProps {
 
 /**
  * Invites one waiter — exactly the fields the pinned backend's real
- * `crearValidator` requires (see `schemas/invitationSchema.ts`), nothing
- * more. No role picker: this form always invites `mesero`
+ * `crearValidator` accepts (see `schemas/invitationSchema.ts`), including
+ * the optional `telefono` added in `ba55bea`. No role picker: this form
+ * always invites `mesero`
  * (`WaitersInviteDialog` resolves that role's real `id_rol` via
  * `GET /roles` and supplies it), since "Invitar mesero" is specifically
  * what this screen offers — a generic personnel-invite panel (any role)
@@ -115,6 +116,21 @@ export function WaitersInviteForm({
             autoComplete="email"
             disabled={isSubmitting}
             {...register('correo')}
+          />
+        )}
+      </FormField>
+      <FormField
+        label="Teléfono"
+        description="10 a 15 dígitos, opcional."
+        error={errors.telefono?.message}
+      >
+        {(controlProps) => (
+          <Input
+            {...controlProps}
+            type="tel"
+            autoComplete="tel"
+            disabled={isSubmitting}
+            {...register('telefono')}
           />
         )}
       </FormField>
