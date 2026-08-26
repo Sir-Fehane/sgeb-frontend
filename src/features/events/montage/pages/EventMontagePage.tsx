@@ -6,9 +6,11 @@ import { useEventDetailQuery } from '@/features/events/queries/useEventDetailQue
 import { useMesasQuery } from '@/features/events/queries/useMesasQuery'
 import { useAsignacionesQuery } from '@/features/events/queries/useAsignacionesQuery'
 import { EventMontageContent } from '@/features/events/montage/components/EventMontageContent'
+import { EventMontageForbiddenState } from '@/features/events/montage/components/EventMontageForbiddenState'
 import { useApproveChecklistMutation } from '@/features/events/montage/queries/useApproveChecklistMutation'
 import { useAssignTableMutation } from '@/features/events/montage/queries/useAssignTableMutation'
 import { useReleaseAssignmentMutation } from '@/features/events/montage/queries/useReleaseAssignmentMutation'
+import { useInstantiateChecklistMutation } from '@/features/events/montage/queries/useInstantiateChecklistMutation'
 import { useMontageChecklistInstanciaQueries } from '@/features/events/montage/queries/useMontageChecklistInstanciaQueries'
 import { useMontageChecklistTemplatesQuery } from '@/features/events/montage/queries/useMontageChecklistTemplatesQuery'
 import { useMontageParticipantsQuery } from '@/features/events/montage/queries/useMontageParticipantsQuery'
@@ -17,11 +19,14 @@ import type {
   ApproveChecklistRequest,
   AssignTableRequest,
   ChecklistApprovalStatus,
+  ChecklistInstantiationStatus,
+  InstantiateChecklistRequest,
   MontageParticipantViewModel,
   ReleaseAssignmentRequest,
 } from '@/features/events/montage/types/montage'
 import { deriveMontageAssignments } from '@/features/events/montage/utils/deriveMontageAssignments'
 import { parseEventId } from '@/features/events/utils/parseEventId'
+import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { Toast } from '@/shared/components'
 import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
 import { useEventRealtimeRoom } from '@/shared/realtime/useEventRealtimeRoom'
@@ -61,28 +66,58 @@ interface MontageFeedback {
  * should not take down the checklist/roster half of the screen, which is
  * independently useful to a captain even if the tables section is
  * temporarily broken.
+ *
+ * Role gate (`feature/checklist-flow-alignment`, final role/scope
+ * verification): this is the CAPTAIN'S WEB VIEW per this feature's own
+ * `types/montage.ts` module comment — a `mesero` session never
+ * legitimately reaches it (the native iOS app is the mesero product,
+ * same reasoning `MenuPage`/`ChecklistsPage` already apply to their own
+ * routes). `canView` is computed first and threaded into every query hook
+ * below as `effectiveIdEvento` (`canView ? idEvento : null`), reusing the
+ * exact `idEvento === null → skipToken` guard every one of these hooks
+ * already implements for a malformed route id — so a non-`capitán`/`admin`
+ * session fires zero requests (roster, checklist instances/templates,
+ * mesas, asignaciones, the realtime room join), not just a hidden button.
+ * The mutations (`approve`/`instantiate`/`assign`/`release`) need no
+ * separate gate: they are inert until a handler calls `.mutate()`, and
+ * `EventMontageForbiddenState` replaces every control that could do that.
  */
 export function EventMontagePage() {
   const { id } = useParams<{ id: string }>()
   const idEvento = parseEventId(id)
-  useEventRealtimeRoom(idEvento)
 
-  const eventDetailQuery = useEventDetailQuery(idEvento)
-  const participantsQuery = useMontageParticipantsQuery(idEvento)
-  const templatesQuery = useMontageChecklistTemplatesQuery(idEvento)
+  const session = useOidcSessionStore((state) => state.session)
+  const canView =
+    session.status === 'authenticated' &&
+    (session.user.rol === 'capitan' || session.user.rol === 'admin')
+  const effectiveIdEvento = canView ? idEvento : null
+
+  useEventRealtimeRoom(effectiveIdEvento)
+
+  const eventDetailQuery = useEventDetailQuery(effectiveIdEvento)
+  const participantsQuery = useMontageParticipantsQuery(effectiveIdEvento)
+  const templatesQuery = useMontageChecklistTemplatesQuery(effectiveIdEvento)
   const participationIds = participantsQuery.data?.map((p) => p.idParticipacion) ?? []
   const checklistInstanciaQueries = useMontageChecklistInstanciaQueries(participationIds)
-  const approveChecklistMutation = useApproveChecklistMutation(idEvento ?? -1)
+  const approveChecklistMutation = useApproveChecklistMutation(effectiveIdEvento ?? -1)
+  const instantiateChecklistMutation = useInstantiateChecklistMutation()
 
-  const mesasQuery = useMesasQuery(idEvento)
-  const asignacionesQuery = useAsignacionesQuery(idEvento)
-  const assignTableMutation = useAssignTableMutation(idEvento ?? -1)
-  const releaseAssignmentMutation = useReleaseAssignmentMutation(idEvento ?? -1)
+  const mesasQuery = useMesasQuery(effectiveIdEvento)
+  const asignacionesQuery = useAsignacionesQuery(effectiveIdEvento)
+  const assignTableMutation = useAssignTableMutation(effectiveIdEvento ?? -1)
+  const releaseAssignmentMutation = useReleaseAssignmentMutation(effectiveIdEvento ?? -1)
 
   const [checklistApprovalStatuses, setChecklistApprovalStatuses] = useState<
     Record<number, ChecklistApprovalStatus>
   >({})
   const [checklistApprovalErrors, setChecklistApprovalErrors] = useState<
+    Record<number, string>
+  >({})
+
+  const [checklistInstantiationStatuses, setChecklistInstantiationStatuses] = useState<
+    Record<number, ChecklistInstantiationStatus>
+  >({})
+  const [checklistInstantiationErrors, setChecklistInstantiationErrors] = useState<
     Record<number, string>
   >({})
 
@@ -96,6 +131,20 @@ export function EventMontagePage() {
   const [releaseErrors, setReleaseErrors] = useState<Record<number, string>>({})
 
   const [montageFeedback, setMontageFeedback] = useState<MontageFeedback | null>(null)
+
+  /**
+   * Every hook above is already called unconditionally (including the
+   * skipped, `effectiveIdEvento === null` queries) — this early return only
+   * selects what to render, so it stays clear of the Rules of Hooks. It
+   * must come before `isLoading`'s own `idEvento !== null` check: a
+   * skipped query stays `pending` forever (see `useEventDetailQuery`'s own
+   * comment), so without this early return a non-`capitán`/`admin` session
+   * would see an infinite loading skeleton instead of a clear forbidden
+   * state.
+   */
+  if (!canView) {
+    return <EventMontageForbiddenState />
+  }
 
   const notFound = idEvento === null || isEventoNotFoundError(eventDetailQuery.error)
   const evento = notFound ? null : (eventDetailQuery.data ?? null)
@@ -214,6 +263,50 @@ export function EventMontagePage() {
     })
   }
 
+  function handleInstantiateChecklist({
+    idParticipacion,
+    idChecklist,
+  }: InstantiateChecklistRequest) {
+    if (checklistInstantiationStatuses[idParticipacion] === 'instantiating') {
+      return
+    }
+
+    setChecklistInstantiationStatuses((previous) => ({
+      ...previous,
+      [idParticipacion]: 'instantiating',
+    }))
+    setChecklistInstantiationErrors((previous) => {
+      if (!(idParticipacion in previous)) {
+        return previous
+      }
+      const next = { ...previous }
+      delete next[idParticipacion]
+      return next
+    })
+
+    instantiateChecklistMutation.mutate(
+      { idParticipacion, idChecklist },
+      {
+        onSuccess: () => {
+          setChecklistInstantiationStatuses((previous) => ({
+            ...previous,
+            [idParticipacion]: 'idle',
+          }))
+        },
+        onError: (error) => {
+          setChecklistInstantiationStatuses((previous) => ({
+            ...previous,
+            [idParticipacion]: 'error',
+          }))
+          setChecklistInstantiationErrors((previous) => ({
+            ...previous,
+            [idParticipacion]: toSafeErrorMessage(error),
+          }))
+        },
+      },
+    )
+  }
+
   function handleAssignTable(request: AssignTableRequest) {
     const { idParticipacion } = request
     if (assignStatuses[idParticipacion] === 'assigning') {
@@ -319,6 +412,10 @@ export function EventMontagePage() {
         onApproveChecklist={handleApproveChecklist}
         onAssignTable={handleAssignTable}
         onReleaseAssignment={handleReleaseAssignment}
+        availableChecklistTemplates={templatesQuery.data ?? []}
+        checklistInstantiationStatuses={checklistInstantiationStatuses}
+        checklistInstantiationErrorMessages={checklistInstantiationErrors}
+        onInstantiateChecklist={handleInstantiateChecklist}
       />
     </div>
   )

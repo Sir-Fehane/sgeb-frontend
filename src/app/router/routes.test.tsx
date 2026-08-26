@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState, type ReactNode } from 'react'
 import { RouterProvider } from 'react-router-dom'
@@ -1188,6 +1188,29 @@ describe('/meseros renders the real waiters UI inside AppShell', () => {
 
   it('does not register /meseros/nuevo', async () => {
     await renderAt('/meseros/nuevo')
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
+    ).toBeInTheDocument()
+  })
+})
+
+describe('/checklists renders the real checklist template catalog UI inside AppShell', () => {
+  it('renders the AppShell chrome and the checklist catalog content at /checklists', async () => {
+    await renderAt('/checklists')
+
+    expect(
+      screen.getByRole('navigation', { name: 'Navegación principal' }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('banner')).toBeInTheDocument()
+    expect(
+      within(screen.getByRole('main')).getByRole('heading', { name: 'Checklists' }),
+    ).toBeInTheDocument()
+    expect(await screen.findByText('Nueva plantilla')).toBeInTheDocument()
+  })
+
+  it('does not register /checklists/:id — no template-detail route is registered', async () => {
+    await renderAt('/checklists/1')
+
     expect(
       screen.getByRole('heading', { level: 1, name: 'Página no encontrada' }),
     ).toBeInTheDocument()

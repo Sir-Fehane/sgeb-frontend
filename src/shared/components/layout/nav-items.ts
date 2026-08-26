@@ -1,6 +1,7 @@
 import {
   IconCalendarEvent,
   IconChartBar,
+  IconChecklist,
   IconGlassFull,
   IconHistory,
   IconLayoutDashboard,
@@ -114,6 +115,17 @@ export const NAV_ITEMS: readonly NavItemConfig[] = [
     // visit — the global catalog CRUD (bebidas/insumos/envases/Cubaitor
     // fleet) it hosts is a `capitan`/`admin` administrative surface, same
     // reasoning as `meseros` above.
+    roles: ['admin', 'capitan'],
+  },
+  {
+    id: 'checklists',
+    label: 'Checklists',
+    href: '/checklists',
+    icon: IconChecklist,
+    // `ChecklistsPage`'s own `canView` gate backs this up for a direct
+    // `/checklists` visit — the global template catalog (montaje/servicio/
+    // cierre) it hosts is a `capitan`/`admin` administrative surface, same
+    // reasoning as `meseros`/`bebidas-cubaitor` above.
     roles: ['admin', 'capitan'],
   },
   {

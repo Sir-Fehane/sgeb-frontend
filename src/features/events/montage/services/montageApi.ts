@@ -225,6 +225,30 @@ export function buildMontageChecklist(
 }
 
 /**
+ * `POST /participaciones/{id_participacion}/checklist-instancias` (RF-19)
+ * — the captain applies a `montaje` template to a participant who doesn't
+ * have one instanced yet. **Idempotent** (confirmed
+ * `checklist_service.ts`'s `instanciar`): calling this again for the same
+ * participation/template pair returns the same existing instance rather
+ * than creating a duplicate, so a caller never needs to guard against
+ * double-submission client-side beyond the normal in-flight disable.
+ */
+export async function instantiateChecklist(
+  idParticipacion: number,
+  idChecklist: number,
+): Promise<ChecklistInstanciaApiRecord> {
+  const envelope = await requestSgeb<ChecklistInstanciaApiRecord>({
+    url: `/participaciones/${String(idParticipacion)}/checklist-instancias`,
+    method: 'POST',
+    data: { id_checklist: idChecklist },
+  })
+  if (envelope.data === null) {
+    throw new SgebNetworkError('No pudimos interpretar la respuesta del servidor.')
+  }
+  return envelope.data
+}
+
+/**
  * `PATCH /checklist-instancias/{id}/aprobar` — the one real captain
  * mutation this screen performs. No request body (confirmed against the
  * pinned backend: the controller reads only the URL param). The caller

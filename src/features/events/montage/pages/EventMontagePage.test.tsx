@@ -13,6 +13,7 @@ import type {
 } from '@/features/events/montage/services/montageApi'
 import type { AsignacionMesaApiRecord } from '@/features/events/services/asignacionesApi'
 import type { MesaApiRecord } from '@/features/events/services/mesasApi'
+import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { SgebApplicationError, SgebNetworkError } from '@/shared/api/sgebApiError'
 import type { SgebRequestConfig } from '@/shared/api/sgebClient'
 import { requestSgeb } from '@/shared/api/sgebClient'
@@ -27,8 +28,32 @@ vi.mock('@/shared/realtime/useEventRealtimeRoom', () => ({
   useEventRealtimeRoom: vi.fn(),
 }))
 
+function authenticate(rol: 'admin' | 'capitan' | 'mesero' = 'capitan') {
+  useOidcSessionStore.getState().setAuthenticated({
+    accessToken: 'test-access-token',
+    accessTokenExpiresAt: Date.now() + 900_000,
+    user: {
+      sub: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      name: 'Test Capitán',
+      email: 'test@example.com',
+      rol,
+    },
+  })
+}
+
+/**
+ * Every existing describe block in this file exercises the real montage
+ * content (roster/checklist/tables), so a `capitán` session — this page's
+ * own documented "CAPTAIN'S WEB VIEW" — is seeded by default here rather
+ * than at each of the many call sites below, mirroring `MenuPage.test.tsx`'s
+ * `authenticate` default. The dedicated role-gating describe block further
+ * down overrides this per-test to exercise the gate itself (mesero/admin/
+ * unauthenticated).
+ */
 beforeEach(() => {
   vi.mocked(requestSgeb).mockReset()
+  useOidcSessionStore.getState().reset()
+  authenticate()
 })
 
 function successEnvelope<T>(data: T): ApiEnvelope<T> {
@@ -208,7 +233,10 @@ function fakeTransport(
   } = {},
 ) {
   let roster = options.participaciones ? [...options.participaciones] : []
-  const instancias = options.instancias ?? {}
+  const instancias: Record<number, ChecklistInstanciaApiRecord[]> = {
+    ...(options.instancias ?? {}),
+  }
+  let nextIdInstancia = 9500
   let mesas = options.mesas ? [...options.mesas] : []
   let asignaciones = options.asignaciones ? [...options.asignaciones] : []
   let nextIdAsignacion = 8000
@@ -240,6 +268,27 @@ function fakeTransport(
     if (instanciaMatch && !config.method) {
       const idParticipacion = Number(instanciaMatch[1])
       return Promise.resolve(successEnvelope(instancias[idParticipacion] ?? []))
+    }
+    if (instanciaMatch && config.method === 'POST') {
+      const idParticipacion = Number(instanciaMatch[1])
+      const idChecklist = (config.data as { id_checklist: number }).id_checklist
+      const existing = (instancias[idParticipacion] ?? []).find(
+        (i) => i.id_checklist === idChecklist,
+      )
+      if (existing) {
+        return Promise.resolve(successEnvelope(existing))
+      }
+      const nueva: ChecklistInstanciaApiRecord = {
+        id_instancia: nextIdInstancia,
+        id_participacion: idParticipacion,
+        id_checklist: idChecklist,
+        completado: false,
+        fecha: '2026-08-20T00:00:00',
+        respuestas: [],
+      }
+      nextIdInstancia += 1
+      instancias[idParticipacion] = [...(instancias[idParticipacion] ?? []), nueva]
+      return Promise.resolve(successEnvelope(nueva))
     }
     const aprobarMatch = /^\/checklist-instancias\/(\d+)\/aprobar$/.exec(config.url)
     if (config.method === 'PATCH' && aprobarMatch) {
@@ -413,6 +462,109 @@ describe('EventMontagePage', () => {
 
     expect(await screen.findByText('Juan Pérez')).toBeInTheDocument()
     expect(screen.getByText(/checklist de montaje instanciado/)).toBeInTheDocument()
+  })
+
+  it('offers an "Asignar checklist" action for a participant with no instance, and POSTs /participaciones/{id}/checklist-instancias (Phase 6, idempotent instantiation)', async () => {
+    fakeTransport(1001, {
+      participaciones: [participacion({ id_participacion: 5003 })],
+      instancias: { 5003: [] },
+    })
+
+    renderAt('/eventos/1001/montaje')
+
+    const row = (await screen.findByText('Juan Pérez')).closest('li') as HTMLElement
+    const user = userEvent.setup()
+    await user.click(
+      within(row).getByRole('button', {
+        name: 'Asignar checklist de montaje a Juan Pérez',
+      }),
+    )
+
+    await waitFor(() => {
+      expect(requestSgeb).toHaveBeenCalledWith({
+        url: '/participaciones/5003/checklist-instancias',
+        method: 'POST',
+        data: { id_checklist: 1 },
+      })
+    })
+
+    // After the mutation's own invalidation, the instance query refetches
+    // and this participant's row moves from the absent-instance message to
+    // the real pending-checklist badge — never a locally-faked instance.
+    await waitFor(() => {
+      expect(
+        within(row).queryByText(/checklist de montaje instanciado/),
+      ).not.toBeInTheDocument()
+    })
+    expect(within(row).getByText('Checklist pendiente')).toBeInTheDocument()
+  })
+
+  it('a repeated instantiate click while in flight only sends one POST', async () => {
+    fakeTransport(1001, {
+      participaciones: [participacion({ id_participacion: 5003 })],
+      instancias: { 5003: [] },
+    })
+
+    renderAt('/eventos/1001/montaje')
+
+    const row = (await screen.findByText('Juan Pérez')).closest('li') as HTMLElement
+    const button = within(row).getByRole('button', {
+      name: 'Asignar checklist de montaje a Juan Pérez',
+    })
+    fireEvent.click(button)
+    fireEvent.click(button)
+
+    await waitFor(() => {
+      expect(within(row).getByText('Checklist pendiente')).toBeInTheDocument()
+    })
+
+    const postCalls = vi
+      .mocked(requestSgeb)
+      .mock.calls.filter(
+        ([config]) =>
+          config.url === '/participaciones/5003/checklist-instancias' &&
+          config.method === 'POST',
+      )
+    expect(postCalls).toHaveLength(1)
+  })
+
+  /**
+   * Regression coverage for the real, reported UX bug: "I do NOT see where
+   * a checklist template is assigned/instantiated for a waiter
+   * participation." Root cause was never a wiring break — `templatesQuery`
+   * →`EventMontageContent`→`EventMontageParticipantList`→
+   * `EventMontageParticipantRow`→`EventMontageChecklistSection` was
+   * already threaded correctly end to end — but when the `GET
+   * /checklists?tipo=montaje` catalog is genuinely empty (e.g. a captain
+   * who only created `servicio`/`cierre` templates, or none yet), the
+   * instantiate action had nothing to offer and rendered only a passive,
+   * unexplained sentence: from the rendered UI there was no way to tell
+   * "you need to create a montaje template first" apart from "this feature
+   * doesn't exist." This exercises the real `EventMontagePage` render, not
+   * `EventMontageChecklistSection` in isolation, with `fakeTransport`'s
+   * `templates` option explicitly overridden to empty (the default
+   * fixture always supplies one montaje template, which is why no earlier
+   * test in this file hit this branch).
+   */
+  it('explains the missing-template prerequisite, with a real link to /checklists, when the montaje catalog is empty', async () => {
+    fakeTransport(1001, {
+      participaciones: [participacion({ id_participacion: 5003 })],
+      instancias: { 5003: [] },
+      templates: [],
+    })
+
+    renderAt('/eventos/1001/montaje')
+
+    const row = (await screen.findByText('Juan Pérez')).closest('li') as HTMLElement
+    expect(
+      within(row).getByText(/No hay ninguna plantilla de checklist de tipo "Montaje"/),
+    ).toBeInTheDocument()
+    expect(
+      within(row).queryByRole('button', { name: /Asignar checklist/ }),
+    ).not.toBeInTheDocument()
+
+    const link = within(row).getByRole('link', { name: 'Ir a Checklists' })
+    expect(link).toHaveAttribute('href', '/checklists')
   })
 
   it('renders real tables and real assignment rows from the transport — no stale demo/foundation-only copy remains', async () => {
@@ -762,5 +914,74 @@ describe('EventMontagePage', () => {
       value: originalGeolocation,
       configurable: true,
     })
+  })
+})
+
+/**
+ * Final role/scope verification (`feature/checklist-flow-alignment`) —
+ * this page is the documented "CAPTAIN'S WEB VIEW" of montage checklists
+ * and table assignment (`types/montage.ts`'s module comment); a `mesero`
+ * session must never see its roster, checklist actions (Asignar checklist,
+ * Aprobar), or table-assignment actions, and must never trigger any of its
+ * captain-only queries — not just have the buttons hidden while data still
+ * loads underneath.
+ */
+describe('EventMontagePage — role gating', () => {
+  it('shows the forbidden state, and never calls the transport, for a mesero session', () => {
+    authenticate('mesero')
+
+    renderAt('/eventos/1001/montaje')
+
+    expect(
+      screen.getByText('No tienes permiso para ver esta sección'),
+    ).toBeInTheDocument()
+    expect(requestSgeb).not.toHaveBeenCalled()
+    expect(screen.queryByText('Juan Pérez')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Asignar checklist/ }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Aprobar checklist/ }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('shows the forbidden state, and never calls the transport, for an unauthenticated session', () => {
+    useOidcSessionStore.getState().reset()
+
+    renderAt('/eventos/1001/montaje')
+
+    expect(
+      screen.getByText('No tienes permiso para ver esta sección'),
+    ).toBeInTheDocument()
+    expect(requestSgeb).not.toHaveBeenCalled()
+  })
+
+  it('renders the real montage content for an admin session, same as capitán', async () => {
+    authenticate('admin')
+    fakeTransport(1001, {
+      participaciones: [participacion({ id_participacion: 5003 })],
+      instancias: { 5003: [] },
+    })
+
+    renderAt('/eventos/1001/montaje')
+
+    expect(await screen.findByText('Juan Pérez')).toBeInTheDocument()
+    expect(
+      screen.queryByText('No tienes permiso para ver esta sección'),
+    ).not.toBeInTheDocument()
+  })
+
+  it('renders the real montage content for a capitán session', async () => {
+    fakeTransport(1001, {
+      participaciones: [participacion({ id_participacion: 5003 })],
+      instancias: { 5003: [] },
+    })
+
+    renderAt('/eventos/1001/montaje')
+
+    expect(await screen.findByText('Juan Pérez')).toBeInTheDocument()
+    expect(
+      screen.queryByText('No tienes permiso para ver esta sección'),
+    ).not.toBeInTheDocument()
   })
 })

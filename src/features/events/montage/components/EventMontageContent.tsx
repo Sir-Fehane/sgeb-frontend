@@ -7,11 +7,14 @@ import { EventMontageLoadingState } from '@/features/events/montage/components/E
 import { EventMontageParticipantList } from '@/features/events/montage/components/EventMontageParticipantList'
 import { EventMontageSummary } from '@/features/events/montage/components/EventMontageSummary'
 import { EventMontageTablesSection } from '@/features/events/montage/components/EventMontageTablesSection'
+import type { ChecklistTemplateViewModel } from '@/features/events/montage/services/montageApi'
 import type {
   ApproveChecklistRequest,
   AssignTableRequest,
   ChecklistApprovalStatus,
+  ChecklistInstantiationStatus,
   EventTableViewModel,
+  InstantiateChecklistRequest,
   MontageParticipantViewModel,
   ReleaseAssignmentRequest,
 } from '@/features/events/montage/types/montage'
@@ -37,6 +40,10 @@ export interface EventMontageContentProps {
   onApproveChecklist: (request: ApproveChecklistRequest) => void
   onAssignTable: (request: AssignTableRequest) => void
   onReleaseAssignment: (request: ReleaseAssignmentRequest) => void
+  availableChecklistTemplates?: readonly ChecklistTemplateViewModel[]
+  checklistInstantiationStatuses?: Readonly<Record<number, ChecklistInstantiationStatus>>
+  checklistInstantiationErrorMessages?: Readonly<Record<number, string>>
+  onInstantiateChecklist?: (request: InstantiateChecklistRequest) => void
 }
 
 /**
@@ -66,6 +73,10 @@ export function EventMontageContent({
   onApproveChecklist,
   onAssignTable,
   onReleaseAssignment,
+  availableChecklistTemplates,
+  checklistInstantiationStatuses,
+  checklistInstantiationErrorMessages,
+  onInstantiateChecklist,
 }: EventMontageContentProps) {
   if (isLoading) {
     return <EventMontageLoadingState />
@@ -120,6 +131,12 @@ export function EventMontageContent({
           onApproveChecklist={onApproveChecklist}
           onAssignTable={onAssignTable}
           onReleaseAssignment={onReleaseAssignment}
+          {...(availableChecklistTemplates ? { availableChecklistTemplates } : {})}
+          {...(checklistInstantiationStatuses ? { checklistInstantiationStatuses } : {})}
+          {...(checklistInstantiationErrorMessages
+            ? { checklistInstantiationErrorMessages }
+            : {})}
+          {...(onInstantiateChecklist ? { onInstantiateChecklist } : {})}
         />
       </EventDetailSection>
     </div>

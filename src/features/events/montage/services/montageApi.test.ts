@@ -6,6 +6,7 @@ import {
   fetchChecklistInstancias,
   fetchMontageChecklistTemplates,
   fetchMontageParticipants,
+  instantiateChecklist,
   type ChecklistApiRecord,
   type ChecklistInstanciaApiRecord,
   type ChecklistTemplateViewModel,
@@ -312,6 +313,62 @@ describe('approveChecklistInstancia', () => {
     })
 
     const error = await approveChecklistInstancia(9001).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(SgebNetworkError)
+  })
+})
+
+describe('instantiateChecklist', () => {
+  it('POSTs /participaciones/{id}/checklist-instancias with { id_checklist }', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0001', message: 'creado' },
+      data: {
+        id_instancia: 9001,
+        id_participacion: 5002,
+        id_checklist: 1,
+        completado: false,
+        fecha: '2026-08-01T00:00:00',
+        respuestas: [],
+      },
+    })
+
+    const result = await instantiateChecklist(5002, 1)
+
+    expect(requestSgeb).toHaveBeenCalledWith({
+      url: '/participaciones/5002/checklist-instancias',
+      method: 'POST',
+      data: { id_checklist: 1 },
+    })
+    expect(result.id_instancia).toBe(9001)
+  })
+
+  it('returns the same instance on a repeated call — idempotent, no duplicate-instance assumption client-side', async () => {
+    const existingInstance = {
+      id_instancia: 9001,
+      id_participacion: 5002,
+      id_checklist: 1,
+      completado: false,
+      fecha: '2026-08-01T00:00:00',
+      respuestas: [],
+    }
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0001', message: 'creado' },
+      data: existingInstance,
+    })
+
+    const first = await instantiateChecklist(5002, 1)
+    const second = await instantiateChecklist(5002, 1)
+
+    expect(first).toEqual(second)
+    expect(requestSgeb).toHaveBeenCalledTimes(2)
+  })
+
+  it('throws a SgebNetworkError if the envelope carries null data on success (defensive guard)', async () => {
+    vi.mocked(requestSgeb).mockResolvedValue({
+      result: { code: 'SGEB-0000', message: 'ok' },
+      data: null,
+    })
+
+    const error = await instantiateChecklist(5002, 1).catch((e: unknown) => e)
     expect(error).toBeInstanceOf(SgebNetworkError)
   })
 })

@@ -180,6 +180,20 @@ export interface ApproveChecklistRequest {
 /** Per-participant UI state for the live approve-checklist action. */
 export type ChecklistApprovalStatus = 'idle' | 'approving' | 'error'
 
+/**
+ * `POST /participaciones/{id_participacion}/checklist-instancias`'s
+ * documented shape (RF-19) — the captain applies a `montaje` template to a
+ * participant who has none instanced yet. Idempotent server-side (see
+ * `services/montageApi.ts`'s `instantiateChecklist`).
+ */
+export interface InstantiateChecklistRequest {
+  idParticipacion: number
+  idChecklist: number
+}
+
+/** Per-participant UI state for the live instantiate-checklist action. */
+export type ChecklistInstantiationStatus = 'idle' | 'instantiating' | 'error'
+
 /** `POST /participaciones/{id_participacion}/asignaciones`'s exact documented request body — `id_mesa` only. */
 export interface AssignTableRequest {
   idParticipacion: number

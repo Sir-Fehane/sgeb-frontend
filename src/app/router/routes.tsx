@@ -369,6 +369,25 @@ export const router = createBrowserRouter([
         },
       },
       {
+        /*
+         * Checklists — the GLOBAL template catalog
+         * (`feature/checklist-flow-alignment`): reusable `montaje`/
+         * `servicio`/`cierre` checklist templates and their items, backed
+         * by the real `GET/POST/PUT /checklists`, `DELETE /checklists/{id}`
+         * family. Scoped catalog-wide, never to a specific event — same
+         * "global catalog gets its own top-level route" reasoning as
+         * `/menu`. Instantiating a template against a participation stays
+         * in `features/events/montage` instead, the one screen that
+         * already has a participation in context.
+         */
+        path: 'checklists',
+        lazy: async () => {
+          const { ChecklistsPage } =
+            await import('@/features/checklists/pages/ChecklistsPage')
+          return { Component: ChecklistsPage }
+        },
+      },
+      {
         path: 'reportes',
         lazy: async () => {
           const { ReportsPage } = await import('@/features/reports/pages/ReportsPage')

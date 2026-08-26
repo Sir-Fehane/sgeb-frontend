@@ -83,7 +83,7 @@ describe('AppShell navigation', () => {
     expect(screen.queryByRole('link', { name: 'Bitácora' })).not.toBeInTheDocument()
   })
 
-  it('hides both capitán/admin-only entries (Meseros, Bebidas y Cubaitor) for a mesero session — this web console is not the mesero product (native iOS app), so a stray mesero session sees neither', () => {
+  it('hides every capitán/admin-only entry (Meseros, Bebidas y Cubaitor, Checklists) for a mesero session — this web console is not the mesero product (native iOS app), so a stray mesero session sees none of them', () => {
     authenticate('mesero')
     renderAppShell('/eventos')
 
@@ -91,6 +91,7 @@ describe('AppShell navigation', () => {
     expect(
       screen.queryByRole('link', { name: 'Bebidas y Cubaitor' }),
     ).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Checklists' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Usuarios' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Bitácora' })).not.toBeInTheDocument()
   })

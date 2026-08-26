@@ -1,9 +1,12 @@
 import { EventMontageParticipantRow } from '@/features/events/montage/components/EventMontageParticipantRow'
+import type { ChecklistTemplateViewModel } from '@/features/events/montage/services/montageApi'
 import type {
   ApproveChecklistRequest,
   AssignTableRequest,
   ChecklistApprovalStatus,
+  ChecklistInstantiationStatus,
   EventTableViewModel,
+  InstantiateChecklistRequest,
   MontageParticipantViewModel,
   ReleaseAssignmentRequest,
 } from '@/features/events/montage/types/montage'
@@ -21,6 +24,10 @@ export interface EventMontageParticipantListProps {
   onApproveChecklist: (request: ApproveChecklistRequest) => void
   onAssignTable: (request: AssignTableRequest) => void
   onReleaseAssignment: (request: ReleaseAssignmentRequest) => void
+  availableChecklistTemplates?: readonly ChecklistTemplateViewModel[]
+  checklistInstantiationStatuses?: Readonly<Record<number, ChecklistInstantiationStatus>>
+  checklistInstantiationErrorMessages?: Readonly<Record<number, string>>
+  onInstantiateChecklist?: (request: InstantiateChecklistRequest) => void
 }
 
 export function EventMontageParticipantList({
@@ -35,6 +42,10 @@ export function EventMontageParticipantList({
   onApproveChecklist,
   onAssignTable,
   onReleaseAssignment,
+  availableChecklistTemplates,
+  checklistInstantiationStatuses,
+  checklistInstantiationErrorMessages,
+  onInstantiateChecklist,
 }: EventMontageParticipantListProps) {
   if (participants.length === 0) {
     return (
@@ -80,6 +91,18 @@ export function EventMontageParticipantList({
           onApproveChecklist={onApproveChecklist}
           onAssignTable={onAssignTable}
           onReleaseAssignment={onReleaseAssignment}
+          {...(availableChecklistTemplates ? { availableChecklistTemplates } : {})}
+          isInstantiatingChecklist={
+            checklistInstantiationStatuses?.[participant.idParticipacion] ===
+            'instantiating'
+          }
+          {...(checklistInstantiationErrorMessages?.[participant.idParticipacion]
+            ? {
+                instantiateChecklistErrorMessage:
+                  checklistInstantiationErrorMessages[participant.idParticipacion],
+              }
+            : {})}
+          {...(onInstantiateChecklist ? { onInstantiateChecklist } : {})}
         />
       ))}
     </ul>

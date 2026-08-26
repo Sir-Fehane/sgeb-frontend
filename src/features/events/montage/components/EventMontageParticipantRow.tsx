@@ -1,9 +1,11 @@
 import { EventMontageAssignmentSection } from '@/features/events/montage/components/EventMontageAssignmentSection'
 import { EventMontageChecklistSection } from '@/features/events/montage/components/EventMontageChecklistSection'
+import type { ChecklistTemplateViewModel } from '@/features/events/montage/services/montageApi'
 import type {
   ApproveChecklistRequest,
   AssignTableRequest,
   EventTableViewModel,
+  InstantiateChecklistRequest,
   MontageParticipantViewModel,
   ReleaseAssignmentRequest,
 } from '@/features/events/montage/types/montage'
@@ -21,6 +23,10 @@ export interface EventMontageParticipantRowProps {
   onApproveChecklist: (request: ApproveChecklistRequest) => void
   onAssignTable: (request: AssignTableRequest) => void
   onReleaseAssignment: (request: ReleaseAssignmentRequest) => void
+  availableChecklistTemplates?: readonly ChecklistTemplateViewModel[]
+  isInstantiatingChecklist?: boolean
+  instantiateChecklistErrorMessage?: string
+  onInstantiateChecklist?: (request: InstantiateChecklistRequest) => void
 }
 
 const PUESTO_LABELS: Record<MontageParticipantViewModel['puesto'], string> = {
@@ -47,6 +53,10 @@ export function EventMontageParticipantRow({
   onApproveChecklist,
   onAssignTable,
   onReleaseAssignment,
+  availableChecklistTemplates,
+  isInstantiatingChecklist,
+  instantiateChecklistErrorMessage,
+  onInstantiateChecklist,
 }: EventMontageParticipantRowProps) {
   return (
     <li className="border-border bg-card flex flex-col gap-3 rounded-lg border p-4">
@@ -64,6 +74,14 @@ export function EventMontageParticipantRow({
           ? { approveErrorMessage: approveChecklistErrorMessage }
           : {})}
         onApproveChecklist={onApproveChecklist}
+        {...(availableChecklistTemplates
+          ? { availableTemplates: availableChecklistTemplates }
+          : {})}
+        isInstantiating={isInstantiatingChecklist ?? false}
+        {...(instantiateChecklistErrorMessage
+          ? { instantiateErrorMessage: instantiateChecklistErrorMessage }
+          : {})}
+        {...(onInstantiateChecklist ? { onInstantiateChecklist } : {})}
       />
 
       <EventMontageAssignmentSection
