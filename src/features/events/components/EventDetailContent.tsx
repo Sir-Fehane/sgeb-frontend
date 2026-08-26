@@ -132,7 +132,10 @@ export function EventDetailContent({
       />
 
       <EventDetailComandaSection {...comanda} />
-      <EventDetailNavigationSection idEvento={evento.idEvento} />
+      <EventDetailNavigationSection
+        idEvento={evento.idEvento}
+        canManageEvent={lifecycle.canManage}
+      />
     </div>
   )
 }

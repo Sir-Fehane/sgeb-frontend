@@ -127,16 +127,19 @@ const SALON_RECORD: SalonApiRecord = {
   activo: true,
 }
 
-const CREATED_RECORD: EventoApiRecord = {
+/**
+ * Deliberately has NO `capitan` field — confirmed real shape of `POST
+ * /eventos`'s response (`EventoService.crear` never preloads it, unlike
+ * `.obtener()`/`.listar()`; see `createEvento`'s own comment in
+ * `eventsApi.ts`). Must never be reintroduced here: it previously masked a
+ * real `TypeError` (`mapCapitan` dereferencing an absent field) that made a
+ * genuinely successful `SGEB-0001` creation display as "Ocurrió un error
+ * inesperado." — the "submits POST /eventos ... then navigates" test below
+ * is this bug's regression coverage.
+ */
+const CREATED_RECORD: Omit<EventoApiRecord, 'capitan'> = {
   id_evento: 5001,
   id_salon: 1,
-  capitan: {
-    uuid_usuario: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-    nombre: 'Capitán',
-    apellido_paterno: 'Prueba',
-    apellido_materno: null,
-    correo: 'capitan.prueba@example.com',
-  },
   titulo: 'Evento válido de prueba',
   tipo: 'social',
   fecha: '2099-01-10',

@@ -354,6 +354,7 @@ describe('EventDetailPage', () => {
   })
 
   it('still renders the back link and the grouped operational navigation', async () => {
+    authenticate('capitan')
     mockTransport()
 
     renderAt('/eventos/1001')

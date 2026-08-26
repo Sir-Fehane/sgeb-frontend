@@ -3,6 +3,7 @@ import { EventDetailUnavailableState } from '@/features/events/components/EventD
 import type { EventDetailViewModel } from '@/features/events/types/event'
 import { TeamSelectionCandidateList } from '@/features/events/team-selection/components/TeamSelectionCandidateList'
 import { TeamSelectionErrorState } from '@/features/events/team-selection/components/TeamSelectionErrorState'
+import { TeamSelectionForbiddenState } from '@/features/events/team-selection/components/TeamSelectionForbiddenState'
 import { TeamSelectionHeader } from '@/features/events/team-selection/components/TeamSelectionHeader'
 import { TeamSelectionLoadingState } from '@/features/events/team-selection/components/TeamSelectionLoadingState'
 import { TeamSelectionSelectedList } from '@/features/events/team-selection/components/TeamSelectionSelectedList'
@@ -14,6 +15,7 @@ import type {
 } from '@/features/events/team-selection/types/teamSelection'
 
 export interface TeamSelectionContentProps {
+  canView: boolean
   /** `null` means "not found" — a real `SGEB-3001` 404 or a malformed route id, not a loading gap. Reuses `EventDetailUnavailableState`: same concern as Event Detail's own unavailable event. */
   evento: EventDetailViewModel | null
   isLoading?: boolean
@@ -33,8 +35,13 @@ export interface TeamSelectionContentProps {
  * layer around it). Candidates/selected are derived from `participants`'
  * live `estado` — a participant moves from one list to the other purely
  * by its `estado` changing, never by a separate "removed" action.
+ *
+ * `canView` gates everything below behind `TeamSelectionForbiddenState` for
+ * a non-capitán/admin session reaching `/eventos/:id/equipo` directly by
+ * URL — same pattern `UsersContent`/`WaitersContent` already establish.
  */
 export function TeamSelectionContent({
+  canView,
   evento,
   isLoading = false,
   errorMessage,
@@ -44,6 +51,10 @@ export function TeamSelectionContent({
   rowErrorMessages,
   onSelectParticipant,
 }: TeamSelectionContentProps) {
+  if (!canView) {
+    return <TeamSelectionForbiddenState />
+  }
+
   if (isLoading) {
     return <TeamSelectionLoadingState />
   }

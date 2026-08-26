@@ -65,6 +65,7 @@ function EnvaseForm({ initialValues, isSubmitting, onSubmit }: EnvaseFormProps) 
           <Input
             {...controlProps}
             type="number"
+            numeric="integer"
             min={1}
             max={65535}
             step={1}

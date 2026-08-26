@@ -174,52 +174,53 @@ describe('sgebClient — authorization', () => {
 })
 
 describe('sgebClient — envelope preservation', () => {
+  /**
+   * The authoritative 0xxx "Éxito" set and each code's real documented HTTP
+   * status, confirmed directly against the pinned backend's
+   * `app/shared/errors/catalogo.ts` (`CODIGOS`) — not assumed. Every one of
+   * these resolves via the plain Axios success path (`validateStatus`'s
+   * default `2xx`); the interceptor's error branch never even runs for
+   * them, so nothing here special-cases a `result.code` string to decide
+   * success — HTTP status is the only signal that matters, exactly as
+   * before. `SGEB-0001`'s real status is 201 (`responder.creado`), NOT 200
+   * — a prior version of this test suite mocked 200 for it uniformly with
+   * SGEB-0000, which passed trivially without ever exercising the real 201
+   * path and would have masked a genuine 201-specific regression.
+   */
   it.each([
-    ['SGEB-0000', { foo: 'bar' }],
-    ['SGEB-0001', { id: 1 }],
-  ])('preserves a %s success envelope, result and typed data', async (code, data) => {
+    ['SGEB-0000', 200, { foo: 'bar' }],
+    ['SGEB-0001', 201, { id: 1 }],
+    ['SGEB-0002', 200, []],
+    ['SGEB-0003', 202, { id_job: 'job-123' }],
+    ['SGEB-0004', 200, { resumen: { total: 5 }, cierre: null }],
+  ] as const)(
+    'preserves a %s success envelope (HTTP %i) as a resolved promise, result and typed data — never a rejection',
+    async (code, http, data) => {
+      const { adapter, request } = createTestClient()
+      adapter.mockImplementation((config) =>
+        Promise.resolve(fakeResponse(config, http, envelope(successResult(code), data))),
+      )
+
+      const result = await request<typeof data>({ url: '/eventos' })
+
+      expect(result.result.code).toBe(code)
+      expect(result.data).toEqual(data)
+    },
+  )
+
+  it('a real, documented error code sharing SGEB-0001\'s own 2xx-adjacent numeric neighborhood (e.g. SGEB-2001, HTTP 400) still throws — success is driven by HTTP status, never by treating any "low-numbered" SGEB code as inherently safe', async () => {
     const { adapter, request } = createTestClient()
     adapter.mockImplementation((config) =>
-      Promise.resolve(fakeResponse(config, 200, envelope(successResult(code), data))),
-    )
-
-    const result = await request<typeof data>({ url: '/eventos' })
-
-    expect(result.result.code).toBe(code)
-    expect(result.data).toEqual(data)
-  })
-
-  it('preserves SGEB-0002 (empty-result success) with null data', async () => {
-    const { adapter, request } = createTestClient()
-    adapter.mockImplementation((config) =>
-      Promise.resolve(
-        fakeResponse(config, 200, envelope(successResult('SGEB-0002'), [])),
+      Promise.reject(
+        fakeAxiosError(config, 400, envelope(errorResult('SGEB-2001', 'Dato inválido.'))),
       ),
     )
 
-    const result = await request({ url: '/eventos' })
-
-    expect(result.result.code).toBe('SGEB-0002')
-    expect(result.data).toEqual([])
-  })
-
-  it('preserves SGEB-0004 (partial success) as a resolved promise, never a rejection', async () => {
-    const { adapter, request } = createTestClient()
-    const partialData = { resumen: { total: 5 }, cierre: null }
-    adapter.mockImplementation((config) =>
-      Promise.resolve(
-        fakeResponse(
-          config,
-          200,
-          envelope(successResult('SGEB-0004', 'Éxito parcial.'), partialData),
-        ),
-      ),
+    const error = await request({ url: '/eventos', method: 'POST' }).catch(
+      (e: unknown) => e,
     )
 
-    const result = await request({ url: '/dashboard/capitan' })
-
-    expect(result.result.code).toBe('SGEB-0004')
-    expect(result.data).toEqual(partialData)
+    expect(isSgebApplicationError(error)).toBe(true)
   })
 })
 

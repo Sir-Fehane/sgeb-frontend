@@ -173,6 +173,7 @@ function ManualReportRow({
       <div className="flex flex-wrap items-center gap-2">
         <Input
           type="number"
+          numeric="decimal"
           min={0}
           max={99.99}
           step="0.1"

@@ -129,6 +129,7 @@ export function EventEditForm({
             <Input
               {...controlProps}
               type="number"
+              numeric="integer"
               disabled={isSubmitting}
               {...register('cupo_meseros', { valueAsNumber: true })}
             />
@@ -139,6 +140,7 @@ export function EventEditForm({
             <Input
               {...controlProps}
               type="number"
+              numeric="integer"
               disabled={isSubmitting}
               {...register('num_mesas', { valueAsNumber: true })}
             />
@@ -153,6 +155,7 @@ export function EventEditForm({
             <Input
               {...controlProps}
               type="number"
+              numeric="decimal"
               step="0.01"
               disabled={isSubmitting}
               {...register('tarifa_por_mesero', { valueAsNumber: true })}

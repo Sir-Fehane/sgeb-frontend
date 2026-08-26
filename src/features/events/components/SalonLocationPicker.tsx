@@ -223,6 +223,8 @@ export function SalonLocationPicker({
               <Input
                 {...controlProps}
                 type="number"
+                numeric="decimal"
+                allowNegative
                 step="any"
                 inputMode="decimal"
                 disabled={disabled}
@@ -243,6 +245,8 @@ export function SalonLocationPicker({
               <Input
                 {...controlProps}
                 type="number"
+                numeric="decimal"
+                allowNegative
                 step="any"
                 inputMode="decimal"
                 disabled={disabled}

@@ -11,19 +11,15 @@
  * this model). Event-scoped pin configuration, live orders, and dispensing
  * state live in `features/events/cubaitor/`, never here.
  *
- * **`en_linea`/heartbeat — confirmed DEAD in production, not fixable from
- * the frontend.** `CubaitorService.heartbeat(mac)` (the only writer of
- * `ultima_conexion` besides device registration setting it to `null`) has
- * NO registered route anywhere in `start/routes.ts` on the pinned backend —
- * its controller method and validator exist, but nothing ever calls it
- * outside a single unit test that invokes the service directly, bypassing
- * HTTP. The backend's own functional test
- * (`tests/functional/api_barra.spec.ts`) asserts `en_linea: false`
- * immediately after registering a device and treats that as expected,
- * documented behavior ("no es un error… el evento continúa con dispensado
- * manual"). `useCubaitorEstadoQuery` therefore surfaces `enLinea` as
- * reported, but `CubaitorFleetSection` must never present it as a
- * trustworthy live "Online" indicator — see that component's own comment.
+ * **`en_linea`/heartbeat — live as of the pinned backend.** `POST
+ * /cubaitors/heartbeat` is registered in `start/routes.ts` and wired to
+ * `CubaitorService.heartbeat(mac)`, the ESP32 devices' own periodic report —
+ * an interim HTTP channel while the MQTT client doesn't exist yet (see that
+ * route's own comment: without it, `ultima_conexion` never updated and the
+ * dashboard marked every device permanently offline). `enLinea` is
+ * server-derived (`segundos_sin_reportar <= 120`), not a raw flag —
+ * `useCubaitorEstadoQuery` surfaces it as reported, and
+ * `CubaitorFleetSection` renders it as a real online/offline indicator.
  */
 
 export type CubaitorEstado = 'activo' | 'inactivo' | 'mantenimiento'
@@ -36,11 +32,11 @@ export interface CubaitorViewModel {
   hostIp: string | null
   numPins: number
   estado: CubaitorEstado
-  /** Raw heartbeat timestamp, if any — see this file's module comment on why it is effectively always `null` in production today. */
+  /** Last heartbeat timestamp, `null` if the device has never reported — see this file's module comment. */
   ultimaConexion: string | null
 }
 
-/** `GET /cubaitors/{id}/estado` — a distinct, derived shape from `Cubaitor` itself, never a subset of it. See this file's module comment for why `enLinea` cannot be trusted as live. */
+/** `GET /cubaitors/{id}/estado` — a distinct, derived shape from `Cubaitor` itself, never a subset of it. `enLinea` is server-computed from the heartbeat threshold — see this file's module comment. */
 export interface CubaitorEstadoViewModel {
   idCubaitor: number
   nombre: string

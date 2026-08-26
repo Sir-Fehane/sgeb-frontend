@@ -75,6 +75,55 @@ describe('EventDetailMesasSection', () => {
     expect(screen.queryByText(MESA.codigoQr)).not.toBeInTheDocument()
   })
 
+  it('shows a "Ver QR" action for a mesa that has a codigoQr', () => {
+    render(
+      <EventDetailMesasSection
+        mesas={[MESA]}
+        isLoading={false}
+        canManage={false}
+        onCreateMesa={vi.fn()}
+        isCreating={false}
+      />,
+    )
+    expect(screen.getByRole('button', { name: 'Ver QR' })).toBeInTheDocument()
+  })
+
+  it('hides the "Ver QR" action, without crashing, when a mesa has no codigoQr', () => {
+    render(
+      <EventDetailMesasSection
+        mesas={[{ ...MESA, codigoQr: '' }]}
+        isLoading={false}
+        canManage={false}
+        onCreateMesa={vi.fn()}
+        isCreating={false}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: 'Ver QR' })).not.toBeInTheDocument()
+  })
+
+  it('opens the QR dialog for that mesa when "Ver QR" is clicked', async () => {
+    const user = userEvent.setup()
+    render(
+      <EventDetailMesasSection
+        mesas={[MESA]}
+        isLoading={false}
+        canManage={false}
+        onCreateMesa={vi.fn()}
+        isCreating={false}
+      />,
+    )
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Ver QR' }))
+
+    expect(screen.getByRole('dialog', { name: 'QR de Mesa 1' })).toBeInTheDocument()
+    expect(
+      screen.getByDisplayValue(
+        `${window.location.origin}/publico/mesas/${MESA.codigoQr}`,
+      ),
+    ).toBeInTheDocument()
+  })
+
   it('never exposes an NFC UID field — reserved/unused, QR is the live linking mechanism', () => {
     render(
       <EventDetailMesasSection

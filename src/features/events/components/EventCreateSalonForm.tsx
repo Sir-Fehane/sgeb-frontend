@@ -151,6 +151,7 @@ export function EventCreateSalonForm({
             <Input
               {...controlProps}
               type="number"
+              numeric="integer"
               disabled={isSubmitting}
               {...register('capacidadMaxMesas', { valueAsNumber: true })}
             />
@@ -165,6 +166,7 @@ export function EventCreateSalonForm({
             <Input
               {...controlProps}
               type="number"
+              numeric="integer"
               disabled={isSubmitting}
               {...register('capacidadPersonas', { valueAsNumber: true })}
             />

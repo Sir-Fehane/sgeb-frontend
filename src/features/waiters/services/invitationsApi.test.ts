@@ -100,6 +100,29 @@ describe('createInvitation', () => {
       expiraEn: '2026-08-08T09:00:00',
     })
   })
+
+  it("never sends a telefono field — confirmed against the pinned backend's crearValidator (invitaciones_controller.ts), which has no phone field at all; a phone number can only be set later, after the invited person's account exists, via PUT /usuarios/{uuid} or PUT /usuarios/me", async () => {
+    vi.mocked(requestSgeb).mockResolvedValue(
+      envelope({
+        correo: 'pedro.gomez@example.com',
+        deeplink: 'mx.mediocres.sgeb://registro?token=abc',
+        expira_en: '2026-08-08T09:00:00',
+      }),
+    )
+
+    await createInvitation({
+      idRolDestino: 3,
+      nombre: 'Pedro',
+      apellidoPaterno: 'Gómez',
+      correo: 'pedro.gomez@example.com',
+    })
+
+    const sentData = vi.mocked(requestSgeb).mock.calls[0]![0].data as Record<
+      string,
+      unknown
+    >
+    expect(sentData).not.toHaveProperty('telefono')
+  })
 })
 
 describe('revokeInvitation', () => {

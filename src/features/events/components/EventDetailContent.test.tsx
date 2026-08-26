@@ -231,7 +231,10 @@ describe('EventDetailContent — grouped operational navigation', () => {
   })
 
   it('renders three real group headings: Planeación, Operación en vivo, Cierre', () => {
-    renderContent({ evento: EVENTO_CON_COMANDA })
+    renderContent({
+      evento: EVENTO_CON_COMANDA,
+      lifecycle: { ...defaultLifecycleProps(), canManage: true },
+    })
 
     expect(
       screen.getByRole('heading', { level: 2, name: 'Planeación' }),
@@ -242,13 +245,32 @@ describe('EventDetailContent — grouped operational navigation', () => {
     expect(screen.getByRole('heading', { level: 2, name: 'Cierre' })).toBeInTheDocument()
   })
 
-  it('Planeación groups "Selección de equipo"', () => {
-    renderContent({ evento: EVENTO_CON_COMANDA })
+  it('Planeación groups "Selección de equipo" for a session that can manage the event', () => {
+    renderContent({
+      evento: EVENTO_CON_COMANDA,
+      lifecycle: { ...defaultLifecycleProps(), canManage: true },
+    })
 
     const group = screen.getByRole('list', { name: 'Áreas de planeación del evento' })
     expect(
       within(group).getByRole('link', { name: /Selección de equipo/ }),
     ).toHaveAttribute('href', `/eventos/${String(EVENTO_CON_COMANDA.idEvento)}/equipo`)
+  })
+
+  it('hides "Selección de equipo" and "Pagos" (and the now-empty Planeación heading) for a mesero session, which can never act on either destination', () => {
+    renderContent({ evento: EVENTO_CON_COMANDA })
+
+    expect(
+      screen.queryByRole('heading', { level: 2, name: 'Planeación' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: /Selección de equipo/ }),
+    ).not.toBeInTheDocument()
+    const cierreGroup = screen.getByRole('list', { name: 'Áreas de cierre del evento' })
+    expect(
+      within(cierreGroup).queryByRole('link', { name: /^Pagos/ }),
+    ).not.toBeInTheDocument()
+    expect(within(cierreGroup).getByRole('link', { name: /^Cierre/ })).toBeInTheDocument()
   })
 
   it('Operación en vivo groups Resumen operativo, Pase de lista, Montaje, Control de salida, Solicitudes de mesa, and Bebidas y Cubaitor', () => {
@@ -275,8 +297,11 @@ describe('EventDetailContent — grouped operational navigation', () => {
     }
   })
 
-  it('Cierre groups "Cierre" and "Pagos"', () => {
-    renderContent({ evento: EVENTO_CON_COMANDA })
+  it('Cierre groups "Cierre" and "Pagos" for a session that can manage the event', () => {
+    renderContent({
+      evento: EVENTO_CON_COMANDA,
+      lifecycle: { ...defaultLifecycleProps(), canManage: true },
+    })
 
     const idEvento = String(EVENTO_CON_COMANDA.idEvento)
     const group = screen.getByRole('list', { name: 'Áreas de cierre del evento' })

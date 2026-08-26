@@ -113,6 +113,7 @@ function InsumoForm({ initialValues, isSubmitting, onSubmit }: InsumoFormProps) 
           <Input
             {...controlProps}
             type="number"
+            numeric="decimal"
             min={0}
             max={99999.99}
             step="0.01"

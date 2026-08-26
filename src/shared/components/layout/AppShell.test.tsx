@@ -83,6 +83,18 @@ describe('AppShell navigation', () => {
     expect(screen.queryByRole('link', { name: 'Bitácora' })).not.toBeInTheDocument()
   })
 
+  it('hides both capitán/admin-only entries (Meseros, Bebidas y Cubaitor) for a mesero session — this web console is not the mesero product (native iOS app), so a stray mesero session sees neither', () => {
+    authenticate('mesero')
+    renderAppShell('/eventos')
+
+    expect(screen.queryByRole('link', { name: 'Meseros' })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('link', { name: 'Bebidas y Cubaitor' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Usuarios' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Bitácora' })).not.toBeInTheDocument()
+  })
+
   it('hides both admin-console entries before a session is authenticated', () => {
     renderAppShell('/eventos')
 

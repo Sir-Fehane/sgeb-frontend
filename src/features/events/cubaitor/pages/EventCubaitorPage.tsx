@@ -21,6 +21,7 @@ import { isEventoNotFoundError } from '@/features/events/services/eventsApi'
 import { parseEventId } from '@/features/events/utils/parseEventId'
 import { useBebidasQuery } from '@/features/menu/queries/useBebidasQuery'
 import { useEnvasesQuery } from '@/features/menu/queries/useEnvasesQuery'
+import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
 import { useEventRealtimeRoom } from '@/shared/realtime/useEventRealtimeRoom'
 import { Alert, Button, Caption, SectionHeading, Tabs, Text } from '@/shared/components'
@@ -32,10 +33,22 @@ function toSafeErrorMessage(error: unknown): string {
   return 'Ocurrió un error inesperado al cargar la barra.'
 }
 
-const TABS = [
-  { value: 'ordenes', label: 'Órdenes' },
-  { value: 'configuracion', label: 'Configuración' },
-] as const
+const ORDENES_TAB = { value: 'ordenes', label: 'Órdenes' } as const
+/**
+ * `GET/POST/PUT/DELETE /eventos/{id}/config-dispensado` are all
+ * `middleware.rol(['capitan', 'admin'])` on the pinned backend, unlike the
+ * Órdenes tab's dispensing endpoints (open to any authenticated role there —
+ * "quien atiende la barra, que puede ser un mesero con puesto 'barra' o el
+ * propio capitán", per `start/routes.ts`'s own comment). This tab is
+ * therefore excluded from `TABS` entirely for a non-capitán/admin session,
+ * so `activeTab` can never become `'configuracion'` and
+ * `ConfigDispensadoSection` (and its `useCubaitorsQuery`/`useInsumosQuery`/
+ * `useConfigDispensadoQuery`) never mounts for one — there is no direct URL
+ * for a single tab, so hiding it here is the complete guard, same "avoid
+ * firing queries when the role cannot access the resource" goal
+ * `UsersPage`/`WaitersPage` apply via an explicit `enabled` flag.
+ */
+const CONFIGURACION_TAB = { value: 'configuracion', label: 'Configuración' } as const
 
 /**
  * Routed at `/eventos/:id/cubaitor` (the slug `docs/FrontendArchitecture.md`
@@ -48,11 +61,23 @@ const TABS = [
  * user-facing label "Resumen operativo") stays the summary surface; this
  * page is its detailed deep-link target — reused via the "Ver resumen
  * operativo" link below, never a second copy of those counts.
+ *
+ * The page itself stays open to any authenticated role — Órdenes'
+ * dispensing endpoints are too (see `start/routes.ts`'s own comment: "quien
+ * atiende la barra, que puede ser un mesero con puesto 'barra' o el propio
+ * capitán"). Only the "Configuración" tab (`CONFIGURACION_TAB`'s own
+ * comment) is `capitán`/`admin`-only.
  */
 export function EventCubaitorPage() {
   const { id } = useParams<{ id: string }>()
   const idEvento = parseEventId(id)
   useEventRealtimeRoom(idEvento)
+
+  const session = useOidcSessionStore((state) => state.session)
+  const canManageEvent =
+    session.status === 'authenticated' &&
+    (session.user.rol === 'capitan' || session.user.rol === 'admin')
+  const TABS = canManageEvent ? [ORDENES_TAB, CONFIGURACION_TAB] : [ORDENES_TAB]
 
   const eventDetailQuery = useEventDetailQuery(idEvento)
   const bebidasQuery = useBebidasQuery()
@@ -63,7 +88,15 @@ export function EventCubaitorPage() {
     filtroEstado ? { estado: filtroEstado } : {},
   )
   const alertasQuery = useAlertasEventoQuery(idEvento)
-  const configQuery = useConfigDispensadoQuery(idEvento)
+  /**
+   * `GET /eventos/{id}/config-dispensado` is `capitán`/`admin`-only on the
+   * pinned backend — `idEvento: null` (`useConfigDispensadoQuery`'s
+   * existing `skipToken` convention) for a `mesero` session means this
+   * never fires, not even to populate `configPinById`'s read-only pin
+   * labels for Órdenes; that map simply stays empty for that session, same
+   * graceful-degradation shape any other unresolved lookup here already has.
+   */
+  const configQuery = useConfigDispensadoQuery(canManageEvent ? idEvento : null)
 
   const cambiarEstadoMutation = useCambiarEstadoOrdenMutation(idEvento ?? -1)
   const dispensarMutation = useDispensarMutation(idEvento ?? -1)
@@ -240,9 +273,9 @@ export function EventCubaitorPage() {
               reportarError={reportarError}
               onReportar={handleReportar}
             />
-          ) : (
+          ) : canManageEvent ? (
             <ConfigDispensadoSection idEvento={idEvento} />
-          )}
+          ) : null}
         </Tabs>
       </EventDetailSection>
     </div>

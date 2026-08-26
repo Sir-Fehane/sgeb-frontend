@@ -99,12 +99,22 @@ export const NAV_ITEMS: readonly NavItemConfig[] = [
     label: 'Meseros',
     href: '/meseros',
     icon: IconUserCheck,
+    // `WaitersPage`'s own `canView` gate backs this up for a direct
+    // `/meseros` visit — a `mesero` session never uses this web console
+    // (the native iOS app is its own product, docs/FrontendArchitecture.md
+    // §2/§10.3), so this destination is product-scoped to `capitan`/`admin`.
+    roles: ['admin', 'capitan'],
   },
   {
     id: 'bebidas-cubaitor',
     label: 'Bebidas y Cubaitor',
     href: '/menu',
     icon: IconGlassFull,
+    // `MenuPage`'s own `canView` gate backs this up for a direct `/menu`
+    // visit — the global catalog CRUD (bebidas/insumos/envases/Cubaitor
+    // fleet) it hosts is a `capitan`/`admin` administrative surface, same
+    // reasoning as `meseros` above.
+    roles: ['admin', 'capitan'],
   },
   {
     id: 'reportes',

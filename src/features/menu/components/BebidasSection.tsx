@@ -241,6 +241,7 @@ function RecetaForm({ bebida, isSubmitting, onSubmit }: RecetaFormProps) {
               <Input
                 {...controlProps}
                 type="number"
+                numeric="decimal"
                 min={0}
                 max={999.99}
                 step="0.01"
@@ -260,6 +261,7 @@ function RecetaForm({ bebida, isSubmitting, onSubmit }: RecetaFormProps) {
               <Input
                 {...controlProps}
                 type="number"
+                numeric="integer"
                 min={1}
                 max={255}
                 step={1}

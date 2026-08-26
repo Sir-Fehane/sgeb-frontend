@@ -294,17 +294,56 @@ export interface CreateEventoRequest {
 }
 
 /**
+ * The only field `createEvento`'s caller (`EventCreatePage`, via
+ * `useCreateEventoMutation`) actually needs from a successful `POST
+ * /eventos` — just enough to navigate to `/eventos/{idEvento}`, which then
+ * fetches the event fresh through `GET /eventos/{id}` (`fetchEventoDetalle`)
+ * for real display. See `createEvento`'s own comment for why this response
+ * is deliberately never run through `mapEventoToDetail`.
+ */
+export interface CreatedEventoResult {
+  idEvento: number
+}
+
+/**
  * Creates a real event through the shared authenticated SGEB transport.
  * The server always sets `estado: 'borrador'`
  * (`EventoService.crear`) — this function never sends and the request type
  * never accepts an `estado` field. No optimistic write: the caller only
- * learns the created event's real id/state from this response, and the
- * events list only learns of it through cache invalidation
+ * learns the created event's real id from this response, and the events
+ * list only learns of it through cache invalidation
  * (`useCreateEventoMutation`), never a locally fabricated entry.
+ *
+ * **Deliberately never calls `mapEventoToDetail`/`mapCapitan` on this
+ * response, and deliberately resolves to `CreatedEventoResult` rather than
+ * `EventDetailViewModel`.** Confirmed directly against the pinned backend
+ * (`EventoService.crear`, `app/modules/eventos/services/evento_service.ts`):
+ * unlike `.obtener()`/`.listar()` (both `.preload('capitan', ...)`),
+ * `crear()` returns `Evento.create({...})` straight from the insert, with
+ * `capitan` never preloaded — so this response's `capitan` key is entirely
+ * absent on the wire, not merely `null`. Running it through
+ * `mapEventoToDetail` (which unconditionally dereferences
+ * `record.capitan.uuid_usuario` via `mapCapitan`) throws a plain
+ * `TypeError`, which is neither a `SgebApplicationError` nor a
+ * `SgebNetworkError` — so it fell through `EventCreatePage`'s
+ * `toSafeErrorMessage` to the generic "Ocurrió un error inesperado.",
+ * misreporting a genuinely successful `SGEB-0001` creation (HTTP 201, the
+ * event really persisted) as a failure. This is the exact same
+ * incomplete-preload-on-write class of bug already fixed twice elsewhere —
+ * `changeEventoEstado`'s own comment (backend-side fix: `cambiarEstado` now
+ * re-fetches through `obtener()`) and `teamSelectionApi.ts`'s
+ * `selectParticipant` (frontend-side fix: resolves to `void`, same
+ * reasoning applied here). The shared SGEB transport
+ * (`shared/api/sgebClient.ts`) is NOT the bug — it already resolves any
+ * 2xx response (including HTTP 201/`SGEB-0001`) as a success regardless of
+ * `result.code`; this crash happened strictly after that, while turning an
+ * already-successful response into a view model. `id_evento` itself is
+ * always present (`Evento`'s own primary-key column, never a preloaded
+ * relation), so reading it directly off `envelope.data` is safe.
  */
 export async function createEvento(
   request: CreateEventoRequest,
-): Promise<EventDetailViewModel> {
+): Promise<CreatedEventoResult> {
   const envelope = await requestSgeb<EventoApiRecord>({
     url: '/eventos',
     method: 'POST',
@@ -316,7 +355,7 @@ export async function createEvento(
     // assumed, same as `fetchEventoDetalle`.
     throw new SgebNetworkError('No pudimos interpretar la respuesta del servidor.')
   }
-  return mapEventoToDetail(envelope.data)
+  return { idEvento: envelope.data.id_evento }
 }
 
 /**

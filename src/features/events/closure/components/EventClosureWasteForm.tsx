@@ -162,6 +162,7 @@ export function EventClosureWasteForm({
               <Input
                 {...controlProps}
                 type="number"
+                numeric="integer"
                 min={1}
                 max={65535}
                 step={1}
@@ -197,6 +198,7 @@ export function EventClosureWasteForm({
               <Input
                 {...controlProps}
                 type="number"
+                numeric="decimal"
                 min={0}
                 max={999999.99}
                 step="0.01"

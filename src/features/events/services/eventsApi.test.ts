@@ -229,11 +229,36 @@ const CREATE_REQUEST: CreateEventoRequest = {
   radioGeocercaM: 150,
 }
 
+/**
+ * Deliberately has NO `capitan` field — confirmed real shape of `POST
+ * /eventos`'s response (`EventoService.crear` never preloads it, unlike
+ * `.obtener()`/`.listar()`, which `RECORD` above correctly represents for
+ * the read paths). `createEvento` reads only `id_evento` from this record
+ * — see its own comment in `eventsApi.ts` for the full `TypeError`
+ * regression this fixture (and the tests below) guard against.
+ */
+const CREATE_RESPONSE_RECORD: Omit<EventoApiRecord, 'capitan'> = {
+  id_evento: 1001,
+  id_salon: 3,
+  titulo: 'Boda García',
+  tipo: 'social',
+  fecha: '2026-09-12',
+  hora_presentacion: '16:00',
+  inicio: '2026-09-12T18:00:00',
+  fin: null,
+  cupo_meseros: 12,
+  num_mesas: 20,
+  tarifa_por_mesero: 450,
+  radio_geocerca_m: 150,
+  estado: 'borrador',
+  creado_en: '2026-07-01T09:00:00',
+}
+
 describe('createEvento', () => {
   it('POSTs /eventos with exactly the given camelCase body, no extra fields', async () => {
     vi.mocked(requestSgeb).mockResolvedValue({
-      result: { code: 'SGEB-0001', message: 'Creado.' },
-      data: { ...RECORD, estado: 'borrador' },
+      result: { code: 'SGEB-0001', message: 'Registro creado correctamente.' },
+      data: CREATE_RESPONSE_RECORD,
     })
 
     await createEvento(CREATE_REQUEST)
@@ -250,16 +275,15 @@ describe('createEvento', () => {
     expect(CREATE_REQUEST).not.toHaveProperty('estado')
   })
 
-  it('maps the created Evento to the detail view model', async () => {
+  it('resolves with just the created idEvento from a real HTTP 201 SGEB-0001 response whose data has no capitan — never throws, never mistakes a real success for "Ocurrió un error inesperado." (regression: mapEventoToDetail/mapCapitan previously dereferenced the always-absent capitan field on this endpoint and crashed)', async () => {
     vi.mocked(requestSgeb).mockResolvedValue({
-      result: { code: 'SGEB-0001', message: 'Creado.' },
-      data: { ...RECORD, estado: 'borrador' },
+      result: { code: 'SGEB-0001', message: 'Registro creado correctamente.' },
+      data: CREATE_RESPONSE_RECORD,
     })
 
     const result = await createEvento(CREATE_REQUEST)
 
-    expect(result.estado).toBe('borrador')
-    expect(result.idEvento).toBe(RECORD.id_evento)
+    expect(result).toEqual({ idEvento: 1001 })
   })
 
   it('throws a SgebNetworkError if the envelope carries null data on success (defensive guard)', async () => {

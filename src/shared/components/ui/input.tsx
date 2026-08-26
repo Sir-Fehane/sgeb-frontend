@@ -1,10 +1,35 @@
-import type { ComponentPropsWithoutRef, WheelEventHandler } from 'react'
+import type {
+  ChangeEventHandler,
+  ComponentPropsWithoutRef,
+  WheelEventHandler,
+} from 'react'
 
+import {
+  sanitizeDecimalInputValue,
+  sanitizeIntegerInputValue,
+} from '@/shared/utils/numericInput'
 import { cn } from '@/shared/utils/cn'
 
 export interface InputProps extends ComponentPropsWithoutRef<'input'> {
   /** Convenience alias for `aria-invalid` — also drives the error styling. */
   invalid?: boolean
+  /**
+   * Opt-in numeric hardening for `type="number"` fields. Native
+   * `type="number"` inputs accept `1e3`/`+10`/`-10` as spec-valid values —
+   * technically legal HTML, never a valid SGEB business input (no confirmed
+   * SGEB numeric field uses scientific notation, and only a signed
+   * measurement like `latitud`/`longitud` accepts a minus sign). Runs on
+   * every value-changing DOM event — typing, paste, and autofill alike —
+   * not just keystrokes, since a keydown-only guard cannot see paste/
+   * autofill at all. `'decimal'` allows one plain decimal separator, never
+   * a sign; pass `allowNegative` alongside it for the one field family that
+   * needs a leading `-`. This is UX hardening only — the field's own Zod
+   * schema (range, integer-ness, decimal precision) remains the
+   * authoritative check at submit time, completely untouched by this prop.
+   */
+  numeric?: 'integer' | 'decimal'
+  /** Only meaningful together with `numeric="decimal"` — see `numeric`'s own comment. */
+  allowNegative?: boolean
 }
 
 /**
@@ -30,9 +55,25 @@ export function Input({
   className,
   invalid = false,
   type,
+  numeric,
+  allowNegative = false,
   onWheel,
+  onChange,
   ...props
 }: InputProps) {
+  const handleChange: ChangeEventHandler<HTMLInputElement> | undefined = numeric
+    ? (event) => {
+        const sanitized =
+          numeric === 'integer'
+            ? sanitizeIntegerInputValue(event.target.value)
+            : sanitizeDecimalInputValue(event.target.value, { allowNegative })
+        if (sanitized !== event.target.value) {
+          event.target.value = sanitized
+        }
+        onChange?.(event)
+      }
+    : onChange
+
   return (
     <input
       type={type}
@@ -45,6 +86,7 @@ export function Input({
             }
           : onWheel
       }
+      onChange={handleChange}
       className={cn(
         'border-input bg-background text-foreground flex h-10 w-full rounded-lg border px-3 py-2',
         'font-sans text-body-sm',

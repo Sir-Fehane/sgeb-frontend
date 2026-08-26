@@ -52,6 +52,7 @@ function renderContent(props: Partial<TeamSelectionContentProps> = {}) {
   render(
     <MemoryRouter>
       <TeamSelectionContent
+        canView
         evento={EVENTO}
         participants={[CANDIDATO, SELECCIONADO]}
         rowStatuses={{}}
@@ -237,5 +238,17 @@ describe('TeamSelectionContent — loading / error / unavailable', () => {
       screen.getByRole('status', { name: 'Cargando equipo del evento' }),
     ).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('renders the forbidden state, taking priority over loading/error/the roster, when canView is false', () => {
+    renderContent({ canView: false, isLoading: true, errorMessage: 'Error.' })
+
+    expect(
+      screen.getByText('No tienes permiso para ver esta sección'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(CANDIDATO.nombre)).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('status', { name: 'Cargando equipo del evento' }),
+    ).not.toBeInTheDocument()
   })
 })

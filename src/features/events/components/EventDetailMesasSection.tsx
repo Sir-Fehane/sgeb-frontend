@@ -1,7 +1,9 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 
 import { EventDetailSection } from '@/features/events/components/EventDetailSection'
+import { MesaQrDialog } from '@/features/events/components/MesaQrDialog'
 import {
   createMesaFormSchema,
   type CreateMesaFormValues,
@@ -59,11 +61,10 @@ const MESA_ESTADO_LABELS: Record<MesaViewModel['estado'], string> = {
  * assignment, a Montage concern) is a completely separate model/route,
  * never touched here.
  *
- * `codigoQr` is deliberately never rendered as a scannable QR image or
- * copyable link in this section — this branch has no confirmed, approved
- * design for surfacing it (printing, display, distribution), and
- * fabricating one would be guessing at an unapproved flow, the same
- * reasoning `EventCreateForm` already applies to `uuid_capitan`.
+ * `codigoQr` itself is never rendered inline in the row — only through the
+ * "Ver QR" action's `MesaQrDialog`, the one approved surface for it (see
+ * that component's own comment). The row never guesses at a link or QR
+ * image on its own.
  *
  * No `nfc_uid` field in the "Agregar mesa" form: confirmed reserved/unused
  * (`openapi-sgeb.yaml` v1.12.0's `Mesa.nfc_uid` description — "ningún flujo
@@ -89,6 +90,7 @@ export function EventDetailMesasSection({
     resolver: zodResolver(createMesaFormSchema),
     defaultValues: { etiqueta: '' },
   })
+  const [qrMesa, setQrMesa] = useState<MesaViewModel | null>(null)
 
   async function submit(values: CreateMesaFormValues) {
     try {
@@ -137,9 +139,21 @@ export function EventDetailMesasSection({
                 <Text size="sm" className="font-medium">
                   {mesa.etiqueta}
                 </Text>
-                <Badge tone={mesa.estado === 'libre' ? 'neutral' : 'info'}>
-                  {MESA_ESTADO_LABELS[mesa.estado]}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge tone={mesa.estado === 'libre' ? 'neutral' : 'info'}>
+                    {MESA_ESTADO_LABELS[mesa.estado]}
+                  </Badge>
+                  {mesa.codigoQr ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setQrMesa(mesa)}
+                    >
+                      Ver QR
+                    </Button>
+                  ) : null}
+                </div>
               </li>
             ))}
           </ul>
@@ -173,6 +187,8 @@ export function EventDetailMesasSection({
           </Alert>
         ) : null}
       </div>
+
+      {qrMesa ? <MesaQrDialog mesa={qrMesa} onClose={() => setQrMesa(null)} /> : null}
     </EventDetailSection>
   )
 }

@@ -17,6 +17,7 @@ import { useEventDetailQuery } from '@/features/events/queries/useEventDetailQue
 import { isEventoNotFoundError } from '@/features/events/services/eventsApi'
 import { useTeamSelectionParticipantsQuery } from '@/features/events/team-selection/queries/useTeamSelectionParticipantsQuery'
 import { parseEventId } from '@/features/events/utils/parseEventId'
+import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
 
 /**
@@ -52,9 +53,21 @@ function joinPaymentsWithNombre(
 }
 
 /**
- * Routed at /eventos/:id/pagos ("Pagos"). LIVE wiring for the payments
- * list (`GET /eventos/{id}/pagos`), closure readiness
- * (`GET /eventos/{id}/cierre`, reused directly from the Closure
+ * Routed at /eventos/:id/pagos ("Pagos") — `capitán`/`admin` only on this
+ * frontend: every payments endpoint this page calls
+ * (`GET .../pagos`, `POST .../calcular`, `PATCH /pagos/{id}/pagado`,
+ * `PATCH /pagos/{id}/fallido`) is `middleware.rol(['capitan', 'admin'])`
+ * on the pinned backend, and a `mesero` session never uses this web
+ * console at all (native iOS app, docs/FrontendArchitecture.md §2/§10.3).
+ * `canView` is the route-level backstop for a direct `/eventos/:id/pagos`
+ * visit — `EventPaymentsContent` renders `EventPaymentsForbiddenState`
+ * instead of the real payments list, and every query below is only given
+ * the real `idEvento` when `canView` is true (`skipToken` otherwise, via
+ * each hook's existing `idEvento: null` convention) so none of them ever
+ * fires for a `mesero` session.
+ *
+ * LIVE wiring for the payments list (`GET /eventos/{id}/pagos`), closure
+ * readiness (`GET /eventos/{id}/cierre`, reused directly from the Closure
  * feature), payment calculation (`POST /pagos/calcular`), and the two
  * per-payment mutations (`PATCH /pagos/{id}/pagado`,
  * `PATCH /pagos/{id}/fallido`) — the exact three captain actions this
@@ -66,10 +79,15 @@ export function EventPaymentsPage() {
   const { id } = useParams<{ id: string }>()
   const idEvento = parseEventId(id)
 
-  const eventDetailQuery = useEventDetailQuery(idEvento)
-  const readinessQuery = useEventClosureReadinessQuery(idEvento)
-  const participantsQuery = useTeamSelectionParticipantsQuery(idEvento)
-  const paymentsQuery = useEventPaymentsQuery(idEvento)
+  const session = useOidcSessionStore((state) => state.session)
+  const canView =
+    session.status === 'authenticated' &&
+    (session.user.rol === 'capitan' || session.user.rol === 'admin')
+
+  const eventDetailQuery = useEventDetailQuery(canView ? idEvento : null)
+  const readinessQuery = useEventClosureReadinessQuery(canView ? idEvento : null)
+  const participantsQuery = useTeamSelectionParticipantsQuery(canView ? idEvento : null)
+  const paymentsQuery = useEventPaymentsQuery(canView ? idEvento : null)
   const calculateMutation = useCalculateEventPaymentsMutation(idEvento ?? -1)
   const markPaidMutation = useMarkPaymentPaidMutation(idEvento ?? -1)
   const markFailedMutation = useMarkPaymentFailedMutation(idEvento ?? -1)
@@ -87,6 +105,7 @@ export function EventPaymentsPage() {
   const payments = joinPaymentsWithNombre(paymentsQuery.data ?? [], nombreByParticipacion)
 
   const isLoading =
+    canView &&
     idEvento !== null &&
     !notFound &&
     (eventDetailQuery.isPending ||
@@ -95,6 +114,7 @@ export function EventPaymentsPage() {
       paymentsQuery.isPending)
 
   const hasRealError =
+    canView &&
     idEvento !== null &&
     !notFound &&
     (eventDetailQuery.isError ||
@@ -147,6 +167,7 @@ export function EventPaymentsPage() {
   return (
     <div className="flex flex-col gap-6">
       <EventPaymentsContent
+        canView={canView}
         evento={evento}
         isLoading={isLoading}
         {...(errorMessage ? { errorMessage } : {})}

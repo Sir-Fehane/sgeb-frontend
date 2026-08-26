@@ -100,6 +100,7 @@ function renderContent(props: Partial<EventPaymentsContentProps> = {}) {
   return render(
     <MemoryRouter>
       <EventPaymentsContent
+        canView
         evento={EVENTO}
         isLoading={false}
         readiness={READINESS_READY}
@@ -510,5 +511,14 @@ describe('EventPaymentsContent — loading / error / unavailable', () => {
     expect(
       screen.getByText('Aún no se han calculado pagos para este evento.'),
     ).toBeInTheDocument()
+  })
+
+  it('renders the forbidden state, taking priority over loading/error/the payments list, when canView is false', () => {
+    renderContent({ canView: false, isLoading: true, errorMessage: 'Error.' })
+
+    expect(
+      screen.getByText('No tienes permiso para ver esta sección'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Pagos')).not.toBeInTheDocument()
   })
 })

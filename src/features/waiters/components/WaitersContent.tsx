@@ -2,6 +2,7 @@ import { WaiterList } from '@/features/waiters/components/WaiterList'
 import { WaitersEmptyState } from '@/features/waiters/components/WaitersEmptyState'
 import { WaitersErrorState } from '@/features/waiters/components/WaitersErrorState'
 import { WaitersFilters } from '@/features/waiters/components/WaitersFilters'
+import { WaitersForbiddenState } from '@/features/waiters/components/WaitersForbiddenState'
 import { WaitersLoadingState } from '@/features/waiters/components/WaitersLoadingState'
 import { WaitersPageHeader } from '@/features/waiters/components/WaitersPageHeader'
 import type {
@@ -10,6 +11,7 @@ import type {
 } from '@/features/waiters/types/waiter'
 
 export interface WaitersContentProps {
+  canView: boolean
   waiters: readonly WaiterListItemViewModel[]
   isLoading?: boolean
   errorMessage?: string
@@ -29,9 +31,13 @@ export interface WaitersContentProps {
  * invitations roster (`InvitationsSection`) is a deliberately separate
  * component rendered alongside this one, not nested inside it — an
  * invited person has no `Usuario` row yet, so it is never one of these
- * `waiters`.
+ * `waiters`. `canView` gates everything below the header behind
+ * `WaitersForbiddenState` for a non-capitán/admin session reaching
+ * `/meseros` directly by URL — same pattern `UsersContent`/`AuditLogContent`
+ * already establish.
  */
 export function WaitersContent({
+  canView,
   waiters,
   isLoading = false,
   errorMessage,
@@ -42,6 +48,14 @@ export function WaitersContent({
   onInvite,
   isInviteDisabled = false,
 }: WaitersContentProps) {
+  if (!canView) {
+    return (
+      <div className="flex flex-col gap-6">
+        <WaitersForbiddenState />
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <WaitersPageHeader onInvite={onInvite} isInviteDisabled={isInviteDisabled} />

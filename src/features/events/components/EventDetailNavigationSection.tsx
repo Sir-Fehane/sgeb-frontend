@@ -18,6 +18,19 @@ import { cn } from '@/shared/utils/cn'
 
 export interface EventDetailNavigationSectionProps {
   idEvento: number
+  /**
+   * UX-only role gate — same `capitán`/`admin` condition `EventDetailPage`'s
+   * own `canManageEvent` already computes (passed through here as
+   * `lifecycle.canManage`). Hides "Selección de equipo" and "Pagos" — both
+   * `capitán`/`admin`-only on the pinned backend (`middleware.rol(['capitan',
+   * 'admin'])` on `PATCH /participaciones/{id}/estado` and every `/pagos*`
+   * route) — for a `mesero` session, so this list never links to a
+   * destination that would only show that session a forbidden state.
+   * "Bebidas y Cubaitor" stays listed for every role: only its
+   * "Configuración" tab is restricted (`EventCubaitorPage`'s own comment),
+   * and Órdenes/dispensing stay open to any authenticated role.
+   */
+  canManageEvent: boolean
 }
 
 interface OperationNavItem {
@@ -158,16 +171,26 @@ function OperationNavList({
  */
 export function EventDetailNavigationSection({
   idEvento,
+  canManageEvent,
 }: EventDetailNavigationSectionProps) {
+  const planeacionItems = canManageEvent
+    ? PLANEACION_ITEMS
+    : PLANEACION_ITEMS.filter((item) => item.slug !== 'equipo')
+  const cierreItems = canManageEvent
+    ? CIERRE_ITEMS
+    : CIERRE_ITEMS.filter((item) => item.slug !== 'pagos')
+
   return (
     <>
-      <EventDetailSection title="Planeación">
-        <OperationNavList
-          idEvento={idEvento}
-          ariaLabel="Áreas de planeación del evento"
-          items={PLANEACION_ITEMS}
-        />
-      </EventDetailSection>
+      {planeacionItems.length > 0 ? (
+        <EventDetailSection title="Planeación">
+          <OperationNavList
+            idEvento={idEvento}
+            ariaLabel="Áreas de planeación del evento"
+            items={planeacionItems}
+          />
+        </EventDetailSection>
+      ) : null}
 
       <EventDetailSection title="Operación en vivo">
         <OperationNavList
@@ -181,7 +204,7 @@ export function EventDetailNavigationSection({
         <OperationNavList
           idEvento={idEvento}
           ariaLabel="Áreas de cierre del evento"
-          items={CIERRE_ITEMS}
+          items={cierreItems}
         />
       </EventDetailSection>
     </>

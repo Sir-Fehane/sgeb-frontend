@@ -11,6 +11,7 @@ import type {
   TeamSelectionRowStatus,
 } from '@/features/events/team-selection/types/teamSelection'
 import { parseEventId } from '@/features/events/utils/parseEventId'
+import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { isSgebApplicationError, isSgebNetworkError } from '@/shared/api/sgebApiError'
 import { useEventRealtimeRoom } from '@/shared/realtime/useEventRealtimeRoom'
 
@@ -28,9 +29,23 @@ function toSafeErrorMessage(error: unknown): string {
 }
 
 /**
- * Routed at /eventos/:id/equipo (W-05 "Seleccionar equipo"). Live wiring
- * layer around `TeamSelectionContent`, mirroring `EventDetailPage`'s
- * relationship to `EventDetailContent`.
+ * Routed at /eventos/:id/equipo (W-05 "Seleccionar equipo") — `capitán`/
+ * `admin` only on this frontend: the pinned backend's own
+ * `PATCH /participaciones/{id}/estado` (this screen's core write action) is
+ * `middleware.rol(['capitan', 'admin'])`, and a `mesero` session never uses
+ * this web console at all (native iOS app, docs/FrontendArchitecture.md
+ * §2/§10.3). `canView` is the route-level backstop for a direct
+ * `/eventos/:id/equipo` visit — `TeamSelectionContent` renders
+ * `TeamSelectionForbiddenState` instead of the real roster, and
+ * `eventDetailQuery`/`participantsQuery` are only given the real
+ * `idEvento` when `canView` is true (`skipToken` otherwise, via
+ * `useEventDetailQuery`/`useTeamSelectionParticipantsQuery`'s existing
+ * `idEvento: null` convention) so neither request ever fires for a `mesero`
+ * session — same "avoid firing queries the role can't act on" goal
+ * `UsersPage`/`WaitersPage` already establish via an explicit `enabled` flag.
+ *
+ * Live wiring layer around `TeamSelectionContent`, mirroring
+ * `EventDetailPage`'s relationship to `EventDetailContent`.
  *
  * Reuses `useEventDetailQuery` for the event header/cupo context instead
  * of a second, independent fetch — same query key as the Event Detail
@@ -54,8 +69,13 @@ export function TeamSelectionPage() {
   const idEvento = parseEventId(id)
   useEventRealtimeRoom(idEvento)
 
-  const eventDetailQuery = useEventDetailQuery(idEvento)
-  const participantsQuery = useTeamSelectionParticipantsQuery(idEvento)
+  const session = useOidcSessionStore((state) => state.session)
+  const canView =
+    session.status === 'authenticated' &&
+    (session.user.rol === 'capitan' || session.user.rol === 'admin')
+
+  const eventDetailQuery = useEventDetailQuery(canView ? idEvento : null)
+  const participantsQuery = useTeamSelectionParticipantsQuery(canView ? idEvento : null)
   const selectParticipantMutation = useSelectParticipantMutation(idEvento ?? -1)
 
   const [rowStatuses, setRowStatuses] = useState<Record<number, TeamSelectionRowStatus>>(
@@ -66,8 +86,11 @@ export function TeamSelectionPage() {
   const notFound = idEvento === null || isEventoNotFoundError(eventDetailQuery.error)
   const evento = notFound ? null : (eventDetailQuery.data ?? null)
   const isLoading =
-    idEvento !== null && (eventDetailQuery.isPending || participantsQuery.isPending)
+    canView &&
+    idEvento !== null &&
+    (eventDetailQuery.isPending || participantsQuery.isPending)
   const hasRealError =
+    canView &&
     idEvento !== null &&
     !notFound &&
     (eventDetailQuery.isError || participantsQuery.isError)
@@ -120,6 +143,7 @@ export function TeamSelectionPage() {
 
   return (
     <TeamSelectionContent
+      canView={canView}
       evento={evento}
       isLoading={isLoading}
       {...(errorMessage ? { errorMessage } : {})}

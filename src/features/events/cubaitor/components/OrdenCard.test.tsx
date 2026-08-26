@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
 import {
@@ -94,5 +94,17 @@ describe('OrdenCard — reload reconstruction from query data', () => {
 
     expect(screen.getByText(/Cubaitor: 45 ml/)).toBeInTheDocument()
     expect(screen.queryByText(/pin \d+, 45 ml/)).not.toBeInTheDocument()
+  })
+
+  it('hardens the manual "Segundos reales" report against scientific notation — "1e3" never reports as 1000', () => {
+    const onReportar = vi.fn()
+    renderCard({ onReportar })
+
+    fireEvent.change(screen.getByLabelText('Segundos reales'), {
+      target: { value: '1e3' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar resultado' }))
+
+    expect(onReportar).toHaveBeenCalledWith(901, 13)
   })
 })

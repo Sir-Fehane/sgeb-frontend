@@ -7,6 +7,7 @@ import {
   useDeactivateCubaitorMutation,
   useUpdateCubaitorMutation,
 } from '@/features/cubaitor/queries/useCubaitorMutations'
+import { useCubaitorEstadoQuery } from '@/features/cubaitor/queries/useCubaitorEstadoQuery'
 import { useCubaitorsQuery } from '@/features/cubaitor/queries/useCubaitorsQuery'
 import {
   CUBAITOR_ESTADOS,
@@ -50,13 +51,6 @@ function toSafeErrorMessage(error: unknown): string {
   return 'Ocurrió un error inesperado.'
 }
 
-/**
- * Honest, non-live rendering of `ultimaConexion` — never a colored "En
- * línea"/"Fuera de línea" badge. See `types/cubaitor.ts`'s module comment:
- * `en_linea`/heartbeat is confirmed dead in production (no route ever
- * writes it), so this fleet list must not claim to know whether a device is
- * currently reachable. This is plain informational text only.
- */
 function formatUltimaConexion(ultimaConexion: string | null): string {
   if (ultimaConexion === null) {
     return 'Última conexión: nunca reportada'
@@ -66,6 +60,28 @@ function formatUltimaConexion(ultimaConexion: string | null): string {
     timeStyle: 'short',
   })
   return `Última conexión: ${formatted}`
+}
+
+/**
+ * Per-device online/offline badge, backed by `GET /cubaitors/{id}/estado`
+ * (`useCubaitorEstadoQuery`) — a separate request per row since no bulk
+ * "estado de la flota" endpoint exists. While that request is loading or
+ * fails, this renders nothing rather than guessing a status — the existing
+ * `formatUltimaConexion` text above stays the fallback source of truth for
+ * connectivity in that case.
+ */
+function CubaitorLiveStatusBadge({ idCubaitor }: { idCubaitor: number }) {
+  const estadoQuery = useCubaitorEstadoQuery(idCubaitor)
+
+  if (!estadoQuery.data) {
+    return null
+  }
+
+  return estadoQuery.data.enLinea ? (
+    <Badge tone="success">En línea</Badge>
+  ) : (
+    <Badge tone="neutral">Fuera de línea</Badge>
+  )
 }
 
 function parseOptionalHostIp(value: string): string | null {
@@ -118,6 +134,7 @@ function CubaitorCreateForm({ isSubmitting, onSubmit }: CubaitorCreateFormProps)
           <Input
             {...controlProps}
             type="number"
+            numeric="integer"
             min={1}
             max={16}
             step={1}
@@ -183,6 +200,7 @@ function CubaitorEditForm({
           <Input
             {...controlProps}
             type="number"
+            numeric="integer"
             min={1}
             max={16}
             step={1}
@@ -227,10 +245,10 @@ function CubaitorEditForm({
  * `Bebidas y Cubaitor` global catalog — Cubaitor (device fleet) tab. Real
  * `GET/POST/PUT /cubaitors`, `DELETE /cubaitors/{id}`.
  *
- * Deliberately never renders an "En línea"/"Fuera de línea" indicator: see
- * `formatUltimaConexion` above and `types/cubaitor.ts`'s module comment for
- * why `en_linea`/heartbeat cannot be trusted as a live signal on the pinned
- * backend today.
+ * Each row's "En línea"/"Fuera de línea" badge (`CubaitorLiveStatusBadge`)
+ * is its own `GET /cubaitors/{id}/estado` request — see that component's
+ * own comment and `types/cubaitor.ts`'s module comment for the heartbeat
+ * contract behind `enLinea`.
  */
 export function CubaitorFleetSection() {
   const cubaitorsQuery = useCubaitorsQuery()
@@ -361,6 +379,7 @@ export function CubaitorFleetSection() {
                       <Badge tone={CUBAITOR_ESTADO_TONE[cubaitor.estado]}>
                         {CUBAITOR_ESTADO_LABELS[cubaitor.estado]}
                       </Badge>
+                      <CubaitorLiveStatusBadge idCubaitor={cubaitor.idCubaitor} />
                     </div>
                     <Text size="sm" className="text-muted-foreground">
                       <span className="font-mono">{cubaitor.mac}</span>

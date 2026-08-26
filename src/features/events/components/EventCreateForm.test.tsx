@@ -239,6 +239,30 @@ describe('EventCreateForm', () => {
     expect(payload).not.toHaveProperty('comanda_url')
   })
 
+  it('hardens numeric fields against scientific notation and disallowed signs — "1e3" never submits as 1000, "-50" never submits negative', async () => {
+    const user = userEvent.setup()
+    const { onSubmit } = renderForm()
+
+    await fillValidForm(user)
+    // "1e3" is a spec-valid `type="number"` value the browser would
+    // otherwise interpret as the exponential 1000 — `numeric="integer"`
+    // must strip the "e" instead, submitting 13.
+    fireEvent.change(screen.getByLabelText(/^Cupo de meseros/), {
+      target: { value: '1e3' },
+    })
+    // tarifa_por_mesero has no valid negative range (TARIFA_MIN = 0) —
+    // `numeric="decimal"` must strip the sign, submitting 50.
+    fireEvent.change(screen.getByLabelText(/^Tarifa por mesero/), {
+      target: { value: '-50' },
+    })
+    await user.click(screen.getByRole('button', { name: 'Crear evento' }))
+
+    expect(onSubmit).toHaveBeenCalledOnce()
+    const [payload] = onSubmit.mock.calls[0] as [Record<string, unknown>]
+    expect(payload.cupo_meseros).toBe(13)
+    expect(payload.tarifa_por_mesero).toBe(50)
+  })
+
   it('presents radio_geocerca_m as a real-world arrival radius — helper copy, an "m" unit, and the same 10-1000 range', () => {
     renderForm()
 

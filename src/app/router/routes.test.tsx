@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { useState, type ReactNode } from 'react'
 import { RouterProvider } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -420,8 +421,8 @@ describe('legacy SGEB auth routes are no longer registered (feature/app-shell-ha
   )
 })
 
-describe('/ redirects into the authenticated shell (feature/app-shell-hardening)', () => {
-  it('an authenticated session at / lands on /panel, not the design-system preview', async () => {
+describe('/ is the public LandingPage, not a guarded AppShellLayout route (feature/pre-release-polish-and-hardening)', () => {
+  it('an authenticated session at / redirects to /panel instead of showing the login prompt', async () => {
     await renderAt('/')
 
     await waitFor(() => {
@@ -430,28 +431,47 @@ describe('/ redirects into the authenticated shell (feature/app-shell-hardening)
     expect(
       await screen.findByRole('navigation', { name: 'Navegación principal' }),
     ).toBeInTheDocument()
-    expect(await screen.findByText('Próximos eventos')).toBeInTheDocument()
+    expect(mockedBeginAuthorization).not.toHaveBeenCalled()
+  })
+
+  it('an anonymous session at / renders the public landing page — no auto-redirect into /authorize, no AppShell chrome', async () => {
+    useOidcSessionStore.getState().setAnonymous()
+
+    await renderAt('/')
+
+    expect(
+      await screen.findByRole('button', { name: 'Iniciar sesión' }),
+    ).toBeInTheDocument()
+    expect(mockedBeginAuthorization).not.toHaveBeenCalled()
+    expect(
+      screen.queryByRole('navigation', { name: 'Navegación principal' }),
+    ).not.toBeInTheDocument()
     expect(
       screen.queryByText('SGEB frontend foundation is running'),
     ).not.toBeInTheDocument()
   })
 
-  it('an anonymous session at / never renders the design-system preview and starts authorization exactly once', async () => {
+  it('clicking "Iniciar sesión" starts the real, unmodified SSO authorization flow', async () => {
     useOidcSessionStore.getState().setAnonymous()
     mockedBeginAuthorization.mockResolvedValue('https://auth.sgeb.mediocres.mx/authorize')
+    const user = userEvent.setup()
+
+    await renderAt('/')
+    await user.click(await screen.findByRole('button', { name: 'Iniciar sesión' }))
+
+    expect(mockedBeginAuthorization).toHaveBeenCalledOnce()
+    expect(mockedBeginAuthorization).toHaveBeenCalledWith()
+  })
+
+  it('an idle (never-bootstrapped) session at / renders the landing page too, not a redirect or a spinner', async () => {
+    useOidcSessionStore.getState().reset()
 
     await renderAt('/')
 
-    await waitFor(() => {
-      expect(mockedBeginAuthorization).toHaveBeenCalledOnce()
-    })
-    expect(mockedBeginAuthorization).toHaveBeenCalledWith({ returnTo: '/' })
     expect(
-      screen.queryByText('SGEB frontend foundation is running'),
-    ).not.toBeInTheDocument()
-    expect(
-      screen.queryByRole('navigation', { name: 'Navegación principal' }),
-    ).not.toBeInTheDocument()
+      await screen.findByRole('button', { name: 'Iniciar sesión' }),
+    ).toBeInTheDocument()
+    expect(mockedBeginAuthorization).not.toHaveBeenCalled()
   })
 })
 

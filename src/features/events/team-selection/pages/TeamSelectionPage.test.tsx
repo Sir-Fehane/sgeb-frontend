@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import type { EventoApiRecord } from '@/features/events/services/eventsApi'
 import { TeamSelectionPage } from '@/features/events/team-selection/pages/TeamSelectionPage'
 import type { ParticipacionApiRecord } from '@/features/events/team-selection/services/teamSelectionApi'
@@ -21,8 +22,23 @@ vi.mock('@/shared/realtime/useEventRealtimeRoom', () => ({
   useEventRealtimeRoom: vi.fn(),
 }))
 
+function authenticate(rol: 'admin' | 'capitan' | 'mesero' = 'capitan') {
+  useOidcSessionStore.getState().setAuthenticated({
+    accessToken: 'test-access-token',
+    accessTokenExpiresAt: Date.now() + 900_000,
+    user: {
+      sub: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      name: 'Test User',
+      email: 'test@example.com',
+      rol,
+    },
+  })
+}
+
 beforeEach(() => {
   vi.mocked(requestSgeb).mockReset()
+  useOidcSessionStore.getState().reset()
+  authenticate('capitan')
 })
 
 function successEnvelope<T>(data: T): ApiEnvelope<T> {
@@ -320,5 +336,18 @@ describe('TeamSelectionPage', () => {
         .mock.calls.find((call) => call[0].method === 'PATCH')
       expect(patchCall?.[0].data).toEqual({ estado: 'seleccionado' })
     })
+  })
+
+  it('shows the forbidden state, and never fetches the event or the roster, for a mesero session — this web console is not the mesero product (native iOS app)', async () => {
+    authenticate('mesero')
+    fakeTransport(1001, { participaciones: [CANDIDATO_RECORD] })
+
+    renderAt('/eventos/1001/equipo')
+
+    expect(
+      await screen.findByText('No tienes permiso para ver esta sección'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Juan Pérez')).not.toBeInTheDocument()
+    expect(requestSgeb).not.toHaveBeenCalled()
   })
 })

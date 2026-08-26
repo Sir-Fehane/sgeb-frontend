@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useForm } from 'react-hook-form'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -334,6 +334,28 @@ describe('SalonLocationPicker manual coordinate fallback', () => {
     expect(onSubmit).toHaveBeenCalledWith(
       expect.objectContaining({ latitud: 19, longitud: -99 }),
     )
+  })
+
+  it('hardens manual latitud/longitud against scientific notation while still allowing a real negative sign', async () => {
+    const user = userEvent.setup()
+    const onSubmit = vi.fn()
+    render(<Harness onSubmit={onSubmit} />)
+
+    await openManualFallback(user)
+    // "1e3" is a spec-valid `type="number"` value the browser would
+    // otherwise interpret as the exponential 1000 — the field must strip
+    // the "e" instead, ending up at 13.
+    fireEvent.change(screen.getByLabelText(/^Latitud/), {
+      target: { value: '1e3' },
+    })
+    // A genuine leading "-" must still work — latitud/longitud are the one
+    // signed field family in this codebase.
+    fireEvent.change(screen.getByLabelText(/^Longitud/), {
+      target: { value: '-99.5' },
+    })
+
+    expect(screen.getByLabelText(/^Latitud/)).toHaveValue(13)
+    expect(screen.getByLabelText(/^Longitud/)).toHaveValue(-99.5)
   })
 
   it('keeps the existing -90..90/-180..180 validation for manual coordinates and blocks submission', async () => {

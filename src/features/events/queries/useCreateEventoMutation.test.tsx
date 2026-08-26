@@ -40,16 +40,18 @@ const REQUEST: CreateEventoRequest = {
   radioGeocercaM: 150,
 }
 
-const CREATED_RECORD: EventoApiRecord = {
+/**
+ * Deliberately has NO `capitan` field — confirmed real shape of `POST
+ * /eventos`'s response (`EventoService.crear` returns `Evento.create({...})`
+ * straight from the insert, never `.preload('capitan')`, unlike
+ * `.obtener()`/`.listar()`). `createEvento`'s own comment documents this;
+ * these fixtures must never silently reintroduce `capitan` here — that
+ * previously masked the real `TypeError` bug (`mapCapitan` dereferencing an
+ * absent field) that this file's own regression test below guards against.
+ */
+const CREATED_RECORD: Omit<EventoApiRecord, 'capitan'> = {
   id_evento: 5001,
   id_salon: 1,
-  capitan: {
-    uuid_usuario: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-    nombre: 'Capitán',
-    apellido_paterno: 'Prueba',
-    apellido_materno: null,
-    correo: 'capitan.prueba@example.com',
-  },
   titulo: 'Evento nuevo',
   tipo: 'social',
   fecha: '2099-01-10',
@@ -85,9 +87,9 @@ describe('useCreateEventoMutation', () => {
     })
   })
 
-  it('resolves with the created event, already in its real borrador state', async () => {
+  it('resolves with the created event id, from a real HTTP 201 SGEB-0001 response — never a false "unexpected error" (regression: mapCapitan previously threw on this endpoint\'s capitan-less response, see createEvento\'s own comment)', async () => {
     vi.mocked(requestSgeb).mockResolvedValue({
-      result: { code: 'SGEB-0001', message: 'Creado.' },
+      result: { code: 'SGEB-0001', message: 'Registro creado correctamente.' },
       data: CREATED_RECORD,
     })
     const queryClient = new QueryClient()
@@ -98,8 +100,8 @@ describe('useCreateEventoMutation', () => {
     result.current.mutate(REQUEST)
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
-    expect(result.current.data?.idEvento).toBe(5001)
-    expect(result.current.data?.estado).toBe('borrador')
+    expect(result.current.data).toEqual({ idEvento: 5001 })
+    expect(result.current.error).toBeNull()
   })
 
   it('invalidates the events list on success, never the detail cache (nothing to invalidate for a new event)', async () => {

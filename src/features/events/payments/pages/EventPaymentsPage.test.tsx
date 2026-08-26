@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { EventPaymentsPage } from '@/features/events/payments/pages/EventPaymentsPage'
 import type { PagoApiRecord } from '@/features/events/payments/services/paymentsApi'
 import type { EventoApiRecord } from '@/features/events/services/eventsApi'
@@ -18,8 +19,23 @@ vi.mock('@/shared/api/sgebClient', () => ({
   requestSgeb: vi.fn(),
 }))
 
+function authenticate(rol: 'admin' | 'capitan' | 'mesero' = 'capitan') {
+  useOidcSessionStore.getState().setAuthenticated({
+    accessToken: 'test-access-token',
+    accessTokenExpiresAt: Date.now() + 900_000,
+    user: {
+      sub: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      name: 'Test User',
+      email: 'test@example.com',
+      rol,
+    },
+  })
+}
+
 beforeEach(() => {
   vi.mocked(requestSgeb).mockReset()
+  useOidcSessionStore.getState().reset()
+  authenticate('capitan')
 })
 
 function successEnvelope<T>(data: T): ApiEnvelope<T> {
@@ -449,5 +465,22 @@ describe('EventPaymentsPage', () => {
     expect(
       screen.queryByRole('button', { name: /Aprobar todos/i }),
     ).not.toBeInTheDocument()
+  })
+
+  it('shows the forbidden state, and never calls the transport at all, for a mesero session — this web console is not the mesero product (native iOS app)', async () => {
+    authenticate('mesero')
+    fakeTransport(1001, {
+      readiness: READINESS_READY,
+      participaciones: PARTICIPACIONES,
+      pagos: [PAGO_PENDIENTE, PAGO_PAGADO],
+    })
+
+    renderAt('/eventos/1001/pagos')
+
+    expect(
+      await screen.findByText('No tienes permiso para ver esta sección'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Ana López')).not.toBeInTheDocument()
+    expect(requestSgeb).not.toHaveBeenCalled()
   })
 })

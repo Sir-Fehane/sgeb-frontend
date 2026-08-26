@@ -7,6 +7,7 @@ import { EventPaymentsBlockedSection } from '@/features/events/payments/componen
 import { EventPaymentsCalculateSection } from '@/features/events/payments/components/EventPaymentsCalculateSection'
 import { EventPaymentsErrorState } from '@/features/events/payments/components/EventPaymentsErrorState'
 import { EventPaymentsFilter } from '@/features/events/payments/components/EventPaymentsFilter'
+import { EventPaymentsForbiddenState } from '@/features/events/payments/components/EventPaymentsForbiddenState'
 import { EventPaymentsHeader } from '@/features/events/payments/components/EventPaymentsHeader'
 import { EventPaymentsLoadingState } from '@/features/events/payments/components/EventPaymentsLoadingState'
 import { EventPaymentsSummarySection } from '@/features/events/payments/components/EventPaymentsSummarySection'
@@ -20,6 +21,7 @@ import type { PaymentFilterValue } from '@/features/events/payments/utils/paymen
 import type { EventDetailViewModel } from '@/features/events/types/event'
 
 export interface EventPaymentsContentProps {
+  canView: boolean
   /** `null` means "not found" — a real `SGEB-3001` 404 or a malformed route id, not a loading gap. Reuses `EventDetailUnavailableState`. */
   evento: EventDetailViewModel | null
   isLoading?: boolean
@@ -40,8 +42,13 @@ export interface EventPaymentsContentProps {
  * error / unavailable, selected purely from props. No bank/gateway
  * integration, no bulk `/pagos/aprobar`, no payment-amount formula
  * anywhere in this composition — see this feature's README.
+ *
+ * `canView` gates everything below behind `EventPaymentsForbiddenState` for
+ * a non-capitán/admin session reaching `/eventos/:id/pagos` directly by
+ * URL — same pattern `UsersContent`/`WaitersContent` already establish.
  */
 export function EventPaymentsContent({
+  canView,
   evento,
   isLoading = false,
   errorMessage,
@@ -54,6 +61,10 @@ export function EventPaymentsContent({
   onMarkFailed,
 }: EventPaymentsContentProps) {
   const [filter, setFilter] = useState<PaymentFilterValue>('todos')
+
+  if (!canView) {
+    return <EventPaymentsForbiddenState />
+  }
 
   if (isLoading) {
     return <EventPaymentsLoadingState />

@@ -114,7 +114,7 @@ export async function deactivateCubaitor(idCubaitor: number): Promise<void> {
   await requestSgeb<null>({ url: `/cubaitors/${String(idCubaitor)}`, method: 'DELETE' })
 }
 
-/** `GET /cubaitors/{id}/estado` — see `types/cubaitor.ts`'s module comment: `enLinea` is not a trustworthy live signal on the pinned backend. Always HTTP 200 even when the device is down (`SGEB-5003`, informational, never surfaced as a request failure). */
+/** `GET /cubaitors/{id}/estado` — see `types/cubaitor.ts`'s module comment for `enLinea`'s heartbeat-threshold semantics. Always HTTP 200 even when the device is offline (`SGEB-5003`, informational, never surfaced as a request failure). */
 export async function fetchCubaitorEstado(
   idCubaitor: number,
   signal?: AbortSignal,

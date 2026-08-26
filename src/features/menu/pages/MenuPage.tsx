@@ -4,6 +4,8 @@ import { CubaitorFleetSection } from '@/features/cubaitor/components/CubaitorFle
 import { BebidasSection } from '@/features/menu/components/BebidasSection'
 import { EnvasesSection } from '@/features/menu/components/EnvasesSection'
 import { InsumosSection } from '@/features/menu/components/InsumosSection'
+import { MenuForbiddenState } from '@/features/menu/components/MenuForbiddenState'
+import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { PageTitle, Tabs, Text, type TabItem } from '@/shared/components'
 
 const MENU_TABS: readonly TabItem[] = [
@@ -14,10 +16,22 @@ const MENU_TABS: readonly TabItem[] = [
 ]
 
 /**
- * Routed at /menu (routing wiring owned elsewhere — see this branch's task
- * spec). The GLOBAL catalog screen: bebidas/insumos/envases and the
- * Cubaitor device fleet, all scoped catalog-wide, never to a specific
- * event — distinct from `features/events/cubaitor/`'s event-scoped live bar
+ * Routed at /menu — `capitán`/`admin` only on this frontend: a `mesero`
+ * session never uses this web console at all (the native iOS app is the
+ * mesero product, docs/FrontendArchitecture.md §2/§10.3), so this whole
+ * administrative catalog screen is product-scoped away from it, same
+ * reasoning `UsersPage`/`WaitersPage` already apply to their own routes.
+ * `NAV_ITEMS` hides the sidebar entry for a `mesero` session
+ * (`shared/components/layout/nav-items.ts`); `canView` here is the
+ * route-level backstop for a direct `/menu` visit — none of the four
+ * sections (and none of their queries/mutations) ever mount for a
+ * non-capitán/admin session, which is what "avoid firing queries when the
+ * role cannot access the resource" reduces to here, since each section owns
+ * its own query internally rather than receiving one as a prop.
+ *
+ * The GLOBAL catalog screen: bebidas/insumos/envases and the Cubaitor
+ * device fleet, all scoped catalog-wide, never to a specific event —
+ * distinct from `features/events/cubaitor/`'s event-scoped live bar
  * operation (dispensing, pin configuration, orders), which lives on the
  * event's own dashboard instead. Only the active tab's section mounts, so
  * switching tabs is what triggers that domain's query — not all four on
@@ -25,6 +39,11 @@ const MENU_TABS: readonly TabItem[] = [
  */
 export function MenuPage() {
   const [activeTab, setActiveTab] = useState<string>('bebidas')
+
+  const session = useOidcSessionStore((state) => state.session)
+  const canView =
+    session.status === 'authenticated' &&
+    (session.user.rol === 'capitan' || session.user.rol === 'admin')
 
   return (
     <div className="flex flex-col gap-6">
@@ -37,12 +56,16 @@ export function MenuPage() {
         </Text>
       </div>
 
-      <Tabs items={MENU_TABS} value={activeTab} onChange={setActiveTab}>
-        {activeTab === 'bebidas' ? <BebidasSection /> : null}
-        {activeTab === 'insumos' ? <InsumosSection /> : null}
-        {activeTab === 'envases' ? <EnvasesSection /> : null}
-        {activeTab === 'cubaitor' ? <CubaitorFleetSection /> : null}
-      </Tabs>
+      {!canView ? (
+        <MenuForbiddenState />
+      ) : (
+        <Tabs items={MENU_TABS} value={activeTab} onChange={setActiveTab}>
+          {activeTab === 'bebidas' ? <BebidasSection /> : null}
+          {activeTab === 'insumos' ? <InsumosSection /> : null}
+          {activeTab === 'envases' ? <EnvasesSection /> : null}
+          {activeTab === 'cubaitor' ? <CubaitorFleetSection /> : null}
+        </Tabs>
+      )}
     </div>
   )
 }

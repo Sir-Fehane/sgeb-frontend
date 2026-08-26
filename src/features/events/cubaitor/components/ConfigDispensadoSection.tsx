@@ -111,6 +111,7 @@ function ConfigForm({ cubaitors, insumos, isSubmitting, onSubmit }: ConfigFormPr
           <Input
             {...controlProps}
             type="number"
+            numeric="integer"
             min={0}
             max={39}
             disabled={isSubmitting}
@@ -127,6 +128,7 @@ function ConfigForm({ cubaitors, insumos, isSubmitting, onSubmit }: ConfigFormPr
           <Input
             {...controlProps}
             type="number"
+            numeric="decimal"
             min={0.01}
             max={999.99}
             step="0.01"
@@ -144,6 +146,7 @@ function ConfigForm({ cubaitors, insumos, isSubmitting, onSubmit }: ConfigFormPr
           <Input
             {...controlProps}
             type="number"
+            numeric="integer"
             min={1}
             max={65535}
             disabled={isSubmitting}
@@ -190,6 +193,7 @@ function RecargaForm({
           <Input
             {...controlProps}
             type="number"
+            numeric="integer"
             min={1}
             max={65535}
             disabled={isSubmitting}
@@ -238,6 +242,7 @@ function RecalibrarForm({
           <Input
             {...controlProps}
             type="number"
+            numeric="decimal"
             min={0.01}
             max={999.99}
             step="0.01"

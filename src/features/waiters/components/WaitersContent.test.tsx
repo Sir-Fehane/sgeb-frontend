@@ -24,6 +24,7 @@ function renderContent(overrides: Partial<WaitersContentProps> = {}) {
   const onInvite = overrides.onInvite ?? vi.fn()
   render(
     <WaitersContent
+      canView
       waiters={SAMPLE_WAITERS}
       filters={DEFAULT_WAITERS_FILTER_STATE}
       onFilterChange={onFilterChange}
@@ -104,5 +105,17 @@ describe('WaitersContent', () => {
     renderContent({ onSelectWaiter: vi.fn() })
 
     expect(screen.getAllByRole('button')).toHaveLength(SAMPLE_WAITERS.length + 2)
+  })
+
+  it('renders the forbidden state instead of the roster when canView is false', () => {
+    renderContent({ canView: false })
+
+    expect(
+      screen.getByText('No tienes permiso para ver esta sección'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(SAMPLE_WAITERS[0]!.nombreCompleto)).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Invitar mesero' }),
+    ).not.toBeInTheDocument()
   })
 })

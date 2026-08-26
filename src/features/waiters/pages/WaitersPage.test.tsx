@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { useOidcSessionStore } from '@/features/oidc-client/session/sessionStore'
 import { WaitersPage } from '@/features/waiters/pages/WaitersPage'
 import type { InvitacionApiRecord } from '@/features/waiters/services/invitationsApi'
 import type { RolApiRecord } from '@/features/waiters/services/rolesApi'
@@ -15,8 +16,23 @@ vi.mock('@/shared/api/sgebClient', () => ({
   requestSgeb: vi.fn(),
 }))
 
+function authenticate(rol: 'admin' | 'capitan' | 'mesero' = 'capitan') {
+  useOidcSessionStore.getState().setAuthenticated({
+    accessToken: 'test-access-token',
+    accessTokenExpiresAt: Date.now() + 900_000,
+    user: {
+      sub: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      name: 'Test User',
+      email: 'test@example.com',
+      rol,
+    },
+  })
+}
+
 beforeEach(() => {
   vi.mocked(requestSgeb).mockReset()
+  useOidcSessionStore.getState().reset()
+  authenticate('capitan')
 })
 
 const WAITER_RECORD: UsuarioApiRecord = {
@@ -340,5 +356,30 @@ describe('WaitersPage', () => {
     expect(
       screen.getByDisplayValue('mx.mediocres.sgeb://registro?token=fake-token-2'),
     ).toBeInTheDocument()
+  })
+
+  it('shows the forbidden state, and never fetches GET /usuarios or GET /usuarios/invitaciones, for a mesero session — this web console is not the mesero product (native iOS app)', async () => {
+    authenticate('mesero')
+    mockBaseRequests()
+    renderPage()
+
+    expect(
+      await screen.findByText('No tienes permiso para ver esta sección'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Juana Pérez López')).not.toBeInTheDocument()
+    expect(requestSgeb).not.toHaveBeenCalledWith(
+      expect.objectContaining({ url: '/usuarios' }),
+    )
+    expect(requestSgeb).not.toHaveBeenCalledWith(
+      expect.objectContaining({ url: '/usuarios/invitaciones' }),
+    )
+  })
+
+  it('renders the real roster for an admin session too — Meseros is not admin-exclusive like Usuarios/Bitácora', async () => {
+    authenticate('admin')
+    mockBaseRequests()
+    renderPage()
+
+    expect(await screen.findByText('Juana Pérez López')).toBeInTheDocument()
   })
 })

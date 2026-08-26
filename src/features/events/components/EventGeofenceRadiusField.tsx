@@ -71,6 +71,7 @@ export function EventGeofenceRadiusField({
           <Input
             {...controlProps}
             type="number"
+            numeric="integer"
             inputMode="numeric"
             min={RADIO_GEOCERCA_MIN}
             max={RADIO_GEOCERCA_MAX}

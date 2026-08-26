@@ -1,4 +1,4 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom'
+import { createBrowserRouter } from 'react-router-dom'
 
 import { RouteErrorBoundary } from '@/features/route-errors/components/RouteErrorBoundary'
 import { RouteHydrateFallback } from '@/features/route-errors/components/RouteHydrateFallback'
@@ -12,17 +12,23 @@ import { RouteHydrateFallback } from '@/features/route-errors/components/RouteHy
  * docs/FrontendArchitecture.md §17 for the full planned route map. The
  * private authentication route boundary (`feature/private-route-guard`)
  * lives at `AppShellLayout`, not here — see that component's own doc
- * comment. `/dev/design-system`, `/publico/mesas/:codigoQr`, and
- * `/auth/callback` are deliberately registered as siblings of the
+ * comment. `/dev/design-system`, `/publico/mesas/:codigoQr`, `/auth/callback`,
+ * and `/` (`feature/pre-release-polish-and-hardening`, see `LandingPage`'s
+ * own doc comment) are deliberately registered as siblings of the
  * `AppShellLayout` route, not children of it, so none of them is ever
  * gated by the private guard. The legacy, frozen `/login`/
  * `/verificacion-2fa`/`/recuperar`/`/recuperar/:token` family (pre-dating
  * the finalized OIDC/PKCE architecture) was removed on this same branch —
  * SGEB has never owned auth UI; that belongs to the separate SSO project.
- * `/` is now the `AppShellLayout` boundary's own `index` route (below), not
- * a sibling — so the root path resolves through the exact same
- * authenticated-or-redirect-to-authorization guard as every other private
- * route, with no second bootstrap/redirect path invented for it.
+ * `/` is now the public `LandingPage`, not `AppShellLayout`'s own guarded
+ * `index` route as it briefly was — an anonymous visit to `/` no longer
+ * invisibly redirects straight into `/authorize` with nothing rendered
+ * first. `AppShellLayout` itself has no `index` child anymore; every one of
+ * its children is a real, named path (`panel`, `eventos`, ...) — the
+ * authenticated app's own default landing spot is `/panel`
+ * (`OIDC_DEFAULT_RETURN_TO`), reached by clicking "Iniciar sesión" on the
+ * landing page or by any deep link's own `returnTo`, never by visiting `/`
+ * itself.
  *
  * `errorElement`/`hydrateFallbackElement` are attached directly (not via
  * each route's own `lazy()` loader) so both stay effective even if a
@@ -47,11 +53,12 @@ export const router = createBrowserRouter([
      * `feature/app-shell-hardening` (both stay real, but only as the
      * *event-scoped* `eventos/:id/operacion-en-vivo`/`eventos/:id/pagos`
      * children below, reached from Event Detail, never from the global
-     * sidebar — see that file's own comment for why). `index` (this
-     * layout's own root, i.e. `/`) simply redirects to `panel` — the
-     * `AppShellLayout` guard above it is what actually decides whether
-     * that ever renders or a visible authorization request starts first;
-     * no second bootstrap/redirect path exists. `perfil` (`/perfil`) is
+     * sidebar — see that file's own comment for why). This layout has no
+     * `index` child anymore — `/` is now the public `LandingPage`,
+     * registered as this route's sibling below, not its child (see this
+     * file's top comment and `LandingPage`'s own doc comment); the
+     * authenticated app's own default destination is `/panel`
+     * (`OIDC_DEFAULT_RETURN_TO`), never `/` itself. `perfil` (`/perfil`) is
      * reached only from `AccountMenu`'s "Mi perfil" entry, deliberately
      * absent from `NAV_ITEMS`/the sidebar — it's account-level, not a
      * business navigation destination. `panel`, `eventos`, `eventos/:id`,
@@ -72,10 +79,6 @@ export const router = createBrowserRouter([
       return { Component: AppShellLayout }
     },
     children: [
-      {
-        index: true,
-        element: <Navigate to="/panel" replace />,
-      },
       {
         path: 'panel',
         lazy: async () => {
@@ -424,6 +427,22 @@ export const router = createBrowserRouter([
         },
       },
     ],
+  },
+  /*
+   * Public landing page (`feature/pre-release-polish-and-hardening`) — see
+   * `LandingPage`'s own doc comment for the full rationale. Registered as
+   * an unguarded top-level sibling of `AppShellLayout`, same as
+   * `/dev/design-system`/`/publico/mesas/:codigoQr`/`/auth/callback` below,
+   * so it never triggers the private route guard or its session bootstrap.
+   */
+  {
+    path: '/',
+    errorElement: <RouteErrorBoundary />,
+    hydrateFallbackElement: <RouteHydrateFallback />,
+    lazy: async () => {
+      const { LandingPage } = await import('@/features/landing/pages/LandingPage')
+      return { Component: LandingPage }
+    },
   },
   /*
    * Development-only reference page demonstrating the design tokens and
